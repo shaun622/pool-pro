@@ -1,0 +1,373 @@
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import Header from '../components/layout/Header'
+import PageWrapper from '../components/layout/PageWrapper'
+import Card from '../components/ui/Card'
+import Button from '../components/ui/Button'
+import Input, { TextArea, Select } from '../components/ui/Input'
+import { useBusiness } from '../hooks/useBusiness'
+import { useClients } from '../hooks/useClients'
+import { supabase } from '../lib/supabase'
+import { formatCurrency, calculateGST } from '../lib/utils'
+
+const EMPTY_LINE = { description: '', quantity: 1, unit_price: 0 }
+
+export default function QuoteBuilder() {
+  const { business } = useBusiness()
+  const { clients } = useClients()
+  const navigate = useNavigate()
+  const { id } = useParams()
+  const isEditing = Boolean(id)
+
+  const [clientId, setClientId] = useState('')
+  const [poolId, setPoolId] = useState('')
+  const [clientPools, setClientPools] = useState([])
+  const [lineItems, setLineItems] = useState([{ ...EMPTY_LINE }])
+  const [scope, setScope] = useState('')
+  const [terms, setTerms] = useState('')
+  const [pricingItems, setPricingItems] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [loading, setLoading] = useState(isEditing)
+
+  // Fetch pricing items
+  useEffect(() => {
+    if (!business?.id) return
+    supabase
+      .from('pricing_items')
+      .select('*')
+      .eq('business_id', business.id)
+      .order('name')
+      .then(({ data }) => setPricingItems(data || []))
+  }, [business?.id])
+
+  // Fetch existing quote if editing
+  useEffect(() => {
+    if (!id) return
+    async function fetchQuote() {
+      const { data, error } = await supabase
+        .from('quotes')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+      if (error || !data) {
+        console.error('Error fetching quote:', error)
+        navigate('/jobs')
+        return
+      }
+
+      setClientId(data.client_id || '')
+      setPoolId(data.pool_id || '')
+      setLineItems(data.line_items?.length ? data.line_items : [{ ...EMPTY_LINE }])
+      setScope(data.scope || '')
+      setTerms(data.terms || '')
+      setLoading(false)
+    }
+    fetchQuote()
+  }, [id])
+
+  // Fetch pools for selected client
+  useEffect(() => {
+    if (!clientId) {
+      setClientPools([])
+      setPoolId('')
+      return
+    }
+    supabase
+      .from('pools')
+      .select('id, name, address')
+      .eq('client_id', clientId)
+      .then(({ data }) => setClientPools(data || []))
+  }, [clientId])
+
+  const clientOptions = useMemo(
+    () => [
+      { value: '', label: 'Select client...' },
+      ...clients.map((c) => ({ value: c.id, label: c.name })),
+    ],
+    [clients]
+  )
+
+  const poolOptions = useMemo(
+    () => [
+      { value: '', label: 'No pool (general)' },
+      ...clientPools.map((p) => ({ value: p.id, label: p.address || p.name })),
+    ],
+    [clientPools]
+  )
+
+  const pricingOptions = useMemo(
+    () => [
+      { value: '', label: 'Add from saved items...' },
+      ...pricingItems.map((p) => ({
+        value: p.id,
+        label: `${p.name} - ${formatCurrency(p.unit_price)}`,
+      })),
+    ],
+    [pricingItems]
+  )
+
+  // Calculations
+  const subtotal = lineItems.reduce(
+    (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
+    0
+  )
+  const gst = calculateGST(subtotal)
+  const total = subtotal + gst
+
+  function updateLineItem(index, field, value) {
+    setLineItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? { ...item, [field]: field === 'description' ? value : Number(value) || 0 }
+          : item
+      )
+    )
+  }
+
+  function addLineItem() {
+    setLineItems((prev) => [...prev, { ...EMPTY_LINE }])
+  }
+
+  function removeLineItem(index) {
+    if (lineItems.length <= 1) return
+    setLineItems((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function addPricingItem(pricingItemId) {
+    if (!pricingItemId) return
+    const item = pricingItems.find((p) => p.id === pricingItemId)
+    if (!item) return
+    setLineItems((prev) => [
+      ...prev,
+      { description: item.name, quantity: 1, unit_price: item.unit_price },
+    ])
+  }
+
+  async function saveQuote(status = 'draft') {
+    if (!clientId) return
+
+    const quoteData = {
+      business_id: business.id,
+      client_id: clientId,
+      pool_id: poolId || null,
+      line_items: lineItems.filter((li) => li.description),
+      scope,
+      terms,
+      subtotal,
+      gst,
+      total,
+      status,
+    }
+
+    try {
+      if (status === 'sent') {
+        setSending(true)
+      } else {
+        setSaving(true)
+      }
+
+      let result
+      if (isEditing) {
+        result = await supabase
+          .from('quotes')
+          .update(quoteData)
+          .eq('id', id)
+          .select()
+          .single()
+      } else {
+        result = await supabase.from('quotes').insert(quoteData).select().single()
+      }
+
+      if (result.error) throw result.error
+
+      // If sending, invoke edge function
+      if (status === 'sent') {
+        try {
+          await supabase.functions.invoke('send-quote', {
+            body: { quote_id: result.data.id },
+          })
+        } catch (err) {
+          console.error('Failed to send quote notification:', err)
+        }
+      }
+
+      navigate('/jobs')
+    } catch (err) {
+      console.error('Error saving quote:', err)
+    } finally {
+      setSaving(false)
+      setSending(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <>
+        <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/jobs" />
+        <PageWrapper>
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        </PageWrapper>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/jobs" />
+      <PageWrapper>
+        <div className="space-y-5">
+          {/* Client & Pool selection */}
+          <Card className="p-4 space-y-4">
+            <Select
+              label="Client"
+              options={clientOptions}
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+            />
+            {clientId && (
+              <Select
+                label="Pool (optional)"
+                options={poolOptions}
+                value={poolId}
+                onChange={(e) => setPoolId(e.target.value)}
+              />
+            )}
+          </Card>
+
+          {/* Line items */}
+          <Card className="p-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+              Line Items
+            </h3>
+
+            {/* Saved pricing picker */}
+            {pricingItems.length > 0 && (
+              <div className="mb-4">
+                <Select
+                  options={pricingOptions}
+                  onChange={(e) => {
+                    addPricingItem(e.target.value)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {lineItems.map((item, index) => (
+                <div key={index} className="space-y-2 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                  <Input
+                    label="Description"
+                    placeholder="Item description"
+                    value={item.description}
+                    onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input
+                      label="Qty"
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                    />
+                    <Input
+                      label="Unit Price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.unit_price}
+                      onChange={(e) => updateLineItem(index, 'unit_price', e.target.value)}
+                    />
+                    <div className="space-y-1">
+                      <label className="block text-sm font-medium text-gray-700">Total</label>
+                      <p className="input bg-gray-50 text-gray-600">
+                        {formatCurrency((item.quantity || 0) * (item.unit_price || 0))}
+                      </p>
+                    </div>
+                  </div>
+                  {lineItems.length > 1 && (
+                    <button
+                      onClick={() => removeLineItem(index)}
+                      className="text-xs text-red-500 hover:text-red-700 min-h-tap flex items-center"
+                    >
+                      Remove item
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={addLineItem}
+              className="mt-3 text-sm text-pool-600 font-medium hover:text-pool-700 min-h-tap flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add line item
+            </button>
+          </Card>
+
+          {/* Scope & Terms */}
+          <Card className="p-4 space-y-4">
+            <TextArea
+              label="Scope of Work"
+              placeholder="Describe the work to be completed..."
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+            />
+            <TextArea
+              label="Terms & Conditions"
+              placeholder="Payment terms, warranty, etc..."
+              value={terms}
+              onChange={(e) => setTerms(e.target.value)}
+            />
+          </Card>
+
+          {/* Totals */}
+          <Card className="p-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Subtotal</span>
+                <span className="text-gray-700">{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">GST (10%)</span>
+                <span className="text-gray-700">{formatCurrency(gst)}</span>
+              </div>
+              <div className="flex justify-between text-base font-semibold border-t border-gray-200 pt-2">
+                <span className="text-gray-900">Total</span>
+                <span className="text-gray-900">{formatCurrency(total)}</span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              className="flex-1 min-h-tap"
+              onClick={() => saveQuote('draft')}
+              loading={saving}
+            >
+              Save Draft
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1 min-h-tap"
+              onClick={() => saveQuote('sent')}
+              loading={sending}
+              disabled={!clientId || lineItems.every((li) => !li.description)}
+            >
+              Send Quote
+            </Button>
+          </div>
+        </div>
+      </PageWrapper>
+    </>
+  )
+}

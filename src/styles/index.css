@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg font-medium transition-colors
+           min-h-tap min-w-tap px-4 py-3 text-sm
+           focus:outline-none focus:ring-2 focus:ring-pool-500 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-pool-500 text-white hover:bg-pool-600 active:bg-pool-700;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-3 py-3 text-sm
+           min-h-tap
+           placeholder:text-gray-400
+           focus:outline-none focus:ring-2 focus:ring-pool-500 focus:border-transparent
+           disabled:bg-gray-100 disabled:cursor-not-allowed;
+  }
+
+  .input-lg {
+    @apply input text-2xl font-semibold text-center py-4;
+  }
+
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 p-4 shadow-sm;
+  }
+}

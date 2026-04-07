@@ -1,0 +1,125 @@
+import { useState, useCallback } from 'react'
+import { supabase } from '../lib/supabase'
+import { useBusiness } from './useBusiness'
+
+export function useService() {
+  const { business } = useBusiness()
+  const [loading, setLoading] = useState(false)
+
+  const createServiceRecord = useCallback(async (poolId, technicianName) => {
+    const { data, error } = await supabase
+      .from('service_records')
+      .insert({
+        business_id: business.id,
+        pool_id: poolId,
+        technician_name: technicianName || 'Owner',
+        status: 'in_progress',
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }, [business])
+
+  const saveChemicalLog = useCallback(async (serviceRecordId, readings) => {
+    const { data, error } = await supabase
+      .from('chemical_logs')
+      .insert({ service_record_id: serviceRecordId, ...readings })
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }, [])
+
+  const saveTasks = useCallback(async (serviceRecordId, tasks) => {
+    const rows = tasks.map(t => ({
+      service_record_id: serviceRecordId,
+      task_name: t.name,
+      completed: t.completed,
+    }))
+    const { error } = await supabase.from('service_tasks').insert(rows)
+    if (error) throw error
+  }, [])
+
+  const saveChemicalsAdded = useCallback(async (serviceRecordId, chemicals) => {
+    if (!chemicals.length) return
+    const rows = chemicals.map(c => ({
+      service_record_id: serviceRecordId,
+      product_name: c.product_name,
+      quantity: c.quantity,
+      unit: c.unit,
+      cost: c.cost || null,
+    }))
+    const { error } = await supabase.from('chemicals_added').insert(rows)
+    if (error) throw error
+  }, [])
+
+  const completeService = useCallback(async (serviceRecordId, poolId, notes) => {
+    setLoading(true)
+    try {
+      const { error } = await supabase
+        .from('service_records')
+        .update({ status: 'completed', notes, serviced_at: new Date().toISOString() })
+        .eq('id', serviceRecordId)
+
+      if (error) throw error
+
+      // Update pool last_serviced_at
+      const { data: pool } = await supabase
+        .from('pools')
+        .select('schedule_frequency')
+        .eq('id', poolId)
+        .single()
+
+      const now = new Date()
+      const nextDue = calculateNextDueDate(now, pool?.schedule_frequency || 'weekly')
+
+      await supabase
+        .from('pools')
+        .update({ last_serviced_at: now.toISOString(), next_due_at: nextDue.toISOString() })
+        .eq('id', poolId)
+
+      // Try to invoke edge function for email
+      try {
+        await supabase.functions.invoke('complete-service', {
+          body: { service_record_id: serviceRecordId }
+        })
+      } catch (e) {
+        console.warn('Edge function not available:', e)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const getServiceHistory = useCallback(async (poolId, limit = 10) => {
+    const { data, error } = await supabase
+      .from('service_records')
+      .select(`
+        *,
+        chemical_logs(*),
+        service_tasks(*),
+        chemicals_added(*),
+        service_photos(*)
+      `)
+      .eq('pool_id', poolId)
+      .eq('status', 'completed')
+      .order('serviced_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data || []
+  }, [])
+
+  return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, completeService, getServiceHistory }
+}
+
+function calculateNextDueDate(from, frequency) {
+  const date = new Date(from)
+  switch (frequency) {
+    case 'weekly': date.setDate(date.getDate() + 7); break
+    case 'fortnightly': date.setDate(date.getDate() + 14); break
+    case 'monthly': date.setMonth(date.getMonth() + 1); break
+    default: date.setDate(date.getDate() + 7)
+  }
+  return date
+}
