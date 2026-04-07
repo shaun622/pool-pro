@@ -78,6 +78,7 @@ export default function NewService() {
 
   // Step 3: Chemicals added
   const [chemicalsAdded, setChemicalsAdded] = useState([])
+  const [chemicalProducts, setChemicalProducts] = useState([])
 
   // Step 4: Notes
   const [notes, setNotes] = useState('')
@@ -88,7 +89,7 @@ export default function NewService() {
 
   async function loadPool() {
     try {
-      const [poolRes, staffRes, lastServiceRes] = await Promise.all([
+      const [poolRes, staffRes, lastServiceRes, productsRes] = await Promise.all([
         supabase.from('pools').select('*, clients(*)').eq('id', poolId).single(),
         supabase.from('staff_members').select('*').eq('business_id', business?.id).eq('is_active', true).order('name'),
         supabase.from('service_records')
@@ -98,6 +99,11 @@ export default function NewService() {
           .order('serviced_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase.from('chemical_products')
+          .select('*')
+          .eq('business_id', business.id)
+          .order('use_count', { ascending: false })
+          .limit(20),
       ])
       if (poolRes.error) throw poolRes.error
       setPool(poolRes.data)
@@ -107,6 +113,8 @@ export default function NewService() {
       if (lastServiceRes.data?.chemical_logs?.length) {
         setLastReadings(lastServiceRes.data.chemical_logs[0])
       }
+
+      setChemicalProducts(productsRes.data || [])
 
       const staffData = staffRes.data || []
       setStaffList(staffData)
@@ -138,6 +146,17 @@ export default function NewService() {
 
   function addChemical() {
     setChemicalsAdded(prev => [...prev, { product_name: '', quantity: '', unit: 'L' }])
+  }
+
+  function addFromLibrary(productId) {
+    if (!productId) return
+    const product = chemicalProducts.find(p => p.id === productId)
+    if (!product) return
+    setChemicalsAdded(prev => [...prev, {
+      product_name: product.name,
+      quantity: '',
+      unit: product.default_unit || 'L',
+    }])
   }
 
   function updateChemical(index, field, value) {
@@ -174,6 +193,20 @@ export default function NewService() {
         ...c,
         quantity: parseFloat(c.quantity) || 0,
       })))
+
+      // Save chemicals to product library
+      for (const c of validChemicals) {
+        const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
+        if (existing) {
+          await supabase.from('chemical_products')
+            .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
+            .eq('id', existing.id)
+        } else {
+          await supabase.from('chemical_products')
+            .insert({ business_id: business.id, name: c.product_name, default_unit: c.unit })
+            .catch(() => {}) // ignore duplicates
+        }
+      }
 
       // Complete the service
       await completeService(record.id, poolId, notes)
@@ -352,9 +385,19 @@ export default function NewService() {
         {step === 2 && (
           <div className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Chemicals Added</h2>
+            {chemicalProducts.length > 0 && (
+              <Select
+                label="Quick add from library"
+                options={[
+                  { value: '', label: 'Select a product...' },
+                  ...chemicalProducts.map(p => ({ value: p.id, label: p.name })),
+                ]}
+                onChange={e => { addFromLibrary(e.target.value); e.target.value = '' }}
+              />
+            )}
             {chemicalsAdded.length === 0 && (
               <p className="text-sm text-gray-500 py-4 text-center">
-                No chemicals added yet. Tap the button below to add one.
+                No chemicals added yet. {chemicalProducts.length === 0 ? 'Tap the button below to add one.' : 'Select from the library above or add manually.'}
               </p>
             )}
             {chemicalsAdded.map((chem, i) => (
