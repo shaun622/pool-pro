@@ -5,6 +5,7 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
+import Modal from '../components/ui/Modal'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { supabase } from '../lib/supabase'
@@ -14,7 +15,7 @@ const EMPTY_LINE = { description: '', quantity: 1, unit_price: 0 }
 
 export default function QuoteBuilder() {
   const { business } = useBusiness()
-  const { clients } = useClients()
+  const { clients, createClient } = useClients()
   const navigate = useNavigate()
   const { id } = useParams()
   const isEditing = Boolean(id)
@@ -29,6 +30,11 @@ export default function QuoteBuilder() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(isEditing)
+
+  // New client modal
+  const [newClientOpen, setNewClientOpen] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '', address: '' })
+  const [newClientSaving, setNewClientSaving] = useState(false)
 
   // Fetch pricing items
   useEffect(() => {
@@ -145,6 +151,22 @@ export default function QuoteBuilder() {
     ])
   }
 
+  async function handleCreateClient(e) {
+    e.preventDefault()
+    if (!newClientForm.name.trim()) return
+    setNewClientSaving(true)
+    try {
+      const created = await createClient(newClientForm)
+      setClientId(created.id)
+      setNewClientOpen(false)
+      setNewClientForm({ name: '', email: '', phone: '', address: '' })
+    } catch (err) {
+      console.error('Error creating client:', err)
+    } finally {
+      setNewClientSaving(false)
+    }
+  }
+
   async function saveQuote(status = 'draft') {
     if (!clientId) return
 
@@ -222,12 +244,25 @@ export default function QuoteBuilder() {
         <div className="space-y-5">
           {/* Client & Pool selection */}
           <Card className="p-4 space-y-4">
-            <Select
-              label="Client"
-              options={clientOptions}
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-            />
+            <div>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Select
+                    label="Client"
+                    options={clientOptions}
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewClientOpen(true)}
+                  className="min-h-[44px] px-3 rounded-lg border border-dashed border-pool-300 text-pool-600 text-sm font-medium hover:bg-pool-50 transition-colors whitespace-nowrap"
+                >
+                  + New
+                </button>
+              </div>
+            </div>
             {clientId && (
               <Select
                 label="Pool (optional)"
@@ -368,6 +403,47 @@ export default function QuoteBuilder() {
           </div>
         </div>
       </PageWrapper>
+
+      {/* New Client Modal */}
+      <Modal open={newClientOpen} onClose={() => setNewClientOpen(false)} title="New Client">
+        <form onSubmit={handleCreateClient} className="space-y-4">
+          <Input
+            label="Name"
+            value={newClientForm.name}
+            onChange={e => setNewClientForm(prev => ({ ...prev, name: e.target.value }))}
+            required
+            placeholder="Full name"
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={newClientForm.email}
+            onChange={e => setNewClientForm(prev => ({ ...prev, email: e.target.value }))}
+            placeholder="email@example.com"
+          />
+          <Input
+            label="Phone"
+            type="tel"
+            value={newClientForm.phone}
+            onChange={e => setNewClientForm(prev => ({ ...prev, phone: e.target.value }))}
+            placeholder="0400 000 000"
+          />
+          <Input
+            label="Address"
+            value={newClientForm.address}
+            onChange={e => setNewClientForm(prev => ({ ...prev, address: e.target.value }))}
+            placeholder="Street address"
+          />
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setNewClientOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1" loading={newClientSaving}>
+              Create Client
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </>
   )
 }
