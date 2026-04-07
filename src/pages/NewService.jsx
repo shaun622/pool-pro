@@ -194,18 +194,21 @@ export default function NewService() {
         quantity: parseFloat(c.quantity) || 0,
       })))
 
-      // Save chemicals to product library
-      for (const c of validChemicals) {
-        const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
-        if (existing) {
-          await supabase.from('chemical_products')
-            .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
-            .eq('id', existing.id)
-        } else {
-          await supabase.from('chemical_products')
-            .insert({ business_id: business.id, name: c.product_name, default_unit: c.unit })
-            .catch(() => {}) // ignore duplicates
+      // Save chemicals to product library (non-blocking)
+      try {
+        for (const c of validChemicals) {
+          const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
+          if (existing) {
+            await supabase.from('chemical_products')
+              .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
+              .eq('id', existing.id)
+          } else {
+            await supabase.from('chemical_products')
+              .insert({ business_id: business.id, name: c.product_name, default_unit: c.unit })
+          }
         }
+      } catch (e) {
+        console.warn('Chemical library save failed (non-critical):', e)
       }
 
       // Complete the service
@@ -214,7 +217,7 @@ export default function NewService() {
       setCompleted(true)
     } catch (err) {
       console.error('Error completing service:', err)
-      alert('Failed to complete service. Please try again.')
+      alert('Failed to complete service: ' + (err?.message || JSON.stringify(err)))
     } finally {
       setSubmitting(false)
     }
