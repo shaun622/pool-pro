@@ -20,6 +20,9 @@ create policy "Public staff read" on staff_members for select using (true);
 -- Add staff_id to service_records so we know which tech did the service
 alter table service_records add column if not exists staff_id uuid references staff_members;
 
+-- Add assigned_staff_id to clients so each client has a regular technician
+alter table clients add column if not exists assigned_staff_id uuid references staff_members;
+
 -- Storage bucket for staff photos
 insert into storage.buckets (id, name, public) values ('staff-photos', 'staff-photos', true) on conflict do nothing;
 create policy "Anyone can view staff photos" on storage.objects for select using (bucket_id = 'staff-photos');

@@ -10,16 +10,20 @@ import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
+import { useStaff } from '../hooks/useStaff'
+import StaffCard from '../components/ui/StaffCard'
 import { supabase } from '../lib/supabase'
 import {
   formatDate,
   getOverdueStatus,
   daysOverdue,
   statusDot,
+  calculateNextDue,
   POOL_TYPES,
   POOL_SHAPES,
   SCHEDULE_FREQUENCIES,
   FREQUENCY_LABELS,
+  cn,
 } from '../lib/utils'
 
 const emptyPool = {
@@ -40,14 +44,15 @@ export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { updateClient, deleteClient } = useClients()
-  const { pools, loading: poolsLoading, createPool } = usePools(id)
+  const { pools, loading: poolsLoading, createPool, updatePool } = usePools(id)
+  const { staff: staffList, loading: staffLoading } = useStaff()
 
   const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // Edit client modal
   const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', billing_frequency: '', service_rate: '' })
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', billing_frequency: '', service_rate: '', assigned_staff_id: '' })
   const [editSaving, setEditSaving] = useState(false)
 
   // Delete confirmation
@@ -58,6 +63,12 @@ export default function ClientDetail() {
   const [poolModalOpen, setPoolModalOpen] = useState(false)
   const [poolForm, setPoolForm] = useState(emptyPool)
   const [poolSaving, setPoolSaving] = useState(false)
+
+  // Schedule modal
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [schedulePoolId, setSchedulePoolId] = useState(null)
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleSaving, setScheduleSaving] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -81,6 +92,7 @@ export default function ClientDetail() {
           notes: data.notes || '',
           billing_frequency: data.billing_frequency || '',
           service_rate: data.service_rate || '',
+          assigned_staff_id: data.assigned_staff_id || '',
         })
         setLoading(false)
       })
@@ -154,6 +166,30 @@ export default function ClientDetail() {
       setPoolSaving(false)
     }
   }
+
+  // Schedule handler
+  const openSchedule = (poolId) => {
+    setSchedulePoolId(poolId)
+    const pool = pools.find(p => p.id === poolId)
+    setScheduleDate(pool?.next_due_at ? new Date(pool.next_due_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
+    setScheduleOpen(true)
+  }
+
+  const handleScheduleSave = async () => {
+    if (!scheduleDate || !schedulePoolId) return
+    setScheduleSaving(true)
+    try {
+      await updatePool(schedulePoolId, { next_due_at: new Date(scheduleDate).toISOString() })
+    } catch (err) {
+      console.error('Error scheduling:', err)
+    } finally {
+      setScheduleSaving(false)
+      setScheduleOpen(false)
+    }
+  }
+
+  // Find assigned staff member
+  const assignedStaff = staffList.find(s => s.id === client?.assigned_staff_id)
 
   if (loading) {
     return (
@@ -260,6 +296,14 @@ export default function ClientDetail() {
           </div>
         </Card>
 
+        {/* Assigned Staff */}
+        {assignedStaff && (
+          <Card className="p-4 mb-4">
+            <p className="text-xs text-gray-400 uppercase font-semibold tracking-wide mb-2">Assigned Technician</p>
+            <StaffCard staff={assignedStaff} variant="compact" />
+          </Card>
+        )}
+
         {/* Pools Section */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold text-gray-900">Pools</h2>
@@ -297,45 +341,71 @@ export default function ClientDetail() {
               const overdueStatus = getOverdueStatus(pool.next_due_at)
               const overdueDays = daysOverdue(pool.next_due_at)
               return (
-                <Card
-                  key={pool.id}
-                  onClick={() => navigate(`/pools/${pool.id}`)}
-                  className="p-4"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 truncate">{pool.address}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant={pool.type}>{pool.type}</Badge>
-                        {pool.schedule_frequency && (
-                          <span className="text-xs text-gray-400">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}</span>
-                        )}
-                        {pool.last_serviced_at && (
-                          <span className="text-xs text-gray-500">
-                            Last: {formatDate(pool.last_serviced_at)}
+                <Card key={pool.id} className="p-4">
+                  {/* Tappable pool info area */}
+                  <div
+                    onClick={() => navigate(`/pools/${pool.id}`)}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 truncate">{pool.address}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge variant={pool.type}>{pool.type}</Badge>
+                          {pool.schedule_frequency && (
+                            <span className="text-xs text-gray-400">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}</span>
+                          )}
+                        </div>
+                      </div>
+                      {overdueDays > 0 && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`w-2.5 h-2.5 rounded-full ${statusDot(overdueStatus)}`} />
+                          <span className="text-xs font-medium text-red-600">
+                            {overdueDays}d overdue
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                    {overdueDays > 0 && (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className={`w-2.5 h-2.5 rounded-full ${statusDot(overdueStatus)}`} />
-                        <span className="text-xs font-medium text-gray-600">
-                          {overdueDays}d overdue
+
+                    {/* Service dates row */}
+                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                      {pool.last_serviced_at && (
+                        <span>Last: {formatDate(pool.last_serviced_at)}</span>
+                      )}
+                      {pool.next_due_at && (
+                        <span className={cn(overdueDays > 0 ? 'text-red-500 font-medium' : 'text-pool-600')}>
+                          Next: {formatDate(pool.next_due_at)}
                         </span>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                  {/* Quick service button */}
-                  <div className="mt-3">
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 mt-3">
                     <Button
                       variant="secondary"
-                      className="w-full text-sm"
+                      className="flex-1 text-sm min-h-[44px]"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openSchedule(pool.id)
+                      }}
+                    >
+                      <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Schedule
+                    </Button>
+                    <Button
+                      className="flex-1 text-sm min-h-[44px]"
                       onClick={(e) => {
                         e.stopPropagation()
                         navigate(`/pools/${pool.id}/service`)
                       }}
                     >
+                      <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                       Start Service
                     </Button>
                   </div>
@@ -402,6 +472,23 @@ export default function ClientDetail() {
             </div>
           </div>
 
+          {/* Staff Assignment */}
+          {staffList.length > 0 && (
+            <div className="border-t border-gray-100 pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Staff Assignment</h3>
+              <Select
+                label="Assigned Technician"
+                name="assigned_staff_id"
+                value={editForm.assigned_staff_id}
+                onChange={handleEditChange}
+                options={[
+                  { value: '', label: 'Not assigned' },
+                  ...staffList.filter(s => s.is_active).map(s => ({ value: s.id, label: s.name })),
+                ]}
+              />
+            </div>
+          )}
+
           <TextArea
             label="Notes"
             name="notes"
@@ -450,6 +537,37 @@ export default function ClientDetail() {
           >
             Delete
           </Button>
+        </div>
+      </Modal>
+
+      {/* Schedule Modal */}
+      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule Service">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Set the next service date for this pool.
+          </p>
+          <Input
+            label="Next Service Date"
+            type="date"
+            value={scheduleDate}
+            onChange={e => setScheduleDate(e.target.value)}
+          />
+          <div className="flex gap-3">
+            <Button
+              variant="secondary"
+              className="flex-1 min-h-tap"
+              onClick={() => setScheduleOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 min-h-tap"
+              onClick={handleScheduleSave}
+              loading={scheduleSaving}
+            >
+              Save
+            </Button>
+          </div>
         </div>
       </Modal>
 
