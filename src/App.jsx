@@ -19,8 +19,11 @@ const QuoteBuilder = lazy(() => import('./pages/QuoteBuilder'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Staff = lazy(() => import('./pages/Staff'))
 const Subscription = lazy(() => import('./pages/Subscription'))
-const PublicPortal = lazy(() => import('./pages/PublicPortal'))
 const PublicQuote = lazy(() => import('./pages/PublicQuote'))
+const PortalLogin = lazy(() => import('./pages/portal/PortalLogin'))
+const PortalSetup = lazy(() => import('./pages/portal/PortalSetup'))
+const PortalTokenLanding = lazy(() => import('./pages/portal/PortalTokenLanding'))
+const PortalDashboard = lazy(() => import('./pages/portal/PortalDashboard'))
 
 function Loading() {
   return (
@@ -57,7 +60,10 @@ export default function App() {
           <Suspense fallback={<Loading />}>
             <Routes>
               {/* Public routes - no auth */}
-              <Route path="/portal/:token" element={<PublicPortal />} />
+              <Route path="/portal/login" element={<PortalLogin />} />
+              <Route path="/portal/setup/:token" element={<PortalSetup />} />
+              <Route path="/portal" element={<PortalDashboard />} />
+              <Route path="/portal/:token" element={<PortalTokenLanding />} />
               <Route path="/quote/:token" element={<PublicQuote />} />
 
               {/* Auth routes */}
