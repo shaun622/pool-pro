@@ -83,8 +83,8 @@ export default function NewService() {
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
-    loadPool()
-  }, [poolId])
+    if (business?.id) loadPool()
+  }, [poolId, business?.id])
 
   async function loadPool() {
     try {
