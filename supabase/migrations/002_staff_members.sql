@@ -23,6 +23,9 @@ alter table service_records add column if not exists staff_id uuid references st
 -- Add assigned_staff_id to clients so each client has a regular technician
 alter table clients add column if not exists assigned_staff_id uuid references staff_members;
 
+-- Add assigned_staff_id to pools so each pool can have its own assigned tech
+alter table pools add column if not exists assigned_staff_id uuid references staff_members;
+
 -- Storage bucket for staff photos
 insert into storage.buckets (id, name, public) values ('staff-photos', 'staff-photos', true) on conflict do nothing;
 create policy "Anyone can view staff photos" on storage.objects for select using (bucket_id = 'staff-photos');

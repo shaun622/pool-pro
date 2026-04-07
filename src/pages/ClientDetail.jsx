@@ -367,6 +367,7 @@ export default function ClientDetail() {
             {pools.map(pool => {
               const overdueStatus = getOverdueStatus(pool.next_due_at)
               const overdueDays = daysOverdue(pool.next_due_at)
+              const poolStaff = staffList.find(s => s.id === pool.assigned_staff_id)
               return (
                 <Card key={pool.id} className="p-4">
                   {/* Tappable pool info area */}
@@ -407,6 +408,30 @@ export default function ClientDetail() {
                     </div>
                   </div>
 
+                  {/* Assigned tech */}
+                  <div className="mt-3 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                    {poolStaff?.photo_url ? (
+                      <img src={poolStaff.photo_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                    ) : poolStaff ? (
+                      <div className="w-7 h-7 rounded-full bg-pool-100 text-pool-600 flex items-center justify-center text-xs font-bold">
+                        {poolStaff.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+                      </div>
+                    ) : null}
+                    <select
+                      value={pool.assigned_staff_id || ''}
+                      onChange={async (e) => {
+                        const val = e.target.value || null
+                        await updatePool(pool.id, { assigned_staff_id: val })
+                      }}
+                      className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 min-h-[36px]"
+                    >
+                      <option value="">Assign technician...</option>
+                      {staffList.filter(s => s.is_active).map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Action buttons */}
                   <div className="flex gap-2 mt-3">
                     <Button
@@ -426,7 +451,7 @@ export default function ClientDetail() {
                       className="flex-1 text-sm min-h-[44px]"
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate(`/pools/${pool.id}/service`)
+                        navigate(`/pools/${pool.id}/service${pool.assigned_staff_id ? `?staff=${pool.assigned_staff_id}` : ''}`)
                       }}
                     >
                       <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">

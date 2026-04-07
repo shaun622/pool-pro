@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -38,6 +38,7 @@ const UNIT_OPTIONS = CHEMICAL_UNITS.map(u => ({ value: u, label: u }))
 
 export default function NewService() {
   const { id: poolId } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { business } = useBusiness()
   const {
@@ -95,7 +96,15 @@ export default function NewService() {
       setClient(poolRes.data.clients)
       const staffData = staffRes.data || []
       setStaffList(staffData)
-      if (staffData.length === 1) setSelectedStaffId(staffData[0].id)
+      // Pre-select: URL param > pool assigned > only-one-staff fallback
+      const staffParam = searchParams.get('staff')
+      const poolAssigned = poolRes.data.assigned_staff_id
+      const preselect = staffParam || poolAssigned
+      if (preselect && staffData.some(s => s.id === preselect)) {
+        setSelectedStaffId(preselect)
+      } else if (staffData.length === 1) {
+        setSelectedStaffId(staffData[0].id)
+      }
     } catch (err) {
       console.error('Error loading pool:', err)
     } finally {
