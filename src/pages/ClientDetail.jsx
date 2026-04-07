@@ -68,6 +68,8 @@ export default function ClientDetail() {
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [schedulePoolId, setSchedulePoolId] = useState(null)
   const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleFreq, setScheduleFreq] = useState('weekly')
+  const [scheduleTime, setScheduleTime] = useState('09:00')
   const [scheduleSaving, setScheduleSaving] = useState(false)
 
   useEffect(() => {
@@ -172,14 +174,39 @@ export default function ClientDetail() {
     setSchedulePoolId(poolId)
     const pool = pools.find(p => p.id === poolId)
     setScheduleDate(pool?.next_due_at ? new Date(pool.next_due_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
+    setScheduleFreq(pool?.schedule_frequency || 'weekly')
+    setScheduleTime('09:00')
     setScheduleOpen(true)
+  }
+
+  const handleQuickDate = (option) => {
+    const today = new Date()
+    let d
+    switch (option) {
+      case 'today': d = today; break
+      case 'tomorrow': d = new Date(today); d.setDate(d.getDate() + 1); break
+      case 'next_monday': {
+        d = new Date(today)
+        const day = d.getDay()
+        d.setDate(d.getDate() + ((8 - day) % 7 || 7))
+        break
+      }
+      case 'next_week': d = new Date(today); d.setDate(d.getDate() + 7); break
+      case 'in_2_weeks': d = new Date(today); d.setDate(d.getDate() + 14); break
+      case 'next_month': d = new Date(today); d.setMonth(d.getMonth() + 1); break
+      default: return
+    }
+    setScheduleDate(d.toISOString().split('T')[0])
   }
 
   const handleScheduleSave = async () => {
     if (!scheduleDate || !schedulePoolId) return
     setScheduleSaving(true)
     try {
-      await updatePool(schedulePoolId, { next_due_at: new Date(scheduleDate).toISOString() })
+      await updatePool(schedulePoolId, {
+        next_due_at: new Date(scheduleDate).toISOString(),
+        schedule_frequency: scheduleFreq,
+      })
     } catch (err) {
       console.error('Error scheduling:', err)
     } finally {
@@ -543,15 +570,59 @@ export default function ClientDetail() {
       {/* Schedule Modal */}
       <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule Service">
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Set the next service date for this pool.
-          </p>
+          {/* Quick pick options */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Quick Pick</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key: 'today', label: 'Today' },
+                { key: 'tomorrow', label: 'Tomorrow' },
+                { key: 'next_monday', label: 'Next Monday' },
+                { key: 'next_week', label: 'In 1 Week' },
+                { key: 'in_2_weeks', label: 'In 2 Weeks' },
+                { key: 'next_month', label: 'In 1 Month' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => handleQuickDate(opt.key)}
+                  className="px-3 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-pool-50 hover:border-pool-300 hover:text-pool-700 transition-colors min-h-[44px]"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Date picker */}
           <Input
-            label="Next Service Date"
+            label="Or pick a date"
             type="date"
             value={scheduleDate}
             onChange={e => setScheduleDate(e.target.value)}
           />
+
+          {/* Repeat frequency */}
+          <Select
+            label="Repeats"
+            value={scheduleFreq}
+            onChange={e => setScheduleFreq(e.target.value)}
+            options={SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))}
+          />
+
+          {/* Summary */}
+          {scheduleDate && (
+            <div className="bg-pool-50 border border-pool-200 rounded-lg p-3">
+              <p className="text-sm text-pool-700">
+                <span className="font-semibold">Next service:</span>{' '}
+                {new Date(scheduleDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+              <p className="text-xs text-pool-500 mt-1">
+                Repeating {(FREQUENCY_LABELS[scheduleFreq] || scheduleFreq).toLowerCase()}
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <Button
               variant="secondary"
@@ -565,7 +636,7 @@ export default function ClientDetail() {
               onClick={handleScheduleSave}
               loading={scheduleSaving}
             >
-              Save
+              Save Schedule
             </Button>
           </div>
         </div>
