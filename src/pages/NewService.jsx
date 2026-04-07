@@ -58,6 +58,7 @@ export default function NewService() {
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [completed, setCompleted] = useState(false)
+  const [lastReadings, setLastReadings] = useState(null)
 
   // Step 1: Chemical readings
   const [readings, setReadings] = useState({
@@ -87,13 +88,26 @@ export default function NewService() {
 
   async function loadPool() {
     try {
-      const [poolRes, staffRes] = await Promise.all([
+      const [poolRes, staffRes, lastServiceRes] = await Promise.all([
         supabase.from('pools').select('*, clients(*)').eq('id', poolId).single(),
         supabase.from('staff_members').select('*').eq('business_id', business?.id).eq('is_active', true).order('name'),
+        supabase.from('service_records')
+          .select('id, serviced_at, chemical_logs(*)')
+          .eq('pool_id', poolId)
+          .eq('status', 'completed')
+          .order('serviced_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ])
       if (poolRes.error) throw poolRes.error
       setPool(poolRes.data)
       setClient(poolRes.data.clients)
+
+      // Store last service readings for comparison
+      if (lastServiceRes.data?.chemical_logs?.length) {
+        setLastReadings(lastServiceRes.data.chemical_logs[0])
+      }
+
       const staffData = staffRes.data || []
       setStaffList(staffData)
       // Pre-select: URL param > pool assigned > only-one-staff fallback
@@ -171,6 +185,25 @@ export default function NewService() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function renderDelta(key) {
+    if (!lastReadings || lastReadings[key] == null) return null
+    const current = parseFloat(readings[key])
+    if (isNaN(current)) return (
+      <span className="text-xs text-gray-400">Last: {lastReadings[key]}</span>
+    )
+    const diff = current - lastReadings[key]
+    if (diff === 0) return (
+      <span className="text-xs text-gray-400">— no change (was {lastReadings[key]})</span>
+    )
+    const arrow = diff > 0 ? '↑' : '↓'
+    const color = diff > 0 ? 'text-red-500' : 'text-blue-500'
+    return (
+      <span className={cn('text-xs font-medium', color)}>
+        {arrow} {Math.abs(diff).toFixed(1)} from {lastReadings[key]}
+      </span>
+    )
   }
 
   const targetRanges = pool?.target_ranges || DEFAULT_TARGET_RANGES
@@ -257,6 +290,9 @@ export default function NewService() {
                       placeholder={range ? `${range[0]} - ${range[1]}` : ''}
                       className="input-lg w-full text-lg"
                     />
+                    {lastReadings && (
+                      <div className="mt-0.5">{renderDelta(key)}</div>
+                    )}
                   </div>
                 </div>
               )
@@ -398,6 +434,9 @@ export default function NewService() {
             {/* Chemical readings summary */}
             <Card>
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Chemical Readings</h3>
+              {lastReadings && (
+                <p className="text-xs text-gray-400 mb-2">Compared to last service</p>
+              )}
               <div className="space-y-2">
                 {READING_FIELDS.map(({ key, rangeKey, saltOnly }) => {
                   if (saltOnly && !isSaltPool) return null
@@ -406,17 +445,30 @@ export default function NewService() {
                   const info = CHEMICAL_LABELS[key]
                   const range = targetRanges[rangeKey]
                   const status = getChemicalStatus(parseFloat(value), range)
+                  const lastVal = lastReadings?.[key]
+                  const diff = lastVal != null ? parseFloat(value) - lastVal : null
                   return (
                     <div key={key} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0', statusDot(status))} />
                         <span className="text-sm text-gray-700">{info?.label}</span>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex items-center gap-2">
                         <span className="text-sm font-semibold text-gray-900">{value}</span>
-                        <span className="text-xs text-gray-400 ml-1">{info?.unit}</span>
-                        {range && (
-                          <span className="text-xs text-gray-400 ml-2">({range[0]}-{range[1]})</span>
+                        <span className="text-xs text-gray-400">{info?.unit}</span>
+                        {diff !== null && diff !== 0 && (
+                          <span className={cn(
+                            'text-xs font-medium px-1.5 py-0.5 rounded',
+                            diff > 0 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                          )}>
+                            {diff > 0 ? '↑' : '↓'}{Math.abs(diff).toFixed(1)}
+                          </span>
+                        )}
+                        {diff === 0 && (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                        {range && !lastReadings && (
+                          <span className="text-xs text-gray-400">({range[0]}-{range[1]})</span>
                         )}
                       </div>
                     </div>
