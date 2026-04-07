@@ -8,6 +8,17 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Handle email confirmation redirect (tokens in URL hash)
+    const handleRedirect = async () => {
+      const hash = window.location.hash
+      if (hash && hash.includes('access_token')) {
+        // Supabase will pick up tokens automatically via onAuthStateChange
+        // Clean up the URL
+        window.history.replaceState(null, '', window.location.pathname)
+      }
+    }
+    handleRedirect()
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
@@ -15,6 +26,7 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setLoading(false)
     })
 
     return () => subscription.unsubscribe()

@@ -15,16 +15,21 @@ export function BusinessProvider({ children }) {
       setLoading(false)
       return
     }
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('owner_id', user.id)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('owner_id', user.id)
+        .maybeSingle()
 
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching business:', error)
+      if (error) {
+        console.error('Error fetching business:', error)
+      }
+      setBusiness(data || null)
+    } catch (err) {
+      console.error('Network error fetching business:', err)
+      setBusiness(null)
     }
-    setBusiness(data || null)
     setLoading(false)
   }, [user])
 
