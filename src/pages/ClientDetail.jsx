@@ -32,7 +32,7 @@ const emptyPool = {
   pump_model: '',
   filter_type: '',
   heater: '',
-  route_day: '',
+  first_service_date: new Date().toISOString().split('T')[0],
 }
 
 export default function ClientDetail() {
@@ -137,12 +137,13 @@ export default function ClientDetail() {
     if (!poolForm.address.trim()) return
     setPoolSaving(true)
     try {
-      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, ...rest } = poolForm
+      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, first_service_date, ...rest } = poolForm
       await createPool({
         ...rest,
         client_id: id,
         volume_litres: volume_litres ? Number(volume_litres) : null,
         equipment: { pump_model, filter_type, heater },
+        next_due_at: first_service_date || new Date().toISOString(),
       })
       setPoolModalOpen(false)
       setPoolForm(emptyPool)
@@ -509,6 +510,13 @@ export default function ClientDetail() {
               options={freqOptions}
             />
           </div>
+          <Input
+            label="First Service Date"
+            name="first_service_date"
+            type="date"
+            value={poolForm.first_service_date}
+            onChange={handlePoolChange}
+          />
           <TextArea
             label="Access Notes"
             name="access_notes"

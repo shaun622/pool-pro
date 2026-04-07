@@ -7,6 +7,7 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useService } from '../hooks/useService'
 import { useBusiness } from '../hooks/useBusiness'
@@ -46,6 +47,9 @@ export default function PoolDetail() {
   const [editingRanges, setEditingRanges] = useState(false)
   const [targetRanges, setTargetRanges] = useState({})
   const [savingRanges, setSavingRanges] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduling, setScheduling] = useState(false)
 
   useEffect(() => {
     loadPool()
@@ -277,13 +281,35 @@ export default function PoolDetail() {
             </div>
           </Card>
 
-          {/* Start Service Button */}
-          <Button
-            onClick={() => navigate(`/pools/${id}/service`)}
-            className="w-full min-h-[52px] text-base font-semibold"
-          >
-            Start Service
-          </Button>
+          {/* Next service date */}
+          {pool.next_due_at && (
+            <div className="flex items-center justify-between px-1">
+              <span className="text-sm text-gray-500">Next service due</span>
+              <span className="text-sm font-medium text-gray-900">{formatDate(pool.next_due_at)}</span>
+            </div>
+          )}
+
+          {/* Service Actions */}
+          <div className="flex gap-3">
+            <Button
+              onClick={() => navigate(`/pools/${id}/service`)}
+              className="flex-1 min-h-[52px] text-base font-semibold"
+            >
+              Start Service
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setScheduleDate(new Date().toISOString().split('T')[0])
+                setScheduleOpen(true)
+              }}
+              className="min-h-[52px] px-4"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </Button>
+          </div>
 
           {/* Chemical Trend Chart */}
           {chartData.length > 1 && (
@@ -369,6 +395,53 @@ export default function PoolDetail() {
           </div>
         </div>
       </PageWrapper>
+
+      {/* Schedule Service Modal */}
+      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule Service">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Set the next service date for this pool. It will appear on your Route when due.
+          </p>
+          <Input
+            label="Service Date"
+            type="date"
+            value={scheduleDate}
+            onChange={(e) => setScheduleDate(e.target.value)}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setScheduleOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              loading={scheduling}
+              onClick={async () => {
+                if (!scheduleDate) return
+                setScheduling(true)
+                try {
+                  const { error } = await supabase
+                    .from('pools')
+                    .update({ next_due_at: new Date(scheduleDate).toISOString() })
+                    .eq('id', id)
+                  if (error) throw error
+                  setPool(prev => ({ ...prev, next_due_at: new Date(scheduleDate).toISOString() }))
+                  setScheduleOpen(false)
+                } catch (err) {
+                  console.error('Error scheduling service:', err)
+                } finally {
+                  setScheduling(false)
+                }
+              }}
+            >
+              Schedule
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   )
 }
