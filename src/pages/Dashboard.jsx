@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [todayPools, setTodayPools] = useState([])
   const [overduePools, setOverduePools] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
+  const [counts, setCounts] = useState({ clients: 0, pools: 0, services: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -45,6 +46,9 @@ export default function Dashboard() {
         jobsRes,
         quotesRes,
         activityRes,
+        clientCountRes,
+        poolCountRes,
+        serviceCountRes,
       ] = await Promise.all([
         supabase
           .from('service_records')
@@ -52,7 +56,6 @@ export default function Dashboard() {
           .eq('business_id', business.id)
           .gte('serviced_at', startOfWeek.toISOString()),
 
-        // Pools due today or overdue
         supabase
           .from('pools')
           .select('id, address, type, next_due_at, last_serviced_at, schedule_frequency, clients(name)')
@@ -61,7 +64,6 @@ export default function Dashboard() {
           .order('next_due_at', { ascending: true })
           .limit(5),
 
-        // Overdue pools
         supabase
           .from('pools')
           .select('id, address, next_due_at, clients(name)')
@@ -88,6 +90,22 @@ export default function Dashboard() {
           .eq('status', 'completed')
           .order('serviced_at', { ascending: false })
           .limit(5),
+
+        // Total counts for getting started
+        supabase
+          .from('clients')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', business.id),
+
+        supabase
+          .from('pools')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', business.id),
+
+        supabase
+          .from('service_records')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', business.id),
       ])
 
       setStats({
@@ -95,6 +113,12 @@ export default function Dashboard() {
         overduePools: overdueRes.data?.length || 0,
         activeJobs: jobsRes.count || 0,
         pendingQuotes: quotesRes.count || 0,
+      })
+
+      setCounts({
+        clients: clientCountRes.count || 0,
+        pools: poolCountRes.count || 0,
+        services: serviceCountRes.count || 0,
       })
 
       setTodayPools(dueTodayRes.data || [])
@@ -119,6 +143,16 @@ export default function Dashboard() {
     )
   }
 
+  // Getting Started checklist - show when setup is incomplete
+  const steps = [
+    { label: 'Create your business', done: true, action: null },
+    { label: 'Add your first client', done: counts.clients > 0, action: () => navigate('/clients'), actionLabel: 'Add Client' },
+    { label: 'Add a pool to a client', done: counts.pools > 0, action: () => navigate('/clients'), actionLabel: 'Add Pool' },
+    { label: 'Complete your first service', done: counts.services > 0, action: () => navigate('/route'), actionLabel: 'Start Service' },
+  ]
+  const allDone = steps.every(s => s.done)
+  const completedSteps = steps.filter(s => s.done).length
+
   return (
     <>
       <Header title="Dashboard" />
@@ -133,7 +167,58 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Quick Service Section - Most prominent */}
+        {/* Getting Started - show until all steps complete */}
+        {!allDone && (
+          <section className="mb-6">
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Getting Started</h3>
+                <span className="text-xs text-gray-500">{completedSteps}/{steps.length}</span>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full h-2 bg-gray-100 rounded-full mb-4">
+                <div
+                  className="h-2 bg-pool-500 rounded-full transition-all"
+                  style={{ width: `${(completedSteps / steps.length) * 100}%` }}
+                />
+              </div>
+              <div className="space-y-3">
+                {steps.map((step, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className={cn(
+                      'w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-medium',
+                      step.done ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                    )}>
+                      {step.done ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        i + 1
+                      )}
+                    </div>
+                    <span className={cn(
+                      'text-sm flex-1',
+                      step.done ? 'text-gray-400 line-through' : 'text-gray-900 font-medium'
+                    )}>
+                      {step.label}
+                    </span>
+                    {!step.done && step.action && (
+                      <button
+                        onClick={step.action}
+                        className="text-xs text-pool-500 font-medium min-h-tap flex items-center px-2"
+                      >
+                        {step.actionLabel}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </section>
+        )}
+
+        {/* Quick Service Section */}
         {todayPools.length > 0 && (
           <section className="mb-6">
             <div className="flex items-center justify-between mb-2">
@@ -266,14 +351,6 @@ export default function Dashboard() {
               ))}
             </Card>
           </section>
-        )}
-
-        {/* Empty state */}
-        {todayPools.length === 0 && overduePools.length === 0 && recentActivity.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-sm mb-4">No activity yet. Start by adding clients and pools.</p>
-            <Button onClick={() => navigate('/clients')}>Add Your First Client</Button>
-          </div>
         )}
       </PageWrapper>
     </>
