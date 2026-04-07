@@ -6,15 +6,17 @@ export function useService() {
   const { business } = useBusiness()
   const [loading, setLoading] = useState(false)
 
-  const createServiceRecord = useCallback(async (poolId, technicianName) => {
+  const createServiceRecord = useCallback(async (poolId, technicianName, staffId) => {
+    const record = {
+      business_id: business.id,
+      pool_id: poolId,
+      technician_name: technicianName || 'Owner',
+      status: 'in_progress',
+    }
+    if (staffId) record.staff_id = staffId
     const { data, error } = await supabase
       .from('service_records')
-      .insert({
-        business_id: business.id,
-        pool_id: poolId,
-        technician_name: technicianName || 'Owner',
-        status: 'in_progress',
-      })
+      .insert(record)
       .select()
       .single()
     if (error) throw error
@@ -119,6 +121,8 @@ function calculateNextDueDate(from, frequency) {
     case 'weekly': date.setDate(date.getDate() + 7); break
     case 'fortnightly': date.setDate(date.getDate() + 14); break
     case 'monthly': date.setMonth(date.getMonth() + 1); break
+    case '6_weekly': date.setDate(date.getDate() + 42); break
+    case 'quarterly': date.setDate(date.getDate() + 90); break
     default: date.setDate(date.getDate() + 7)
   }
   return date

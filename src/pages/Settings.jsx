@@ -150,6 +150,23 @@ export default function Settings() {
             </Button>
           </Card>
 
+          {/* Staff */}
+          <Card className="p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              Staff
+            </h3>
+            <p className="text-sm text-gray-500">
+              Manage your team members. Staff profiles appear on service reports and the client portal.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/settings/staff')}
+              className="w-full min-h-tap"
+            >
+              Manage Staff
+            </Button>
+          </Card>
+
           {/* Subscription */}
           <Card className="p-4 space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">

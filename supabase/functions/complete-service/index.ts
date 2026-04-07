@@ -40,6 +40,17 @@ serve(async (req) => {
       .eq('id', record.business_id)
       .single()
 
+    // Fetch staff member if assigned
+    let staffMember = null
+    if (record.staff_id) {
+      const { data: staffData } = await supabase
+        .from('staff_members')
+        .select('*')
+        .eq('id', record.staff_id)
+        .single()
+      staffMember = staffData
+    }
+
     const pool = record.pools
     const client = pool.clients
     const chemicals = record.chemical_logs?.[0] || {}
@@ -126,6 +137,27 @@ serve(async (req) => {
             Your pool at <strong>${pool.address}</strong> has been serviced. Here's a summary of everything we did today.
           </p>
 
+          <!-- Staff Card -->
+          ${staffMember ? `
+          <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-bottom:16px;">
+            <table style="width:100%;">
+              <tr>
+                <td style="width:56px;vertical-align:top;">
+                  ${staffMember.photo_url
+                    ? `<img src="${staffMember.photo_url}" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover;" />`
+                    : `<div style="width:48px;height:48px;border-radius:50%;background:${brandColour}20;color:${brandColour};font-size:18px;font-weight:700;text-align:center;line-height:48px;">${(staffMember.name || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}</div>`
+                  }
+                </td>
+                <td style="vertical-align:top;padding-left:12px;">
+                  <p style="margin:0;font-size:15px;font-weight:600;color:#111827;">${staffMember.name}</p>
+                  <p style="margin:2px 0 0;font-size:13px;color:#6B7280;">${{technician:'Pool Technician',senior_tech:'Senior Technician',manager:'Manager',owner:'Owner'}[staffMember.role] || staffMember.role}</p>
+                  ${staffMember.phone ? `<p style="margin:2px 0 0;font-size:13px;color:${brandColour};">${staffMember.phone}</p>` : ''}
+                </td>
+              </tr>
+            </table>
+          </div>
+          ` : ''}
+
           <!-- Service info bar -->
           <div style="background:#F9FAFB;border-radius:8px;padding:12px 16px;display:flex;">
             <table style="width:100%;font-size:13px;color:#6B7280;">
@@ -133,7 +165,7 @@ serve(async (req) => {
                 <td style="padding:2px 0;"><strong style="color:#374151;">Date:</strong> ${serviceDate}</td>
               </tr>
               <tr>
-                <td style="padding:2px 0;"><strong style="color:#374151;">Technician:</strong> ${record.technician_name || 'Technician'}</td>
+                <td style="padding:2px 0;"><strong style="color:#374151;">Technician:</strong> ${staffMember?.name || record.technician_name || 'Technician'}</td>
               </tr>
               ${pool.type ? `<tr><td style="padding:2px 0;"><strong style="color:#374151;">Pool type:</strong> ${pool.type}</td></tr>` : ''}
             </table>

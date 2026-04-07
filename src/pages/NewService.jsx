@@ -51,6 +51,8 @@ export default function NewService() {
 
   const [pool, setPool] = useState(null)
   const [client, setClient] = useState(null)
+  const [staffList, setStaffList] = useState([])
+  const [selectedStaffId, setSelectedStaffId] = useState('')
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
@@ -84,14 +86,16 @@ export default function NewService() {
 
   async function loadPool() {
     try {
-      const { data, error } = await supabase
-        .from('pools')
-        .select('*, clients(*)')
-        .eq('id', poolId)
-        .single()
-      if (error) throw error
-      setPool(data)
-      setClient(data.clients)
+      const [poolRes, staffRes] = await Promise.all([
+        supabase.from('pools').select('*, clients(*)').eq('id', poolId).single(),
+        supabase.from('staff_members').select('*').eq('business_id', business?.id).eq('is_active', true).order('name'),
+      ])
+      if (poolRes.error) throw poolRes.error
+      setPool(poolRes.data)
+      setClient(poolRes.data.clients)
+      const staffData = staffRes.data || []
+      setStaffList(staffData)
+      if (staffData.length === 1) setSelectedStaffId(staffData[0].id)
     } catch (err) {
       console.error('Error loading pool:', err)
     } finally {
@@ -127,7 +131,9 @@ export default function NewService() {
     setSubmitting(true)
     try {
       // Create service record
-      const record = await createServiceRecord(poolId, business?.owner_name || 'Owner')
+      const selectedStaff = staffList.find(s => s.id === selectedStaffId)
+      const techName = selectedStaff?.name || business?.owner_name || 'Owner'
+      const record = await createServiceRecord(poolId, techName, selectedStaffId || null)
 
       // Save chemical readings (convert empty strings to null)
       const cleanReadings = {}
@@ -206,6 +212,18 @@ export default function NewService() {
         {/* Step 1: Chemical Readings */}
         {step === 0 && (
           <div className="space-y-3">
+            {/* Staff selector */}
+            {staffList.length > 0 && (
+              <Select
+                label="Technician"
+                value={selectedStaffId}
+                onChange={e => setSelectedStaffId(e.target.value)}
+                options={[
+                  { value: '', label: 'Select technician...' },
+                  ...staffList.map(s => ({ value: s.id, label: s.name })),
+                ]}
+              />
+            )}
             <h2 className="text-base font-semibold text-gray-900">Chemical Readings</h2>
             {READING_FIELDS.map(({ key, rangeKey, saltOnly }) => {
               if (saltOnly && !isSaltPool) return null

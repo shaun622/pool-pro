@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import StaffCard from '../components/ui/StaffCard'
 import { supabase } from '../lib/supabase'
-import { formatDate, getChemicalStatus, statusColor, CHEMICAL_LABELS } from '../lib/utils'
+import { formatDate, getChemicalStatus, statusColor, CHEMICAL_LABELS, FREQUENCY_LABELS } from '../lib/utils'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 
 const CHEMICAL_KEYS = ['ph', 'free_chlorine', 'total_chlorine', 'alkalinity', 'stabiliser', 'calcium_hardness', 'salt']
 
 function ChemicalCell({ value, chemKey, ranges }) {
   if (value == null) return <td className="px-2 py-1.5 text-center text-gray-300 text-sm">--</td>
-  const range = ranges?.[chemKey]
+  const rangeKeyMap = { ph: 'ph', free_chlorine: 'free_cl', total_chlorine: 'total_cl', alkalinity: 'alk', stabiliser: 'stabiliser', calcium_hardness: 'calcium', salt: 'salt' }
+  const range = ranges?.[rangeKeyMap[chemKey]]
   const status = getChemicalStatus(value, range)
   const colors = statusColor(status)
   return (
@@ -28,105 +30,76 @@ function MiniChart({ data, dataKey, color }) {
         <LineChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
           <XAxis dataKey="date" hide />
           <YAxis hide domain={['auto', 'auto']} />
-          <Line
-            type="monotone"
-            dataKey={dataKey}
-            stroke={color}
-            strokeWidth={2}
-            dot={false}
-            isAnimationActive={false}
-          />
+          <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>
   )
 }
 
-function PoolSection({ pool, serviceRecords, brandColor }) {
+const trendColors = {
+  ph: '#6366f1', free_chlorine: '#3b82f6', total_chlorine: '#06b6d4',
+  alkalinity: '#10b981', stabiliser: '#f59e0b', calcium_hardness: '#8b5cf6', salt: '#0ea5e9',
+}
+
+function PoolSection({ pool, serviceRecords, chemicalLogs, brandColor }) {
+  // Build readings from chemical_logs joined to service records
   const readings = serviceRecords
-    .filter(r => r.chemical_readings)
-    .map(r => ({
-      date: formatDate(r.serviced_at),
-      ...r.chemical_readings,
-    }))
+    .map(r => {
+      const log = chemicalLogs[r.id]
+      if (!log) return null
+      return { date: formatDate(r.serviced_at), ...log }
+    })
+    .filter(Boolean)
     .reverse()
 
-  const poolTypeBadge = {
-    chlorine: 'chlorine',
-    salt: 'salt',
-    mineral: 'mineral',
-    freshwater: 'freshwater',
-  }
-
-  const trendColors = {
-    ph: '#6366f1',
-    free_chlorine: '#3b82f6',
-    total_chlorine: '#06b6d4',
-    alkalinity: '#10b981',
-    stabiliser: '#f59e0b',
-    calcium_hardness: '#8b5cf6',
-    salt: '#0ea5e9',
-  }
+  const isOverdue = pool.next_due_at && new Date(pool.next_due_at) < new Date()
 
   return (
     <div className="mb-8">
+      {/* Pool info */}
       <Card className="mb-4">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h3 className="font-semibold text-gray-900 text-lg">{pool.address_line}</h3>
-            {pool.address_line_2 && (
-              <p className="text-sm text-gray-500">{pool.address_line_2}</p>
-            )}
-            <p className="text-sm text-gray-500">
-              {[pool.suburb, pool.state, pool.postcode].filter(Boolean).join(', ')}
-            </p>
+            <h3 className="font-semibold text-gray-900 text-lg">{pool.address}</h3>
           </div>
-          <Badge variant={poolTypeBadge[pool.pool_type] || 'default'}>
-            {pool.pool_type}
-          </Badge>
+          <Badge variant={pool.type || 'default'}>{pool.type}</Badge>
         </div>
 
-        {(pool.volume_litres || pool.surface_type || pool.filter_type || pool.pump_model) && (
-          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            {pool.volume_litres && (
-              <div>
-                <span className="text-gray-500">Volume:</span>{' '}
-                <span className="font-medium">{pool.volume_litres.toLocaleString()}L</span>
-              </div>
-            )}
-            {pool.surface_type && (
-              <div>
-                <span className="text-gray-500">Surface:</span>{' '}
-                <span className="font-medium capitalize">{pool.surface_type}</span>
-              </div>
-            )}
-            {pool.filter_type && (
-              <div>
-                <span className="text-gray-500">Filter:</span>{' '}
-                <span className="font-medium capitalize">{pool.filter_type}</span>
-              </div>
-            )}
-            {pool.pump_model && (
-              <div>
-                <span className="text-gray-500">Pump:</span>{' '}
-                <span className="font-medium">{pool.pump_model}</span>
-              </div>
-            )}
-            {pool.chlorinator_model && (
-              <div>
-                <span className="text-gray-500">Chlorinator:</span>{' '}
-                <span className="font-medium">{pool.chlorinator_model}</span>
-              </div>
-            )}
-            {pool.pool_shape && (
-              <div>
-                <span className="text-gray-500">Shape:</span>{' '}
-                <span className="font-medium capitalize">{pool.pool_shape}</span>
-              </div>
+        <div className="grid grid-cols-2 gap-2 text-sm mt-3">
+          {pool.volume_litres && (
+            <div><span className="text-gray-500">Volume:</span> <span className="font-medium">{Number(pool.volume_litres).toLocaleString()}L</span></div>
+          )}
+          {pool.shape && (
+            <div><span className="text-gray-500">Shape:</span> <span className="font-medium capitalize">{pool.shape}</span></div>
+          )}
+          {pool.equipment?.filter_type && (
+            <div><span className="text-gray-500">Filter:</span> <span className="font-medium">{pool.equipment.filter_type}</span></div>
+          )}
+          {pool.equipment?.pump_model && (
+            <div><span className="text-gray-500">Pump:</span> <span className="font-medium">{pool.equipment.pump_model}</span></div>
+          )}
+        </div>
+      </Card>
+
+      {/* Upcoming Service */}
+      {pool.next_due_at && (
+        <Card className={`mb-4 ${isOverdue ? 'border-red-200 bg-red-50' : 'border-pool-200 bg-pool-50'}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Next Service</p>
+              <p className={`text-base font-semibold mt-0.5 ${isOverdue ? 'text-red-600' : 'text-pool-600'}`}>
+                {formatDate(pool.next_due_at)}
+              </p>
+            </div>
+            {pool.schedule_frequency && (
+              <Badge variant={isOverdue ? 'danger' : 'primary'}>
+                {FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}
+              </Badge>
             )}
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Chemical Readings Table */}
       {readings.length > 0 && (
@@ -145,7 +118,7 @@ function PoolSection({ pool, serviceRecords, brandColor }) {
             </thead>
             <tbody>
               {serviceRecords
-                .filter(r => r.chemical_readings)
+                .filter(r => chemicalLogs[r.id])
                 .map(record => (
                   <tr key={record.id} className="border-b last:border-0">
                     <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">
@@ -154,7 +127,7 @@ function PoolSection({ pool, serviceRecords, brandColor }) {
                     {CHEMICAL_KEYS.map(key => (
                       <ChemicalCell
                         key={key}
-                        value={record.chemical_readings?.[key]}
+                        value={chemicalLogs[record.id]?.[key]}
                         chemKey={key}
                         ranges={pool.target_ranges}
                       />
@@ -176,14 +149,8 @@ function PoolSection({ pool, serviceRecords, brandColor }) {
               if (!hasData) return null
               return (
                 <div key={key}>
-                  <p className="text-xs text-gray-500 mb-1 font-medium">
-                    {CHEMICAL_LABELS[key]?.label || key}
-                  </p>
-                  <MiniChart
-                    data={readings.filter(r => r[key] != null)}
-                    dataKey={key}
-                    color={trendColors[key] || brandColor || '#3b82f6'}
-                  />
+                  <p className="text-xs text-gray-500 mb-1 font-medium">{CHEMICAL_LABELS[key]?.label || key}</p>
+                  <MiniChart data={readings.filter(r => r[key] != null)} dataKey={key} color={trendColors[key] || brandColor} />
                 </div>
               )
             })}
@@ -191,7 +158,7 @@ function PoolSection({ pool, serviceRecords, brandColor }) {
         </Card>
       )}
 
-      {/* Service Records */}
+      {/* Service History */}
       {serviceRecords.length > 0 && (
         <Card>
           <h4 className="font-semibold text-gray-900 mb-3">Recent Service History</h4>
@@ -199,35 +166,18 @@ function PoolSection({ pool, serviceRecords, brandColor }) {
             {serviceRecords.map(record => (
               <div key={record.id} className="border-b last:border-0 pb-3 last:pb-0">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium text-gray-900 text-sm">
-                    {formatDate(record.serviced_at)}
-                  </span>
-                  {record.status && (
-                    <Badge variant={record.status === 'completed' ? 'success' : 'warning'}>
-                      {record.status}
-                    </Badge>
-                  )}
-                </div>
-                {record.tasks_completed && record.tasks_completed.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {record.tasks_completed.map((task, i) => (
-                      <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                        {task}
-                      </span>
-                    ))}
+                  <div>
+                    <span className="font-medium text-gray-900 text-sm">{formatDate(record.serviced_at)}</span>
+                    {record.technician_name && (
+                      <span className="text-xs text-gray-400 ml-2">by {record.technician_name}</span>
+                    )}
                   </div>
-                )}
+                  <Badge variant={record.status === 'completed' ? 'success' : 'warning'}>
+                    {record.status}
+                  </Badge>
+                </div>
                 {record.notes && (
                   <p className="text-sm text-gray-500 mt-1">{record.notes}</p>
-                )}
-                {record.chemicals_added && record.chemicals_added.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {record.chemicals_added.map((chem, i) => (
-                      <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                        {chem.chemical}: {chem.amount}{chem.unit}
-                      </span>
-                    ))}
-                  </div>
                 )}
               </div>
             ))}
@@ -246,6 +196,8 @@ export default function PublicPortal() {
   const [client, setClient] = useState(null)
   const [pools, setPools] = useState([])
   const [serviceRecords, setServiceRecords] = useState({})
+  const [chemicalLogs, setChemicalLogs] = useState({})
+  const [staffMembers, setStaffMembers] = useState([])
 
   useEffect(() => {
     if (!token) return
@@ -260,7 +212,7 @@ export default function PublicPortal() {
       // Fetch the pool with this portal token to find the client
       const { data: portalPool, error: poolError } = await supabase
         .from('pools')
-        .select('*, client:clients(*)')
+        .select('*, clients(*)')
         .eq('portal_token', token)
         .single()
 
@@ -270,7 +222,7 @@ export default function PublicPortal() {
         return
       }
 
-      const clientData = portalPool.client
+      const clientData = portalPool.clients
       setClient(clientData)
 
       // Fetch business
@@ -279,7 +231,6 @@ export default function PublicPortal() {
         .select('*')
         .eq('id', clientData.business_id)
         .single()
-
       setBusiness(bizData)
 
       // Fetch all pools for this client
@@ -287,11 +238,10 @@ export default function PublicPortal() {
         .from('pools')
         .select('*')
         .eq('client_id', clientData.id)
-        .order('address_line')
-
+        .order('address')
       setPools(allPools || [])
 
-      // Fetch last 10 service records per pool
+      // Fetch service records and chemical logs
       const poolIds = (allPools || []).map(p => p.id)
       if (poolIds.length > 0) {
         const { data: records } = await supabase
@@ -301,7 +251,7 @@ export default function PublicPortal() {
           .order('serviced_at', { ascending: false })
           .limit(poolIds.length * 10)
 
-        // Group by pool_id, max 10 each
+        // Group by pool_id
         const grouped = {}
         for (const record of (records || [])) {
           if (!grouped[record.pool_id]) grouped[record.pool_id] = []
@@ -310,6 +260,32 @@ export default function PublicPortal() {
           }
         }
         setServiceRecords(grouped)
+
+        // Fetch chemical logs for these records
+        const recordIds = (records || []).map(r => r.id)
+        if (recordIds.length > 0) {
+          const { data: logs } = await supabase
+            .from('chemical_logs')
+            .select('*')
+            .in('service_record_id', recordIds)
+
+          const logMap = {}
+          for (const log of (logs || [])) {
+            logMap[log.service_record_id] = log
+          }
+          setChemicalLogs(logMap)
+        }
+      }
+
+      // Fetch active staff members for this business
+      if (bizData?.id) {
+        const { data: staffData } = await supabase
+          .from('staff_members')
+          .select('*')
+          .eq('business_id', bizData.id)
+          .eq('is_active', true)
+          .order('name')
+        setStaffMembers(staffData || [])
       }
     } catch (err) {
       setError('Something went wrong loading the portal.')
@@ -341,22 +317,15 @@ export default function PublicPortal() {
     )
   }
 
-  const brandColor = business?.brand_colour || '#2563eb'
+  const brandColor = business?.brand_colour || '#0EA5E9'
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Branded Header */}
-      <header
-        className="w-full py-6 px-4"
-        style={{ backgroundColor: brandColor }}
-      >
+      <header className="w-full py-6 px-4" style={{ backgroundColor: brandColor }}>
         <div className="max-w-3xl mx-auto flex items-center gap-4">
           {business?.logo_url && (
-            <img
-              src={business.logo_url}
-              alt={business.name}
-              className="h-12 w-12 rounded-lg object-cover bg-white/20"
-            />
+            <img src={business.logo_url} alt={business.name} className="h-12 w-12 rounded-lg object-cover bg-white/20" />
           )}
           <div className="text-white">
             <h1 className="text-xl font-bold">{business?.name || 'Pool Service'}</h1>
@@ -365,17 +334,26 @@ export default function PublicPortal() {
         </div>
       </header>
 
-      {/* Client Info */}
       <div className="max-w-3xl mx-auto w-full px-4 py-6 flex-1">
+        {/* Welcome */}
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Welcome, {client?.first_name} {client?.last_name}
-          </h2>
-          <p className="text-sm text-gray-500">
-            View your pool service history and chemical readings below.
-          </p>
+          <h2 className="text-lg font-semibold text-gray-900">Welcome, {client?.name}</h2>
+          <p className="text-sm text-gray-500">View your pool service history, chemical readings, and upcoming schedule.</p>
         </div>
 
+        {/* Your Team */}
+        {staffMembers.length > 0 && (
+          <section className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Your Service Team</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {staffMembers.map(member => (
+                <StaffCard key={member.id} staff={member} brandColor={brandColor} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Pools */}
         {pools.length === 0 ? (
           <Card className="text-center py-8">
             <p className="text-gray-500">No pools found for your account.</p>
@@ -386,6 +364,7 @@ export default function PublicPortal() {
               key={pool.id}
               pool={pool}
               serviceRecords={serviceRecords[pool.id] || []}
+              chemicalLogs={chemicalLogs}
               brandColor={brandColor}
             />
           ))
@@ -396,13 +375,10 @@ export default function PublicPortal() {
       <footer className="w-full border-t bg-white py-6 px-4 mt-auto">
         <div className="max-w-3xl mx-auto text-center text-sm text-gray-500 space-y-1">
           <p className="font-medium text-gray-700">{business?.name}</p>
-          {business?.phone && <p>Phone: {business.phone}</p>}
-          {business?.email && <p>Email: {business.email}</p>}
-          {business?.address && <p>{business.address}</p>}
+          {business?.phone && <p>{business.phone}</p>}
+          {business?.email && <p>{business.email}</p>}
           {business?.abn && <p>ABN: {business.abn}</p>}
-          <p className="pt-2 text-xs text-gray-400">
-            Powered by PoolPro
-          </p>
+          <p className="pt-2 text-xs text-gray-400">Powered by PoolPro</p>
         </div>
       </footer>
     </div>

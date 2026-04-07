@@ -17,6 +17,7 @@ const ServiceDetail = lazy(() => import('./pages/ServiceDetail'))
 const Jobs = lazy(() => import('./pages/Jobs'))
 const QuoteBuilder = lazy(() => import('./pages/QuoteBuilder'))
 const Settings = lazy(() => import('./pages/Settings'))
+const Staff = lazy(() => import('./pages/Staff'))
 const Subscription = lazy(() => import('./pages/Subscription'))
 const PublicPortal = lazy(() => import('./pages/PublicPortal'))
 const PublicQuote = lazy(() => import('./pages/PublicQuote'))
@@ -78,6 +79,7 @@ export default function App() {
                   <Route path="/quotes/new" element={<QuoteBuilder />} />
                   <Route path="/quotes/:id" element={<QuoteBuilder />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/settings/staff" element={<Staff />} />
                   <Route path="/subscription" element={<Subscription />} />
                 </Route>
               </Route>

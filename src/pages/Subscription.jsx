@@ -17,9 +17,11 @@ const PLANS = [
     period: '14 days',
     features: {
       pools: '5 pools',
+      staff: '1 staff member',
       serviceHistory: '30 days',
       chemistryLog: true,
       routeSheet: true,
+      clientPortal: true,
       quotesPdf: false,
       photoAttachments: false,
       inventoryTracking: false,
@@ -35,9 +37,11 @@ const PLANS = [
     period: '/mo',
     features: {
       pools: 'Unlimited',
+      staff: '2 staff members',
       serviceHistory: 'Unlimited',
       chemistryLog: true,
       routeSheet: true,
+      clientPortal: true,
       quotesPdf: true,
       photoAttachments: true,
       inventoryTracking: false,
@@ -53,9 +57,11 @@ const PLANS = [
     period: '/mo',
     features: {
       pools: 'Unlimited',
+      staff: '10 staff members',
       serviceHistory: 'Unlimited',
       chemistryLog: true,
       routeSheet: true,
+      clientPortal: true,
       quotesPdf: true,
       photoAttachments: true,
       inventoryTracking: true,
@@ -67,9 +73,11 @@ const PLANS = [
 
 const FEATURE_LABELS = {
   pools: 'Pools',
+  staff: 'Staff Members',
   serviceHistory: 'Service History',
   chemistryLog: 'Chemistry Log',
   routeSheet: 'Route Sheet',
+  clientPortal: 'Client Portal',
   quotesPdf: 'Quotes & PDF',
   photoAttachments: 'Photo Attachments',
   inventoryTracking: 'Inventory Tracking',
