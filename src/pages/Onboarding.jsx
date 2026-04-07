@@ -145,7 +145,7 @@ export default function Onboarding() {
               />
 
               <Input
-                label="ABN"
+                label="ABN (Optional)"
                 value={abn}
                 onChange={(e) => setAbn(e.target.value)}
                 placeholder="e.g. 12 345 678 901"

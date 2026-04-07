@@ -23,6 +23,7 @@ import {
 
 const emptyPool = {
   address: '',
+  sameAsClient: false,
   type: 'chlorine',
   volume_litres: '',
   shape: 'rectangular',
@@ -31,6 +32,7 @@ const emptyPool = {
   pump_model: '',
   filter_type: '',
   heater: '',
+  route_day: '',
 }
 
 export default function ClientDetail() {
@@ -44,7 +46,7 @@ export default function ClientDetail() {
 
   // Edit client modal
   const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' })
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', billing_frequency: '', service_rate: '' })
   const [editSaving, setEditSaving] = useState(false)
 
   // Delete confirmation
@@ -76,6 +78,8 @@ export default function ClientDetail() {
           phone: data.phone || '',
           address: data.address || '',
           notes: data.notes || '',
+          billing_frequency: data.billing_frequency || '',
+          service_rate: data.service_rate || '',
         })
         setLoading(false)
       })
@@ -119,12 +123,21 @@ export default function ClientDetail() {
     setPoolForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
+  const handleSameAsClient = (e) => {
+    const checked = e.target.checked
+    setPoolForm(prev => ({
+      ...prev,
+      sameAsClient: checked,
+      address: checked ? (client?.address || '') : '',
+    }))
+  }
+
   const handlePoolSubmit = async (e) => {
     e.preventDefault()
     if (!poolForm.address.trim()) return
     setPoolSaving(true)
     try {
-      const { pump_model, filter_type, heater, volume_litres, ...rest } = poolForm
+      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, ...rest } = poolForm
       await createPool({
         ...rest,
         client_id: id,
@@ -161,6 +174,14 @@ export default function ClientDetail() {
   const typeOptions = POOL_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))
   const shapeOptions = POOL_SHAPES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))
   const freqOptions = SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: f.charAt(0).toUpperCase() + f.slice(1) }))
+  const billingOptions = [
+    { value: '', label: 'Not set' },
+    { value: 'per_visit', label: 'Per visit' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'fortnightly', label: 'Fortnightly' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+  ]
 
   return (
     <>
@@ -215,6 +236,18 @@ export default function ClientDetail() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <span className="text-gray-700">{client.address}</span>
+              </div>
+            )}
+            {(client.service_rate || client.billing_frequency) && (
+              <div className="flex items-center gap-2 text-sm pt-1 border-t border-gray-100 mt-2">
+                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-gray-700">
+                  {client.service_rate ? `$${client.service_rate}` : ''}
+                  {client.service_rate && client.billing_frequency ? ' / ' : ''}
+                  {client.billing_frequency ? client.billing_frequency.replace('_', ' ') : ''}
+                </span>
               </div>
             )}
             {client.notes && (
@@ -272,6 +305,9 @@ export default function ClientDetail() {
                       <p className="font-medium text-gray-900 truncate">{pool.address}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant={pool.type}>{pool.type}</Badge>
+                        {pool.schedule_frequency && (
+                          <span className="text-xs text-gray-400">{pool.schedule_frequency}</span>
+                        )}
                         {pool.last_serviced_at && (
                           <span className="text-xs text-gray-500">
                             Last: {formatDate(pool.last_serviced_at)}
@@ -287,6 +323,19 @@ export default function ClientDetail() {
                         </span>
                       </div>
                     )}
+                  </div>
+                  {/* Quick service button */}
+                  <div className="mt-3">
+                    <Button
+                      variant="secondary"
+                      className="w-full text-sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigate(`/pools/${pool.id}/service`)
+                      }}
+                    >
+                      Start Service
+                    </Button>
                   </div>
                 </Card>
               )
@@ -329,6 +378,28 @@ export default function ClientDetail() {
             onChange={handleEditChange}
             placeholder="Street address"
           />
+
+          <div className="border-t border-gray-100 pt-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Pricing</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Service Rate ($)"
+                name="service_rate"
+                type="number"
+                value={editForm.service_rate}
+                onChange={handleEditChange}
+                placeholder="e.g. 85"
+              />
+              <Select
+                label="Billing Frequency"
+                name="billing_frequency"
+                value={editForm.billing_frequency}
+                onChange={handleEditChange}
+                options={billingOptions}
+              />
+            </div>
+          </div>
+
           <TextArea
             label="Notes"
             name="notes"
@@ -383,6 +454,19 @@ export default function ClientDetail() {
       {/* Add Pool Modal */}
       <Modal open={poolModalOpen} onClose={() => setPoolModalOpen(false)} title="Add Pool">
         <form onSubmit={handlePoolSubmit} className="space-y-4">
+          {/* Same as client address checkbox */}
+          {client.address && (
+            <label className="flex items-center gap-2 min-h-tap cursor-pointer">
+              <input
+                type="checkbox"
+                checked={poolForm.sameAsClient}
+                onChange={handleSameAsClient}
+                className="w-5 h-5 rounded border-gray-300 text-pool-500 focus:ring-pool-500"
+              />
+              <span className="text-sm text-gray-700">Same address as client</span>
+            </label>
+          )}
+
           <Input
             label="Pool Address"
             name="address"
@@ -390,6 +474,7 @@ export default function ClientDetail() {
             onChange={handlePoolChange}
             required
             placeholder="Pool location address"
+            disabled={poolForm.sameAsClient}
           />
           <div className="grid grid-cols-2 gap-3">
             <Select

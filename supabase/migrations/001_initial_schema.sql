@@ -38,6 +38,8 @@ create table if not exists clients (
   phone text,
   address text,
   notes text,
+  service_rate numeric,
+  billing_frequency text,
   created_at timestamptz default now()
 );
 
