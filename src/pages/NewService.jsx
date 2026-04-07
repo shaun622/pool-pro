@@ -57,7 +57,7 @@ export default function NewService() {
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
-  const [completed, setCompleted] = useState(false)
+  const [completed, setCompleted] = useState(searchParams.get('done') === '1')
   const [lastReadings, setLastReadings] = useState(null)
 
   // Step 1: Chemical readings
@@ -84,7 +84,7 @@ export default function NewService() {
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
-    if (business?.id && !completed) loadPool()
+    if (business?.id) loadPool()
   }, [poolId, business?.id])
 
   async function loadPool() {
@@ -214,6 +214,8 @@ export default function NewService() {
       // Complete the service
       await completeService(record.id, poolId, notes)
 
+      // Navigate to completion URL so it survives page reloads
+      navigate(`/pools/${poolId}/service?done=1`, { replace: true })
       setCompleted(true)
     } catch (err) {
       console.error('Error completing service:', err)
@@ -261,10 +263,10 @@ export default function NewService() {
 
   return (
     <>
-      <Header title="New Service" backTo={`/pools/${poolId}`} />
+      <Header title={completed ? "Service Complete" : "New Service"} backTo={`/pools/${poolId}`} />
       <PageWrapper>
         {/* Progress bar */}
-        <div className="mb-6">
+        {!completed && <div className="mb-6">
           <div className="flex justify-between mb-2">
             {STEPS.map((label, i) => (
               <button
@@ -285,10 +287,10 @@ export default function NewService() {
               style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
             />
           </div>
-        </div>
+        </div>}
 
         {/* Step 1: Chemical Readings */}
-        {step === 0 && (
+        {step === 0 && !completed && (
           <div className="space-y-3">
             {/* Staff selector */}
             {staffList.length > 0 && (
@@ -340,7 +342,7 @@ export default function NewService() {
         )}
 
         {/* Step 2: Task Checklist */}
-        {step === 1 && (
+        {step === 1 && !completed && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Task Checklist</h2>
@@ -385,7 +387,7 @@ export default function NewService() {
         )}
 
         {/* Step 3: Chemicals Added */}
-        {step === 2 && (
+        {step === 2 && !completed && (
           <div className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Chemicals Added</h2>
             {chemicalProducts.length > 0 && (
