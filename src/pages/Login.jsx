@@ -18,7 +18,12 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await signIn(email, password);
+      const { user } = await signIn(email, password);
+      // Block customers from the business login
+      if (user?.user_metadata?.role === 'customer') {
+        navigate('/portal');
+        return;
+      }
       navigate('/');
     } catch (err) {
       setError(err.message || 'Failed to sign in. Please check your credentials.');

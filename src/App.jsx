@@ -41,9 +41,14 @@ function ProtectedRoute() {
 }
 
 function BusinessGuard() {
+  const { user } = useAuth()
   const { business, loading } = useBusiness()
   if (loading) return <Loading />
-  if (!business) return <Navigate to="/onboarding" replace />
+  // Redirect customers to their portal instead of onboarding
+  if (!business) {
+    if (user?.user_metadata?.role === 'customer') return <Navigate to="/portal" replace />
+    return <Navigate to="/onboarding" replace />
+  }
   return (
     <>
       <Outlet />

@@ -18,21 +18,19 @@ export default function PortalLogin() {
     setLoading(true)
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-      if (signInError) throw signInError
-
-      // Verify this user has a client record
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('auth_user_id', (await supabase.auth.getUser()).data.user?.id)
-        .limit(1)
-
-      if (!clients?.length) {
-        await supabase.auth.signOut()
-        setError('No customer account found for this email. Please use the link from your service email.')
+      // Verify this email has a portal account (uses service role, bypasses RLS)
+      const { data, error: checkError } = await supabase.functions.invoke('portal-auth', {
+        body: { action: 'sign-in', email, password },
+      })
+      if (checkError) throw checkError
+      if (data?.error) {
+        setError(data.error)
         return
       }
+
+      // Now sign in client-side
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInError) throw signInError
 
       navigate('/portal')
     } catch (err) {
