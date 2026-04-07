@@ -5,16 +5,17 @@ import { useAuth } from './useAuth'
 const BusinessContext = createContext(null)
 
 export function BusinessProvider({ children }) {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [business, setBusiness] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [businessLoading, setBusinessLoading] = useState(true)
 
   const fetchBusiness = useCallback(async () => {
     if (!user) {
       setBusiness(null)
-      setLoading(false)
+      setBusinessLoading(false)
       return
     }
+    setBusinessLoading(true)
     try {
       const { data, error } = await supabase
         .from('businesses')
@@ -30,12 +31,17 @@ export function BusinessProvider({ children }) {
       console.error('Network error fetching business:', err)
       setBusiness(null)
     }
-    setLoading(false)
+    setBusinessLoading(false)
   }, [user])
 
   useEffect(() => {
-    fetchBusiness()
-  }, [fetchBusiness])
+    if (!authLoading) {
+      fetchBusiness()
+    }
+  }, [authLoading, fetchBusiness])
+
+  // Stay loading until auth is resolved AND business fetch is done
+  const loading = authLoading || businessLoading
 
   const createBusiness = useCallback(async (businessData) => {
     const { data, error } = await supabase
