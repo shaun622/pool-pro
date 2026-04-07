@@ -81,16 +81,13 @@ export function useService() {
         .update({ last_serviced_at: now.toISOString(), next_due_at: nextDue.toISOString() })
         .eq('id', poolId)
 
-      // Invoke edge function for email notifications
-      try {
-        const { data, error } = await supabase.functions.invoke('complete-service', {
-          body: { service_record_id: serviceRecordId }
-        })
+      // Fire-and-forget email notifications (don't block completion)
+      supabase.functions.invoke('complete-service', {
+        body: { service_record_id: serviceRecordId }
+      }).then(({ data, error }) => {
         if (error) console.error('Email function error:', error)
         else console.log('Email result:', data)
-      } catch (e) {
-        console.error('Edge function failed:', e)
-      }
+      }).catch(e => console.error('Edge function failed:', e))
     } finally {
       setLoading(false)
     }
