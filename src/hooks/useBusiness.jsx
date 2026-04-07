@@ -34,6 +34,11 @@ export function BusinessProvider({ children }) {
     setBusinessLoading(false)
   }, [user])
 
+  // Reset loading when user changes so BusinessGuard doesn't flash to onboarding
+  useEffect(() => {
+    if (user) setBusinessLoading(true)
+  }, [user])
+
   useEffect(() => {
     if (!authLoading) {
       fetchBusiness()
