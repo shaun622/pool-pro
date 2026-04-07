@@ -10,6 +10,7 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -30,8 +31,12 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      await signUp(email, password);
-      navigate('/onboarding');
+      const data = await signUp(email, password);
+      if (data?.user?.identities?.length === 0) {
+        setError('An account with this email already exists.');
+      } else {
+        setEmailSent(true);
+      }
     } catch (err) {
       setError(err.message || 'Failed to create account. Please try again.');
     } finally {
@@ -48,6 +53,19 @@ export default function Signup() {
           <p className="text-gray-500 mt-1 text-sm">Create your account</p>
         </div>
 
+        {/* Email confirmation message */}
+        {emailSent && (
+          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-5 text-center">
+            <svg className="w-10 h-10 text-green-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <h3 className="text-sm font-semibold text-green-800 mb-1">Check your email</h3>
+            <p className="text-sm text-green-700">
+              We've sent a confirmation link to <strong>{email}</strong>. Click the link to activate your account.
+            </p>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
@@ -56,7 +74,7 @@ export default function Signup() {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {!emailSent && <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             label="Email"
             type="email"
@@ -94,7 +112,7 @@ export default function Signup() {
           >
             {loading ? 'Creating account...' : 'Create Account'}
           </Button>
-        </form>
+        </form>}
 
         {/* Login link */}
         <p className="text-center text-sm text-gray-500 mt-6">
