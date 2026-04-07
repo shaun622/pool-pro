@@ -84,7 +84,7 @@ export default function NewService() {
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
-    if (business?.id) loadPool()
+    if (business?.id && !completed) loadPool()
   }, [poolId, business?.id])
 
   async function loadPool() {
