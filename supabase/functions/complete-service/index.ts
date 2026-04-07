@@ -249,128 +249,131 @@ serve(async (req) => {
 
     // Send emails via Resend
     const resendKey = Deno.env.get('RESEND_API_KEY')
-    if (resendKey) {
-      const emailPromises: Promise<any>[] = []
+    const emailResults: any[] = []
 
-      // 1. Client email — service report
-      if (client.email) {
-        emailPromises.push(
-          fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
-              to: [client.email],
-              subject: `Pool Service Complete — ${pool.address} — ${serviceDateShort}`,
-              html,
-            }),
-          })
-        )
+    if (!resendKey) {
+      console.error('RESEND_API_KEY not found in environment')
+      return new Response(JSON.stringify({ error: 'RESEND_API_KEY not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    async function sendEmail(to: string, subject: string, emailHtml: string) {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
+          to: [to],
+          subject,
+          html: emailHtml,
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        console.error(`Resend error sending to ${to}:`, JSON.stringify(result))
       }
+      return { to, status: res.status, result }
+    }
 
-      // 2. Business owner email — daily summary
-      if (business?.email) {
-        const techName = staffMember?.name || record.technician_name || 'Technician'
-        const today = new Date()
-        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
-        const startOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay() + 1).toISOString()
+    // 1. Client email — service report
+    if (client.email) {
+      emailResults.push(
+        await sendEmail(client.email, `Pool Service Complete — ${pool.address} — ${serviceDateShort}`, html)
+      )
+    }
 
-        // Fetch tech stats
-        const techFilter = staffMember?.id
-          ? supabase.from('service_records').select('id', { count: 'exact', head: true }).eq('staff_id', staffMember.id).eq('status', 'completed')
-          : null
+    // 2. Business owner email — daily summary
+    if (business?.email) {
+      const techName = staffMember?.name || record.technician_name || 'Technician'
+      const today = new Date()
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+      const startOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay() + 1).toISOString()
 
-        const [todayRes, weekRes, remainingRes] = await Promise.all([
-          techFilter ? techFilter.gte('serviced_at', startOfDay) : Promise.resolve({ count: null }),
-          techFilter ? techFilter.gte('serviced_at', startOfWeek) : Promise.resolve({ count: null }),
-          // Pools due today that haven't been serviced yet
-          supabase.from('pools').select('id', { count: 'exact', head: true })
-            .eq('business_id', record.business_id)
-            .lte('next_due_at', new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString())
-            .gt('next_due_at', startOfDay),
-        ])
+      // Fetch tech stats — separate queries to avoid mutable builder bug
+      const [todayRes, weekRes, remainingRes] = await Promise.all([
+        staffMember?.id
+          ? supabase.from('service_records').select('id', { count: 'exact', head: true }).eq('staff_id', staffMember.id).eq('status', 'completed').gte('serviced_at', startOfDay)
+          : Promise.resolve({ count: null }),
+        staffMember?.id
+          ? supabase.from('service_records').select('id', { count: 'exact', head: true }).eq('staff_id', staffMember.id).eq('status', 'completed').gte('serviced_at', startOfWeek)
+          : Promise.resolve({ count: null }),
+        supabase.from('pools').select('id', { count: 'exact', head: true })
+          .eq('business_id', record.business_id)
+          .lte('next_due_at', new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString())
+          .gt('next_due_at', startOfDay),
+      ])
 
-        const jobsToday = todayRes.count ?? '—'
-        const jobsThisWeek = weekRes.count ?? '—'
-        const remainingToday = remainingRes.count ?? '—'
+      const jobsToday = todayRes.count ?? '—'
+      const jobsThisWeek = weekRes.count ?? '—'
+      const remainingToday = remainingRes.count ?? '—'
 
-        const ownerHtml = `
-        <!DOCTYPE html>
-        <html>
-        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F3F4F6;">
-          <div style="max-width:560px;margin:0 auto;">
-            <div style="background:${brandColour};padding:24px;text-align:center;">
-              <h1 style="margin:0;color:white;font-size:18px;">Service Completed</h1>
-            </div>
-            <div style="background:white;padding:24px;">
-              <p style="margin:0 0 16px;font-size:15px;color:#374151;">
-                <strong>${techName}</strong> just completed a service at <strong>${pool.address}</strong> for ${client.name}.
-              </p>
-
-              <!-- Quick stats -->
-              <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-                <tr>
-                  <td style="padding:12px;text-align:center;background:#F0FDF4;border-radius:8px 0 0 8px;">
-                    <div style="font-size:24px;font-weight:700;color:#16A34A;">${jobsToday}</div>
-                    <div style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Jobs Today</div>
-                  </td>
-                  <td style="padding:12px;text-align:center;background:#EFF6FF;">
-                    <div style="font-size:24px;font-weight:700;color:#2563EB;">${jobsThisWeek}</div>
-                    <div style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">This Week</div>
-                  </td>
-                  <td style="padding:12px;text-align:center;background:#FFF7ED;border-radius:0 8px 8px 0;">
-                    <div style="font-size:24px;font-weight:700;color:#EA580C;">${remainingToday}</div>
-                    <div style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Still Due Today</div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Service summary -->
-              <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-bottom:16px;">
-                <table style="width:100%;font-size:13px;color:#374151;">
-                  <tr><td style="padding:3px 0;color:#6B7280;">Client</td><td style="padding:3px 0;text-align:right;font-weight:600;">${client.name}</td></tr>
-                  <tr><td style="padding:3px 0;color:#6B7280;">Pool</td><td style="padding:3px 0;text-align:right;font-weight:600;">${pool.address}</td></tr>
-                  <tr><td style="padding:3px 0;color:#6B7280;">Technician</td><td style="padding:3px 0;text-align:right;font-weight:600;">${techName}</td></tr>
-                  <tr><td style="padding:3px 0;color:#6B7280;">Tasks</td><td style="padding:3px 0;text-align:right;font-weight:600;">${completedTaskCount}/${tasks.length} completed</td></tr>
-                  <tr><td style="padding:3px 0;color:#6B7280;">Chemicals added</td><td style="padding:3px 0;text-align:right;font-weight:600;">${chemicalsAdded.length}</td></tr>
-                  ${record.notes ? `<tr><td style="padding:3px 0;color:#6B7280;">Notes</td><td style="padding:3px 0;text-align:right;font-weight:600;">${record.notes}</td></tr>` : ''}
-                </table>
-              </div>
-
-              ${chemicalRows ? `
-              <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Readings</p>
-              <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:16px;">
-                <thead><tr style="background:#F9FAFB;">
-                  <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #E5E7EB;">Reading</th>
-                  <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #E5E7EB;">Result</th>
-                  <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #E5E7EB;">Range</th>
-                </tr></thead>
-                <tbody>${chemicalRows}</tbody>
-              </table>
-              ` : ''}
-            </div>
-            <div style="padding:16px 24px;text-align:center;font-size:11px;color:#9CA3AF;">
-              ${business?.name || 'PoolPro'} — Service notification
-            </div>
+      const ownerHtml = `
+      <!DOCTYPE html>
+      <html>
+      <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F3F4F6;">
+        <div style="max-width:560px;margin:0 auto;">
+          <div style="background:${brandColour};padding:24px;text-align:center;">
+            <h1 style="margin:0;color:white;font-size:18px;">Service Completed</h1>
           </div>
-        </body>
-        </html>`
+          <div style="background:white;padding:24px;">
+            <p style="margin:0 0 16px;font-size:15px;color:#374151;">
+              <strong>${techName}</strong> just completed a service at <strong>${pool.address}</strong> for ${client.name}.
+            </p>
 
-        emailPromises.push(
-          fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
-              to: [business.email],
-              subject: `✅ ${techName} completed ${pool.address}`,
-              html: ownerHtml,
-            }),
-          })
-        )
-      }
+            <!-- Quick stats -->
+            <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+              <tr>
+                <td style="padding:12px;text-align:center;background:#F0FDF4;border-radius:8px 0 0 8px;">
+                  <div style="font-size:24px;font-weight:700;color:#16A34A;">${jobsToday}</div>
+                  <div style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Jobs Today</div>
+                </td>
+                <td style="padding:12px;text-align:center;background:#EFF6FF;">
+                  <div style="font-size:24px;font-weight:700;color:#2563EB;">${jobsThisWeek}</div>
+                  <div style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">This Week</div>
+                </td>
+                <td style="padding:12px;text-align:center;background:#FFF7ED;border-radius:0 8px 8px 0;">
+                  <div style="font-size:24px;font-weight:700;color:#EA580C;">${remainingToday}</div>
+                  <div style="font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;">Still Due Today</div>
+                </td>
+              </tr>
+            </table>
 
-      await Promise.all(emailPromises)
+            <!-- Service summary -->
+            <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-bottom:16px;">
+              <table style="width:100%;font-size:13px;color:#374151;">
+                <tr><td style="padding:3px 0;color:#6B7280;">Client</td><td style="padding:3px 0;text-align:right;font-weight:600;">${client.name}</td></tr>
+                <tr><td style="padding:3px 0;color:#6B7280;">Pool</td><td style="padding:3px 0;text-align:right;font-weight:600;">${pool.address}</td></tr>
+                <tr><td style="padding:3px 0;color:#6B7280;">Technician</td><td style="padding:3px 0;text-align:right;font-weight:600;">${techName}</td></tr>
+                <tr><td style="padding:3px 0;color:#6B7280;">Tasks</td><td style="padding:3px 0;text-align:right;font-weight:600;">${completedTaskCount}/${tasks.length} completed</td></tr>
+                <tr><td style="padding:3px 0;color:#6B7280;">Chemicals added</td><td style="padding:3px 0;text-align:right;font-weight:600;">${chemicalsAdded.length}</td></tr>
+                ${record.notes ? `<tr><td style="padding:3px 0;color:#6B7280;">Notes</td><td style="padding:3px 0;text-align:right;font-weight:600;">${record.notes}</td></tr>` : ''}
+              </table>
+            </div>
+
+            ${chemicalRows ? `
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Readings</p>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:16px;">
+              <thead><tr style="background:#F9FAFB;">
+                <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #E5E7EB;">Reading</th>
+                <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #E5E7EB;">Result</th>
+                <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #E5E7EB;">Range</th>
+              </tr></thead>
+              <tbody>${chemicalRows}</tbody>
+            </table>
+            ` : ''}
+          </div>
+          <div style="padding:16px 24px;text-align:center;font-size:11px;color:#9CA3AF;">
+            ${business?.name || 'PoolPro'} — Service notification
+          </div>
+        </div>
+      </body>
+      </html>`
+
+      emailResults.push(
+        await sendEmail(business.email, `✅ ${techName} completed ${pool.address}`, ownerHtml)
+      )
     }
 
     // Update report_sent_at
@@ -379,7 +382,7 @@ serve(async (req) => {
       .update({ report_sent_at: new Date().toISOString() })
       .eq('id', service_record_id)
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, emails: emailResults }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
