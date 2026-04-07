@@ -19,6 +19,7 @@ import {
   POOL_TYPES,
   POOL_SHAPES,
   SCHEDULE_FREQUENCIES,
+  FREQUENCY_LABELS,
 } from '../lib/utils'
 
 const emptyPool = {
@@ -174,7 +175,7 @@ export default function ClientDetail() {
 
   const typeOptions = POOL_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))
   const shapeOptions = POOL_SHAPES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))
-  const freqOptions = SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: f.charAt(0).toUpperCase() + f.slice(1) }))
+  const freqOptions = SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))
   const billingOptions = [
     { value: '', label: 'Not set' },
     { value: 'per_visit', label: 'Per visit' },
@@ -307,7 +308,7 @@ export default function ClientDetail() {
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant={pool.type}>{pool.type}</Badge>
                         {pool.schedule_frequency && (
-                          <span className="text-xs text-gray-400">{pool.schedule_frequency}</span>
+                          <span className="text-xs text-gray-400">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}</span>
                         )}
                         {pool.last_serviced_at && (
                           <span className="text-xs text-gray-500">

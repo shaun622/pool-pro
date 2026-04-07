@@ -19,6 +19,7 @@ import {
   statusColor,
   DEFAULT_TARGET_RANGES,
   CHEMICAL_LABELS,
+  FREQUENCY_LABELS,
   cn,
 } from '../lib/utils'
 
@@ -181,7 +182,7 @@ export default function PoolDetail() {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Schedule</p>
-                <p className="text-sm font-medium text-gray-900 mt-1 capitalize">{pool.schedule_frequency || '--'}</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency || '--'}</p>
               </div>
             </div>
           </Card>

@@ -25,12 +25,22 @@ export function getOverdueStatus(nextDueAt) {
   return 'green'
 }
 
+export const FREQUENCY_LABELS = {
+  weekly: 'Weekly',
+  fortnightly: 'Fortnightly',
+  monthly: 'Monthly',
+  '6_weekly': 'Every 6 Weeks',
+  quarterly: 'Quarterly',
+}
+
 export function calculateNextDue(lastServicedAt, frequency) {
   const last = typeof lastServicedAt === 'string' ? parseISO(lastServicedAt) : lastServicedAt
   switch (frequency) {
     case 'weekly': return addWeeks(last, 1)
     case 'fortnightly': return addWeeks(last, 2)
     case 'monthly': return addDays(last, 30)
+    case '6_weekly': return addWeeks(last, 6)
+    case 'quarterly': return addDays(last, 90)
     default: return addWeeks(last, 1)
   }
 }
@@ -78,7 +88,7 @@ export function cn(...classes) {
 
 export const POOL_TYPES = ['chlorine', 'salt', 'mineral', 'freshwater']
 export const POOL_SHAPES = ['freeform', 'rectangular', 'lap']
-export const SCHEDULE_FREQUENCIES = ['weekly', 'fortnightly', 'monthly']
+export const SCHEDULE_FREQUENCIES = ['weekly', 'fortnightly', 'monthly', '6_weekly', 'quarterly']
 export const PHOTO_TAGS = ['before', 'during', 'after', 'equipment', 'issue']
 export const CHEMICAL_UNITS = ['L', 'kg', 'g', 'tabs']
 

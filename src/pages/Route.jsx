@@ -8,7 +8,7 @@ import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, daysOverdue, getOverdueStatus, cn } from '../lib/utils'
+import { formatDate, daysOverdue, getOverdueStatus, FREQUENCY_LABELS, cn } from '../lib/utils'
 
 export default function Route() {
   const { business, loading: bizLoading } = useBusiness()
@@ -156,7 +156,7 @@ export default function Route() {
 
                       <div className="flex items-center gap-3 mt-1.5">
                         {pool.schedule_frequency && (
-                          <span className="text-xs text-gray-400">{pool.schedule_frequency}</span>
+                          <span className="text-xs text-gray-400">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}</span>
                         )}
                         {pool.last_serviced_at && (
                           <span className="text-xs text-gray-400">
