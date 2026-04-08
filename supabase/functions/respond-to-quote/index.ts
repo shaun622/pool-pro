@@ -53,19 +53,22 @@ serve(async (req) => {
       // Notify business owner
       const resendKey = Deno.env.get('RESEND_API_KEY')
       if (resendKey && quote.businesses.email) {
-        await fetch('https://api.resend.com/emails', {
+        const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${resendKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'PoolPro <onboarding@resend.dev>',
+            from: `${quote.businesses.name || 'PoolPro'} <noreply@poolmateapp.online>`,
             to: [quote.businesses.email],
             subject: `Quote Accepted by ${quote.clients.name}`,
             html: `<p><strong>${quote.clients.name}</strong> has accepted your quote for <strong>$${Number(quote.total).toFixed(2)}</strong>.</p><p>A new job has been created automatically.</p>`,
           }),
         })
+        if (!res.ok) {
+          console.error('Resend error:', res.status, await res.text())
+        }
       }
     }
 
