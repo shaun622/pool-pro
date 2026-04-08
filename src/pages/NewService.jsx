@@ -393,53 +393,7 @@ export default function NewService() {
           <div className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Chemicals Added</h2>
 
-            {/* Added chemicals - compact cards */}
-            {chemicalsAdded.map((chem, i) => (
-              <Card key={i} className="p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <p className="text-sm font-semibold text-gray-900 flex-1 truncate">{chem.product_name || 'New Chemical'}</p>
-                  <button
-                    onClick={() => removeChemical(i)}
-                    className="min-h-[36px] min-w-[36px] flex items-center justify-center text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                    aria-label="Remove"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                {!chem.product_name && (
-                  <div className="mb-2">
-                    <Input
-                      value={chem.product_name}
-                      onChange={e => updateChemical(i, 'product_name', e.target.value)}
-                      placeholder="Product name"
-                    />
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      value={chem.quantity}
-                      onChange={e => updateChemical(i, 'quantity', e.target.value)}
-                      placeholder="Qty"
-                    />
-                  </div>
-                  <div className="w-20">
-                    <Select
-                      options={UNIT_OPTIONS}
-                      value={chem.unit}
-                      onChange={e => updateChemical(i, 'unit', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </Card>
-            ))}
-
-            {/* Search / add chemical */}
+            {/* Search to quick-add from library */}
             <div className="relative">
               <input
                 value={chemSearch}
@@ -510,6 +464,55 @@ export default function NewService() {
                 </div>
               )}
             </div>
+
+            {/* Chemical entry cards */}
+            {chemicalsAdded.map((chem, i) => (
+              <Card key={i} className="relative">
+                <button
+                  onClick={() => removeChemical(i)}
+                  className="absolute top-2 right-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-400 hover:text-red-600"
+                  aria-label="Remove"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <div className="space-y-3 pr-8">
+                  <Input
+                    label="Product Name"
+                    value={chem.product_name}
+                    onChange={e => updateChemical(i, 'product_name', e.target.value)}
+                    placeholder="e.g. Liquid Chlorine"
+                  />
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <Input
+                        label="Quantity"
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        value={chem.quantity}
+                        onChange={e => updateChemical(i, 'quantity', e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="w-24">
+                      <Select
+                        label="Unit"
+                        options={UNIT_OPTIONS}
+                        value={chem.unit}
+                        onChange={e => updateChemical(i, 'unit', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+
+            {/* Manual add button */}
+            <Button variant="secondary" onClick={addChemical} className="w-full min-h-[48px]">
+              + Add Chemical Manually
+            </Button>
 
             <div className="flex gap-3 mt-4">
               <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
