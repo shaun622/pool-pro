@@ -380,6 +380,63 @@ export default function QuoteBuilder() {
               </svg>
               Add line item
             </button>
+
+            {/* Recurring toggle — inside line items card */}
+            <div className="border-t border-gray-100 mt-4 pt-4">
+              <label className="flex items-center justify-between min-h-tap cursor-pointer">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-700">Recurring job</span>
+                </div>
+                <div className={cn('relative w-11 h-6 rounded-full transition-colors',
+                  isRecurring ? 'bg-pool-500' : 'bg-gray-200')}>
+                  <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                    isRecurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+                  <input type="checkbox" className="sr-only"
+                    checked={isRecurring}
+                    onChange={e => setIsRecurring(e.target.checked)} />
+                </div>
+              </label>
+
+              {isRecurring && (
+                <div className="mt-3 space-y-3 animate-fade-in">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Select
+                      label="Frequency"
+                      value={recurrenceRule}
+                      onChange={e => setRecurrenceRule(e.target.value)}
+                      options={RECURRENCE_OPTIONS}
+                    />
+                    {recurrenceRule === 'custom' ? (
+                      <Input
+                        label="Interval (days)"
+                        type="number"
+                        value={customIntervalDays}
+                        onChange={e => setCustomIntervalDays(e.target.value)}
+                        placeholder="10"
+                      />
+                    ) : (
+                      <Select
+                        label="Preferred Day"
+                        value={preferredDay}
+                        onChange={e => setPreferredDay(e.target.value)}
+                        options={DAY_OPTIONS}
+                      />
+                    )}
+                  </div>
+                  <div className="bg-pool-50 border border-pool-200 rounded-lg p-2.5">
+                    <p className="text-xs text-pool-600">
+                      <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      When accepted, a recurring job profile will be created. One-off items on this quote won't repeat.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </Card>
 
           {/* Scope & Terms */}
@@ -396,63 +453,6 @@ export default function QuoteBuilder() {
               value={terms}
               onChange={(e) => setTerms(e.target.value)}
             />
-          </Card>
-
-          {/* Recurring */}
-          <Card className="p-4">
-            <label className="flex items-center justify-between min-h-tap cursor-pointer">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span className="text-sm font-medium text-gray-700">Recurring job</span>
-              </div>
-              <div className={cn('relative w-11 h-6 rounded-full transition-colors',
-                isRecurring ? 'bg-pool-500' : 'bg-gray-200')}>
-                <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                  isRecurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
-                <input type="checkbox" className="sr-only"
-                  checked={isRecurring}
-                  onChange={e => setIsRecurring(e.target.checked)} />
-              </div>
-            </label>
-
-            {isRecurring && (
-              <div className="mt-3 space-y-3 animate-fade-in">
-                <div className="grid grid-cols-2 gap-3">
-                  <Select
-                    label="Frequency"
-                    value={recurrenceRule}
-                    onChange={e => setRecurrenceRule(e.target.value)}
-                    options={RECURRENCE_OPTIONS}
-                  />
-                  {recurrenceRule === 'custom' ? (
-                    <Input
-                      label="Interval (days)"
-                      type="number"
-                      value={customIntervalDays}
-                      onChange={e => setCustomIntervalDays(e.target.value)}
-                      placeholder="10"
-                    />
-                  ) : (
-                    <Select
-                      label="Preferred Day"
-                      value={preferredDay}
-                      onChange={e => setPreferredDay(e.target.value)}
-                      options={DAY_OPTIONS}
-                    />
-                  )}
-                </div>
-                <div className="bg-pool-50 border border-pool-200 rounded-lg p-2.5">
-                  <p className="text-xs text-pool-600">
-                    <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    When this quote is accepted, a recurring job profile will be created automatically.
-                  </p>
-                </div>
-              </div>
-            )}
           </Card>
 
           {/* Totals */}
