@@ -80,7 +80,10 @@ export default function BottomNav() {
           return (
             <button
               key={tab.path}
-              onClick={() => navigate(tab.path)}
+              onClick={() => {
+                navigate(tab.path)
+                window.scrollTo(0, 0)
+              }}
               className={cn(
                 'flex flex-col items-center justify-center min-h-tap min-w-tap py-2 px-3 transition-all duration-200 relative',
                 active ? 'text-pool-600' : 'text-gray-400 hover:text-gray-600'

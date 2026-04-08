@@ -7,6 +7,10 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  html, body {
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-slate-50 text-gray-900 antialiased;
     padding-bottom: env(safe-area-inset-bottom, 0px);
