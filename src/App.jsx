@@ -22,6 +22,7 @@ const ChemicalLibrary = lazy(() => import('./pages/ChemicalLibrary'))
 const CommunicationTemplates = lazy(() => import('./pages/settings/CommunicationTemplates'))
 const JobTypeTemplates = lazy(() => import('./pages/settings/JobTypeTemplates'))
 const RecurringJobs = lazy(() => import('./pages/RecurringJobs'))
+const Automations = lazy(() => import('./pages/settings/Automations'))
 const Subscription = lazy(() => import('./pages/Subscription'))
 const PublicQuote = lazy(() => import('./pages/PublicQuote'))
 const PortalLogin = lazy(() => import('./pages/portal/PortalLogin'))
@@ -99,6 +100,7 @@ export default function App() {
                   <Route path="/settings/chemicals" element={<ChemicalLibrary />} />
                   <Route path="/settings/templates" element={<CommunicationTemplates />} />
                   <Route path="/settings/job-types" element={<JobTypeTemplates />} />
+                  <Route path="/settings/automations" element={<Automations />} />
                   <Route path="/subscription" element={<Subscription />} />
                 </Route>
               </Route>

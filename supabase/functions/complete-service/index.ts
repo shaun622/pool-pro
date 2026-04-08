@@ -437,6 +437,25 @@ serve(async (req) => {
       .update({ report_sent_at: new Date().toISOString() })
       .eq('id', service_record_id)
 
+    // Trigger automations for service_completed event (fire and forget)
+    try {
+      const autoUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`
+      fetch(autoUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({
+          trigger_event: 'service_completed',
+          business_id: record.business_id,
+          service_record_id,
+          client_id: pool.client_id,
+          pool_id: pool.id,
+          staff_name: staffMember?.name || record.technician_name,
+        }),
+      }).catch(e => console.error('Automation trigger failed:', e))
+    } catch (e) {
+      console.error('Automation trigger error:', e)
+    }
+
     return new Response(JSON.stringify({ success: true, emails: emailResults }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

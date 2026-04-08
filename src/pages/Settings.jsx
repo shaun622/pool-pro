@@ -322,6 +322,22 @@ export default function Settings() {
             </svg>
           </Card>
 
+          {/* Automations */}
+          <Card onClick={() => navigate('/settings/automations')} className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-yellow-50 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">Automations</h3>
+              <p className="text-xs text-gray-400">Auto-send reminders & follow-ups</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </Card>
+
           {/* Job Types */}
           <Card onClick={() => navigate('/settings/job-types')} className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-cyan-50 flex items-center justify-center shrink-0">
