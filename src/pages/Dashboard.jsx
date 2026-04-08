@@ -240,15 +240,12 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           {[
-            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-pool-600', bg: 'bg-pool-50', icon: '🔧', to: '/route' },
-            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900', bg: stats.overduePools > 0 ? 'bg-red-50' : 'bg-gray-50', icon: '⚠️', to: '/route' },
-            { label: 'Active Jobs', value: stats.activeJobs, sub: 'in progress', color: 'text-amber-600', bg: 'bg-amber-50', icon: '📋', to: '/jobs' },
-            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-violet-600', bg: 'bg-violet-50', icon: '💰', to: '/jobs' },
+            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-pool-600', to: '/route' },
+            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900', to: '/route' },
+            { label: 'Active Jobs', value: stats.activeJobs, sub: 'in progress', color: 'text-amber-600', to: '/jobs' },
+            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-violet-600', to: '/jobs' },
           ].map((stat, i) => (
-            <Card key={i} onClick={() => navigate(stat.to)} className="relative overflow-hidden">
-              <div className={cn('absolute top-3 right-3 w-8 h-8 rounded-lg flex items-center justify-center text-sm', stat.bg)}>
-                {stat.icon}
-              </div>
+            <Card key={i} onClick={() => navigate(stat.to)}>
               <p className="section-title mb-1">{stat.label}</p>
               <p className={cn('text-2xl font-bold tracking-tight', stat.color)}>
                 {stat.value}
