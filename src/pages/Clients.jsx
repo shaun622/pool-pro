@@ -12,30 +12,79 @@ import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, cn } from '../lib/utils'
+import { formatDate, cn, FREQUENCY_LABELS } from '../lib/utils'
 
 // ─── CLIENT CARD ───────────────────────────────────
-function ClientCard({ client, poolCount, onClick }) {
+function ClientCard({ client, clientPools, onClick }) {
   const initials = client.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const poolCount = clientPools.length
+
+  // Find the most urgent pool (soonest due or most overdue)
+  const now = new Date()
+  const nextDuePool = clientPools
+    .filter(p => p.next_due_at)
+    .sort((a, b) => new Date(a.next_due_at) - new Date(b.next_due_at))[0]
+
+  const overduePools = clientPools.filter(p => p.next_due_at && new Date(p.next_due_at) < now)
+  const isDueToday = nextDuePool && !overduePools.includes(nextDuePool) &&
+    new Date(nextDuePool.next_due_at) <= new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+
   return (
     <Card onClick={onClick}>
       <div className="flex items-center gap-3.5">
-        <div className="w-11 h-11 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0 shadow-sm shadow-pool-500/20">
-          <span className="text-sm font-bold text-white">{initials}</span>
+        {/* Avatar with status indicator */}
+        <div className="relative shrink-0">
+          <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center shadow-sm',
+            overduePools.length > 0 ? 'bg-red-500 shadow-red-500/20'
+              : isDueToday ? 'bg-amber-500 shadow-amber-500/20'
+              : 'bg-gradient-brand shadow-pool-500/20')}>
+            <span className="text-sm font-bold text-white">{initials}</span>
+          </div>
+          {overduePools.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 border-2 border-white rounded-full text-[8px] text-white font-bold flex items-center justify-center">
+              {overduePools.length}
+            </span>
+          )}
         </div>
+
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-gray-900 truncate">{client.name}</h3>
-          {client.email && <p className="text-xs text-gray-400 truncate mt-0.5">{client.email}</p>}
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-gray-900 truncate">{client.name}</h3>
+            {poolCount > 0 && (
+              <span className="text-[10px] font-semibold text-gray-400 shrink-0">
+                {poolCount} pool{poolCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          {/* Service status line */}
+          {nextDuePool ? (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className={cn('w-1.5 h-1.5 rounded-full shrink-0',
+                overduePools.length > 0 ? 'bg-red-500' : isDueToday ? 'bg-amber-500' : 'bg-green-500')} />
+              <p className={cn('text-xs truncate',
+                overduePools.length > 0 ? 'text-red-600 font-medium'
+                  : isDueToday ? 'text-amber-600 font-medium'
+                  : 'text-gray-400')}>
+                {overduePools.length > 0
+                  ? `${overduePools.length} overdue`
+                  : isDueToday
+                  ? 'Due today'
+                  : `Next: ${formatDate(nextDuePool.next_due_at)}`}
+                {nextDuePool.schedule_frequency && (
+                  <span className="text-gray-400 font-normal"> · {FREQUENCY_LABELS[nextDuePool.schedule_frequency] || nextDuePool.schedule_frequency}</span>
+                )}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 mt-0.5">
+              {poolCount === 0 ? 'No pools' : 'No schedule set'}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className={cn('text-xs font-semibold px-2.5 py-1 rounded-lg',
-            poolCount > 0 ? 'bg-pool-50 text-pool-600' : 'bg-gray-50 text-gray-400')}>
-            {poolCount} {poolCount === 1 ? 'pool' : 'pools'}
-          </span>
-          <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
+
+        <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
       </div>
     </Card>
   )
@@ -124,8 +173,9 @@ export default function Clients() {
     view === 'crm' ? business?.id : null
   )
 
-  const poolCounts = pools.reduce((acc, pool) => {
-    acc[pool.client_id] = (acc[pool.client_id] || 0) + 1
+  const poolsByClient = pools.reduce((acc, pool) => {
+    if (!acc[pool.client_id]) acc[pool.client_id] = []
+    acc[pool.client_id].push(pool)
     return acc
   }, {})
 
@@ -215,7 +265,7 @@ export default function Clients() {
             ) : (
               <div className="space-y-2.5">
                 {filtered.map(client => (
-                  <ClientCard key={client.id} client={client} poolCount={poolCounts[client.id] || 0}
+                  <ClientCard key={client.id} client={client} clientPools={poolsByClient[client.id] || []}
                     onClick={() => navigate(`/clients/${client.id}`)} />
                 ))}
               </div>
