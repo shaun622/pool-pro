@@ -27,6 +27,22 @@ const trendColors = {
   alkalinity: '#10b981', stabiliser: '#f59e0b', calcium_hardness: '#8b5cf6', salt: '#0ea5e9',
 }
 
+const CATEGORY_LABELS = {
+  sanitiser: 'Sanitiser', oxidiser: 'Oxidiser / Shock', balancer: 'Water Balancer',
+  algaecide: 'Algaecide', clarifier: 'Clarifier', stabiliser: 'Stabiliser',
+  salt: 'Salt', other: 'Other',
+}
+const CATEGORY_STYLES = {
+  sanitiser:  { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-400', dot: 'bg-blue-500' },
+  oxidiser:   { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-400', dot: 'bg-amber-500' },
+  balancer:   { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-400', dot: 'bg-emerald-500' },
+  algaecide:  { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-400', dot: 'bg-indigo-500' },
+  clarifier:  { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-400', dot: 'bg-purple-500' },
+  stabiliser: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-400', dot: 'bg-teal-500' },
+  salt:       { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-400', dot: 'bg-cyan-500' },
+  other:      { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-300', dot: 'bg-gray-400' },
+}
+
 function calcHealthScore(readings, ranges) {
   if (!readings || !ranges) return null
   let total = 0, count = 0
@@ -120,7 +136,7 @@ function TrendChart({ readings, chemKey, color, range }) {
   )
 }
 
-function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog }) {
+function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog, chemProductMap }) {
   const [expanded, setExpanded] = useState(false)
   const score = calcHealthScore(chemLog, ranges)
 
@@ -201,13 +217,34 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog }
           {chemicalsAdded?.length > 0 && (
             <div>
               <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Chemicals Added</h5>
-              <div className="space-y-1">
-                {chemicalsAdded.map((c, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{c.product_name}</span>
-                    <span className="font-medium text-gray-900">{c.quantity} {c.unit}</span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {chemicalsAdded.map((c, i) => {
+                  const product = chemProductMap?.[c.product_name.toLowerCase()]
+                  const cat = product?.category || 'other'
+                  const style = CATEGORY_STYLES[cat] || CATEGORY_STYLES.other
+                  return (
+                    <div key={i} className={cn('rounded-lg border-l-[3px] p-3', style.border, 'bg-white')}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">{c.product_name}</p>
+                          <span className={cn('inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded mt-1', style.bg, style.text)}>
+                            {CATEGORY_LABELS[cat] || 'Other'}
+                          </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-lg font-bold text-gray-900">{c.quantity}</span>
+                          <span className="text-xs text-gray-500 ml-1">{c.unit}</span>
+                        </div>
+                      </div>
+                      {product?.suggested_dose && (
+                        <p className="text-[11px] text-gray-500 mt-1.5">Recommended: {product.suggested_dose}</p>
+                      )}
+                      {product?.notes && (
+                        <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{product.notes}</p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -223,7 +260,7 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog }
   )
 }
 
-function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAddedByRecord, brandColor }) {
+function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAddedByRecord, brandColor, chemProductMap }) {
   const [activeChart, setActiveChart] = useState(null)
   const ranges = pool.target_ranges || DEFAULT_TARGET_RANGES
 
@@ -325,7 +362,7 @@ function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAd
               return (
                 <ServiceCard key={record.id} record={record} chemLog={chemicalLogs[record.id]}
                   tasks={tasksByRecord[record.id]} chemicalsAdded={chemAddedByRecord[record.id]}
-                  ranges={ranges} prevLog={prevLog} />
+                  ranges={ranges} prevLog={prevLog} chemProductMap={chemProductMap} />
               )
             })}
           </div>
@@ -352,6 +389,7 @@ export default function PortalDashboard() {
   const [tasksByRecord, setTasksByRecord] = useState({})
   const [chemAddedByRecord, setChemAddedByRecord] = useState({})
   const [staffMembers, setStaffMembers] = useState([])
+  const [chemProductMap, setChemProductMap] = useState({})
   const [activePool, setActivePool] = useState(null)
 
   useEffect(() => {
@@ -424,15 +462,19 @@ export default function PortalDashboard() {
         }
       }
 
-      // Fetch staff
+      // Fetch staff and chemical products
       if (bizData?.id) {
-        const { data: staffData } = await supabase
-          .from('staff_members')
-          .select('*')
-          .eq('business_id', bizData.id)
-          .eq('is_active', true)
-          .order('name')
-        setStaffMembers(staffData || [])
+        const [staffRes, chemProdRes] = await Promise.all([
+          supabase.from('staff_members').select('*').eq('business_id', bizData.id).eq('is_active', true).order('name'),
+          supabase.from('chemical_products').select('name, category, suggested_dose, notes').eq('business_id', bizData.id),
+        ])
+        setStaffMembers(staffRes.data || [])
+        // Build lookup map by lowercase name
+        const cpMap = {}
+        for (const cp of (chemProdRes.data || [])) {
+          cpMap[cp.name.toLowerCase()] = cp
+        }
+        setChemProductMap(cpMap)
       }
     } catch (err) {
       console.error('Portal load error:', err)
@@ -528,7 +570,8 @@ export default function PortalDashboard() {
           pools.filter(p => pools.length === 1 || p.id === activePool).map(pool => (
             <PoolSection key={pool.id} pool={pool}
               serviceRecords={serviceRecords[pool.id] || []} chemicalLogs={chemicalLogs}
-              tasksByRecord={tasksByRecord} chemAddedByRecord={chemAddedByRecord} brandColor={brandColor} />
+              tasksByRecord={tasksByRecord} chemAddedByRecord={chemAddedByRecord} brandColor={brandColor}
+              chemProductMap={chemProductMap} />
           ))
         )}
       </div>

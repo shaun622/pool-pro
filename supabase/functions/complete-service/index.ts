@@ -51,12 +51,35 @@ serve(async (req) => {
       staffMember = staffData
     }
 
+    // Fetch chemical products for this business (for category/dosage enrichment)
+    const { data: chemProducts } = await supabase
+      .from('chemical_products')
+      .select('name, category, suggested_dose, notes')
+      .eq('business_id', record.business_id)
+
+    const chemProductMap: Record<string, any> = {}
+    for (const cp of (chemProducts || [])) {
+      chemProductMap[cp.name.toLowerCase()] = cp
+    }
+
     const pool = record.pools
     const client = pool.clients
     const chemicals = record.chemical_logs?.[0] || {}
     const tasks = record.service_tasks || []
     const chemicalsAdded = record.chemicals_added || []
     const targetRanges = pool.target_ranges || {}
+
+    // Category styling for email
+    const CATEGORY_EMAIL_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+      sanitiser:  { bg: '#DBEAFE', text: '#1D4ED8', label: 'Sanitiser' },
+      oxidiser:   { bg: '#FEF3C7', text: '#B45309', label: 'Oxidiser / Shock' },
+      balancer:   { bg: '#D1FAE5', text: '#047857', label: 'Water Balancer' },
+      algaecide:  { bg: '#E0E7FF', text: '#4338CA', label: 'Algaecide' },
+      clarifier:  { bg: '#F3E8FF', text: '#7C3AED', label: 'Clarifier' },
+      stabiliser: { bg: '#CCFBF1', text: '#0F766E', label: 'Stabiliser' },
+      salt:       { bg: '#CFFAFE', text: '#0E7490', label: 'Salt' },
+      other:      { bg: '#F3F4F6', text: '#4B5563', label: 'Other' },
+    }
 
     // Build status indicator
     function chemStatus(value: number | null, range: number[] | undefined): string {
@@ -98,12 +121,7 @@ serve(async (req) => {
       </li>
     `).join('')
 
-    const chemicalsAddedHtml = chemicalsAdded.length > 0
-      ? `<h3 style="margin:20px 0 8px;font-size:16px;">Chemicals Added</h3>
-         <ul style="list-style:none;padding:0;">
-           ${chemicalsAdded.map((c: any) => `<li style="padding:4px 0;">${c.product_name} — ${c.quantity} ${c.unit}</li>`).join('')}
-         </ul>`
-      : ''
+    // (chemicalsAddedHtml is now built inline in the email template below)
 
     const serviceDate = new Date(record.serviced_at).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     const serviceDateShort = new Date(record.serviced_at).toLocaleDateString('en-AU')
@@ -205,11 +223,27 @@ serve(async (req) => {
         ${chemicalsAdded.length > 0 ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Chemicals Added</h3>
-          <div style="background:#F9FAFB;border-radius:8px;padding:12px 16px;">
-            <ul style="list-style:none;padding:0;margin:0;font-size:13px;">
-              ${chemicalsAdded.map((c: any) => `<li style="padding:4px 0;color:#374151;">&bull; ${c.product_name} — ${c.quantity} ${c.unit}</li>`).join('')}
-            </ul>
-          </div>
+          ${chemicalsAdded.map((c: any) => {
+            const product = chemProductMap[c.product_name.toLowerCase()]
+            const cat = product?.category || 'other'
+            const catStyle = CATEGORY_EMAIL_COLORS[cat] || CATEGORY_EMAIL_COLORS.other
+            return `
+          <div style="background:#F9FAFB;border-radius:10px;padding:14px 16px;margin-bottom:8px;border-left:4px solid ${catStyle.text};">
+            <table style="width:100%;"><tr>
+              <td style="vertical-align:top;">
+                <span style="display:inline-block;font-size:14px;font-weight:600;color:#111827;margin-bottom:4px;">${c.product_name}</span>
+                <br/>
+                <span style="display:inline-block;background:${catStyle.bg};color:${catStyle.text};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin-top:2px;">${catStyle.label}</span>
+              </td>
+              <td style="text-align:right;vertical-align:top;white-space:nowrap;">
+                <span style="font-size:18px;font-weight:700;color:${brandColour};">${c.quantity}</span>
+                <span style="font-size:13px;color:#6B7280;margin-left:2px;">${c.unit}</span>
+              </td>
+            </tr></table>
+            ${product?.suggested_dose ? `<p style="margin:6px 0 0;font-size:12px;color:#6B7280;">Recommended dose: ${product.suggested_dose}</p>` : ''}
+            ${product?.notes ? `<p style="margin:3px 0 0;font-size:11px;color:#9CA3AF;line-height:1.4;">${product.notes}</p>` : ''}
+          </div>`
+          }).join('')}
         </div>
         ` : ''}
 
