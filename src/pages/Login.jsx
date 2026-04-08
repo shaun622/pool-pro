@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
@@ -9,8 +9,19 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { user, loading: authLoading, signIn } = useAuth();
   const navigate = useNavigate();
+
+  // If already authenticated, redirect away
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (user.user_metadata?.role === 'customer') {
+        navigate('/portal', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
+  }, [user, authLoading, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,19 +29,17 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const { user } = await signIn(email, password);
-      // Block customers from the business login
-      if (user?.user_metadata?.role === 'customer') {
-        navigate('/portal');
-        return;
-      }
-      navigate('/');
+      await signIn(email, password);
+      // Don't navigate here — the useEffect above will handle it
+      // once onAuthStateChange propagates the user state
     } catch (err) {
       setError(err.message || 'Failed to sign in. Please check your credentials.');
-    } finally {
       setLoading(false);
     }
   };
+
+  // Don't render the form if already authenticated
+  if (!authLoading && user) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pool-50 via-white to-pool-100 px-4">

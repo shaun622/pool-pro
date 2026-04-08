@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, createContext, useCallback } from 'react'
+import { useState, useEffect, useContext, createContext, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 
@@ -8,44 +8,49 @@ export function BusinessProvider({ children }) {
   const { user, loading: authLoading } = useAuth()
   const [business, setBusiness] = useState(null)
   const [businessLoading, setBusinessLoading] = useState(true)
+  const lastUserId = useRef(null)
 
-  const fetchBusiness = useCallback(async () => {
-    if (!user) {
+  useEffect(() => {
+    // Still waiting for auth to resolve
+    if (authLoading) return
+
+    const userId = user?.id || null
+
+    // If user hasn't changed, don't refetch
+    if (userId === lastUserId.current) return
+    lastUserId.current = userId
+
+    if (!userId) {
       setBusiness(null)
       setBusinessLoading(false)
       return
     }
+
+    // User changed — fetch their business
+    let cancelled = false
     setBusinessLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('owner_id', user.id)
-        .maybeSingle()
 
-      if (error) {
-        console.error('Error fetching business:', error)
-      }
-      setBusiness(data || null)
-    } catch (err) {
-      console.error('Network error fetching business:', err)
-      setBusiness(null)
-    }
-    setBusinessLoading(false)
-  }, [user])
+    supabase
+      .from('businesses')
+      .select('*')
+      .eq('owner_id', userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) console.error('Error fetching business:', error)
+        setBusiness(data || null)
+        setBusinessLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('Network error fetching business:', err)
+        setBusiness(null)
+        setBusinessLoading(false)
+      })
 
-  // Reset loading when user changes so BusinessGuard doesn't flash to onboarding
-  useEffect(() => {
-    if (user) setBusinessLoading(true)
-  }, [user])
+    return () => { cancelled = true }
+  }, [authLoading, user?.id])
 
-  useEffect(() => {
-    if (!authLoading) {
-      fetchBusiness()
-    }
-  }, [authLoading, fetchBusiness])
-
-  // Stay loading until auth is resolved AND business fetch is done
   const loading = authLoading || businessLoading
 
   const createBusiness = useCallback(async (businessData) => {
@@ -71,8 +76,26 @@ export function BusinessProvider({ children }) {
     return data
   }, [business])
 
+  const refetch = useCallback(async () => {
+    if (!user) return
+    setBusinessLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+      if (error) console.error('Error fetching business:', error)
+      setBusiness(data || null)
+    } catch (err) {
+      console.error('Network error fetching business:', err)
+      setBusiness(null)
+    }
+    setBusinessLoading(false)
+  }, [user])
+
   return (
-    <BusinessContext.Provider value={{ business, loading, createBusiness, updateBusiness, refetch: fetchBusiness }}>
+    <BusinessContext.Provider value={{ business, loading, createBusiness, updateBusiness, refetch }}>
       {children}
     </BusinessContext.Provider>
   )
