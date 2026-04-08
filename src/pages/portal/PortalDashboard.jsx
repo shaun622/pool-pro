@@ -219,7 +219,14 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog, 
               <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Chemicals Added</h5>
               <div className="space-y-2">
                 {chemicalsAdded.map((c, i) => {
-                  const product = chemProductMap?.[c.product_name.toLowerCase()]
+                  const key = c.product_name.toLowerCase().trim()
+                  let product = chemProductMap?.[key]
+                  // Fuzzy: check if any library name contains this name or vice versa
+                  if (!product) {
+                    for (const [cpKey, cpVal] of Object.entries(chemProductMap || {})) {
+                      if (cpKey.includes(key) || key.includes(cpKey)) { product = cpVal; break }
+                    }
+                  }
                   const cat = product?.category || 'other'
                   const style = CATEGORY_STYLES[cat] || CATEGORY_STYLES.other
                   return (

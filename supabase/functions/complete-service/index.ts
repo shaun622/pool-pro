@@ -57,9 +57,23 @@ serve(async (req) => {
       .select('name, category, suggested_dose, notes')
       .eq('business_id', record.business_id)
 
+    const chemProductList = chemProducts || []
     const chemProductMap: Record<string, any> = {}
-    for (const cp of (chemProducts || [])) {
+    for (const cp of chemProductList) {
       chemProductMap[cp.name.toLowerCase()] = cp
+    }
+
+    // Fuzzy lookup: exact match first, then check if product name contains the search term or vice versa
+    function findChemProduct(productName: string) {
+      const key = productName.toLowerCase().trim()
+      // Exact match
+      if (chemProductMap[key]) return chemProductMap[key]
+      // Product library name contains the added name (e.g. "Chlorine" matches "Liquid Chlorine")
+      for (const cp of chemProductList) {
+        const cpLower = cp.name.toLowerCase()
+        if (cpLower.includes(key) || key.includes(cpLower)) return cp
+      }
+      return null
     }
 
     const pool = record.pools
@@ -151,9 +165,16 @@ serve(async (req) => {
         <!-- Greeting -->
         <div style="background:white;padding:28px 24px 20px;">
           <p style="margin:0 0 4px;font-size:16px;color:#111827;">Hi ${client.name},</p>
-          <p style="margin:0 0 20px;font-size:15px;color:#6B7280;line-height:1.5;">
+          <p style="margin:0 0 16px;font-size:15px;color:#6B7280;line-height:1.5;">
             Your pool at <strong>${pool.address}</strong> has been serviced. Here's a summary of everything we did today.
           </p>
+
+          ${pool.portal_token ? `
+          <!-- Portal button top -->
+          <div style="margin-bottom:20px;text-align:center;">
+            <a href="${Deno.env.get('SITE_URL') || ''}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;">Customer Portal</a>
+          </div>
+          ` : ''}
 
           <!-- Staff Card -->
           ${staffMember ? `
@@ -224,7 +245,7 @@ serve(async (req) => {
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Chemicals Added</h3>
           ${chemicalsAdded.map((c: any) => {
-            const product = chemProductMap[c.product_name.toLowerCase()]
+            const product = findChemProduct(c.product_name)
             const cat = product?.category || 'other'
             const catStyle = CATEGORY_EMAIL_COLORS[cat] || CATEGORY_EMAIL_COLORS.other
             return `
