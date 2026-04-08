@@ -23,6 +23,14 @@ const CommunicationTemplates = lazy(() => import('./pages/settings/Communication
 const JobTypeTemplates = lazy(() => import('./pages/settings/JobTypeTemplates'))
 const RecurringJobs = lazy(() => import('./pages/RecurringJobs'))
 const Automations = lazy(() => import('./pages/settings/Automations'))
+const SurveyResults = lazy(() => import('./pages/settings/SurveyResults'))
+const Integrations = lazy(() => import('./pages/settings/Integrations'))
+const ImportData = lazy(() => import('./pages/settings/ImportData'))
+const PublicSurvey = lazy(() => import('./pages/PublicSurvey'))
+const Pipeline = lazy(() => import('./pages/Pipeline'))
+const Invoices = lazy(() => import('./pages/Invoices'))
+const InvoiceBuilder = lazy(() => import('./pages/InvoiceBuilder'))
+const Reports = lazy(() => import('./pages/Reports'))
 const Subscription = lazy(() => import('./pages/Subscription'))
 const PublicQuote = lazy(() => import('./pages/PublicQuote'))
 const PortalLogin = lazy(() => import('./pages/portal/PortalLogin'))
@@ -75,6 +83,7 @@ export default function App() {
               <Route path="/portal" element={<PortalDashboard />} />
               <Route path="/portal/:token" element={<PortalTokenLanding />} />
               <Route path="/quote/:token" element={<PublicQuote />} />
+              <Route path="/survey/:token" element={<PublicSurvey />} />
 
               {/* Auth routes */}
               <Route path="/login" element={<Login />} />
@@ -101,6 +110,14 @@ export default function App() {
                   <Route path="/settings/templates" element={<CommunicationTemplates />} />
                   <Route path="/settings/job-types" element={<JobTypeTemplates />} />
                   <Route path="/settings/automations" element={<Automations />} />
+                  <Route path="/settings/surveys" element={<SurveyResults />} />
+                  <Route path="/settings/integrations" element={<Integrations />} />
+                  <Route path="/settings/import" element={<ImportData />} />
+                  <Route path="/pipeline" element={<Pipeline />} />
+                  <Route path="/invoices" element={<Invoices />} />
+                  <Route path="/invoices/new" element={<InvoiceBuilder />} />
+                  <Route path="/invoices/:id" element={<InvoiceBuilder />} />
+                  <Route path="/reports" element={<Reports />} />
                   <Route path="/subscription" element={<Subscription />} />
                 </Route>
               </Route>

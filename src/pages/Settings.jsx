@@ -386,6 +386,52 @@ export default function Settings() {
             </svg>
           </Card>
 
+          {/* Surveys */}
+          <Card onClick={() => navigate('/settings/surveys')} className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-pink-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">Survey Results</h3>
+              <p className="text-xs text-gray-400">Customer feedback & ratings</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </Card>
+
+          {/* Import Data */}
+          <Card onClick={() => navigate('/settings/import')} className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">Import Data</h3>
+              <p className="text-xs text-gray-400">Bulk import clients & pools from CSV</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </Card>
+
+          {/* Integrations */}
+          <Card onClick={() => navigate('/settings/integrations')} className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.313a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364l1.757 1.757" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">Integrations</h3>
+              <p className="text-xs text-gray-400">Xero, QuickBooks, Stripe & more</p>
+            </div>
+            <Badge variant="default">Coming Soon</Badge>
+          </Card>
+
           {/* Subscription */}
           <Card className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
