@@ -11,26 +11,14 @@ import { useClients } from '../hooks/useClients'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, calculateGST, cn } from '../lib/utils'
 
-const EMPTY_LINE = { description: '', quantity: 1, unit_price: 0 }
+const EMPTY_LINE = { description: '', quantity: 1, unit_price: 0, recurring: null }
 
-const RECURRENCE_OPTIONS = [
+const FREQUENCY_OPTIONS = [
   { value: 'weekly', label: 'Weekly' },
   { value: 'fortnightly', label: 'Fortnightly' },
   { value: 'monthly', label: 'Monthly' },
   { value: '6_weekly', label: 'Every 6 Weeks' },
   { value: 'quarterly', label: 'Quarterly' },
-  { value: 'custom', label: 'Custom Interval' },
-]
-
-const DAY_OPTIONS = [
-  { value: '', label: 'Any day' },
-  { value: '1', label: 'Monday' },
-  { value: '2', label: 'Tuesday' },
-  { value: '3', label: 'Wednesday' },
-  { value: '4', label: 'Thursday' },
-  { value: '5', label: 'Friday' },
-  { value: '6', label: 'Saturday' },
-  { value: '0', label: 'Sunday' },
 ]
 
 export default function QuoteBuilder() {
@@ -50,10 +38,6 @@ export default function QuoteBuilder() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(isEditing)
-  const [isRecurring, setIsRecurring] = useState(false)
-  const [recurrenceRule, setRecurrenceRule] = useState('weekly')
-  const [customIntervalDays, setCustomIntervalDays] = useState('')
-  const [preferredDay, setPreferredDay] = useState('')
 
   // New client modal
   const [newClientOpen, setNewClientOpen] = useState(false)
@@ -89,15 +73,9 @@ export default function QuoteBuilder() {
 
       setClientId(data.client_id || '')
       setPoolId(data.pool_id || '')
-      setLineItems(data.line_items?.length ? data.line_items : [{ ...EMPTY_LINE }])
+      setLineItems(data.line_items?.length ? data.line_items.map(li => ({ ...EMPTY_LINE, ...li })) : [{ ...EMPTY_LINE }])
       setScope(data.scope || '')
       setTerms(data.terms || '')
-      if (data.recurring_settings) {
-        setIsRecurring(true)
-        setRecurrenceRule(data.recurring_settings.recurrence_rule || 'weekly')
-        setCustomIntervalDays(data.recurring_settings.custom_interval_days || '')
-        setPreferredDay(data.recurring_settings.preferred_day_of_week != null ? String(data.recurring_settings.preferred_day_of_week) : '')
-      }
       setLoading(false)
     }
     fetchQuote()
@@ -153,10 +131,11 @@ export default function QuoteBuilder() {
   const total = subtotal + gst
 
   function updateLineItem(index, field, value) {
+    const stringFields = ['description', 'recurring']
     setLineItems((prev) =>
       prev.map((item, i) =>
         i === index
-          ? { ...item, [field]: field === 'description' ? value : Number(value) || 0 }
+          ? { ...item, [field]: stringFields.includes(field) ? value : Number(value) || 0 }
           : item
       )
     )
@@ -177,7 +156,7 @@ export default function QuoteBuilder() {
     if (!item) return
     setLineItems((prev) => [
       ...prev,
-      { description: item.name, quantity: 1, unit_price: item.unit_price },
+      { description: item.name, quantity: 1, unit_price: item.unit_price, recurring: null },
     ])
   }
 
@@ -211,11 +190,7 @@ export default function QuoteBuilder() {
       gst,
       total,
       status,
-      recurring_settings: isRecurring ? {
-        recurrence_rule: recurrenceRule,
-        custom_interval_days: recurrenceRule === 'custom' ? Number(customIntervalDays) || 7 : null,
-        preferred_day_of_week: preferredDay !== '' ? Number(preferredDay) : null,
-      } : null,
+      recurring_settings: null,
     }
 
     try {
@@ -359,6 +334,34 @@ export default function QuoteBuilder() {
                       </p>
                     </div>
                   </div>
+                  {/* Billing type: one-off or recurring */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                      <button type="button"
+                        onClick={() => updateLineItem(index, 'recurring', null)}
+                        className={cn('px-3 py-1.5 text-xs font-semibold transition-colors',
+                          !item.recurring ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+                        One-off
+                      </button>
+                      <button type="button"
+                        onClick={() => updateLineItem(index, 'recurring', 'monthly')}
+                        className={cn('px-3 py-1.5 text-xs font-semibold transition-colors border-l border-gray-200',
+                          item.recurring ? 'bg-pool-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+                        Recurring
+                      </button>
+                    </div>
+                    {item.recurring && (
+                      <select
+                        value={item.recurring}
+                        onChange={e => updateLineItem(index, 'recurring', e.target.value)}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 min-h-[32px]"
+                      >
+                        {FREQUENCY_OPTIONS.map(f => (
+                          <option key={f.value} value={f.value}>{f.label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   {lineItems.length > 1 && (
                     <button
                       onClick={() => removeLineItem(index)}
@@ -381,62 +384,17 @@ export default function QuoteBuilder() {
               Add line item
             </button>
 
-            {/* Recurring toggle — inside line items card */}
-            <div className="border-t border-gray-100 mt-4 pt-4">
-              <label className="flex items-center justify-between min-h-tap cursor-pointer">
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            {/* Recurring info note */}
+            {lineItems.some(li => li.recurring) && (
+              <div className="bg-pool-50 border border-pool-200 rounded-lg p-2.5 mt-3">
+                <p className="text-xs text-pool-600">
+                  <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="text-sm font-medium text-gray-700">Recurring job</span>
-                </div>
-                <div className={cn('relative w-11 h-6 rounded-full transition-colors',
-                  isRecurring ? 'bg-pool-500' : 'bg-gray-200')}>
-                  <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                    isRecurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
-                  <input type="checkbox" className="sr-only"
-                    checked={isRecurring}
-                    onChange={e => setIsRecurring(e.target.checked)} />
-                </div>
-              </label>
-
-              {isRecurring && (
-                <div className="mt-3 space-y-3 animate-fade-in">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Select
-                      label="Frequency"
-                      value={recurrenceRule}
-                      onChange={e => setRecurrenceRule(e.target.value)}
-                      options={RECURRENCE_OPTIONS}
-                    />
-                    {recurrenceRule === 'custom' ? (
-                      <Input
-                        label="Interval (days)"
-                        type="number"
-                        value={customIntervalDays}
-                        onChange={e => setCustomIntervalDays(e.target.value)}
-                        placeholder="10"
-                      />
-                    ) : (
-                      <Select
-                        label="Preferred Day"
-                        value={preferredDay}
-                        onChange={e => setPreferredDay(e.target.value)}
-                        options={DAY_OPTIONS}
-                      />
-                    )}
-                  </div>
-                  <div className="bg-pool-50 border border-pool-200 rounded-lg p-2.5">
-                    <p className="text-xs text-pool-600">
-                      <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      When accepted, a recurring job profile will be created. One-off items on this quote won't repeat.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+                  Recurring items will generate ongoing invoices. One-off items only appear on the first invoice.
+                </p>
+              </div>
+            )}
           </Card>
 
           {/* Scope & Terms */}
