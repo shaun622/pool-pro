@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import { useBusiness } from '../hooks/useBusiness'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 
 const PLAN_BADGE = {
@@ -31,6 +32,8 @@ export default function Settings() {
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     if (business) {
@@ -60,6 +63,105 @@ export default function Settings() {
       console.error('Error updating business:', err)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleLogoUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Logo must be under 2MB')
+      return
+    }
+
+    setUploading(true)
+    try {
+      // Resize to email-safe dimensions (max 400px wide, PNG)
+      const resized = await resizeImage(file, 400, 200)
+
+      const fileExt = 'png'
+      const fileName = `${business.id}-logo-${Date.now()}.${fileExt}`
+
+      // Delete old logo if exists
+      if (form.logo_url) {
+        const oldPath = form.logo_url.split('/logos/')[1]
+        if (oldPath) {
+          await supabase.storage.from('logos').remove([oldPath])
+        }
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(fileName, resized, { contentType: 'image/png' })
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from('logos').getPublicUrl(fileName)
+      const logoUrl = urlData.publicUrl
+
+      // Save to business
+      await updateBusiness({ logo_url: logoUrl })
+      updateField('logo_url', logoUrl)
+    } catch (err) {
+      console.error('Logo upload error:', err)
+      alert('Failed to upload logo: ' + (err.message || 'Unknown error'))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  function resizeImage(file, maxWidth, maxHeight) {
+    return new Promise((resolve) => {
+      const img = new Image()
+      const canvas = document.createElement('canvas')
+      const reader = new FileReader()
+
+      reader.onload = (e) => {
+        img.onload = () => {
+          let { width, height } = img
+
+          // Scale down maintaining aspect ratio
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width)
+            width = maxWidth
+          }
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height)
+            height = maxHeight
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          // Transparent background for PNG
+          ctx.clearRect(0, 0, width, height)
+          ctx.drawImage(img, 0, 0, width, height)
+
+          canvas.toBlob(resolve, 'image/png', 1)
+        }
+        img.src = e.target.result
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleRemoveLogo() {
+    if (!form.logo_url) return
+    try {
+      const oldPath = form.logo_url.split('/logos/')[1]
+      if (oldPath) {
+        await supabase.storage.from('logos').remove([oldPath])
+      }
+      await updateBusiness({ logo_url: null })
+      updateField('logo_url', '')
+    } catch (err) {
+      console.error('Error removing logo:', err)
     }
   }
 
@@ -126,13 +228,61 @@ export default function Settings() {
               value={form.email}
               onChange={(e) => updateField('email', e.target.value)}
             />
-            <Input
-              label="Logo URL"
-              type="url"
-              value={form.logo_url}
-              onChange={(e) => updateField('logo_url', e.target.value)}
-              placeholder="https://..."
-            />
+            {/* Logo upload */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-gray-600">Company Logo</label>
+              {form.logo_url ? (
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-16 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden p-2">
+                    <img src={form.logo_url} alt="Logo" className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs text-pool-600 font-semibold hover:text-pool-700 text-left"
+                    >
+                      Change logo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="text-xs text-red-500 font-semibold hover:text-red-600 text-left"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-6 border-2 border-dashed border-gray-200 rounded-2xl hover:border-pool-400 hover:bg-pool-50/30 transition-all cursor-pointer"
+                >
+                  {uploading ? (
+                    <div className="w-6 h-6 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm text-gray-400">Tap to upload logo</span>
+                      <span className="text-[11px] text-gray-300">Max 400x200px, under 2MB</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+            </div>
 
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-gray-600">Brand Colour</label>
