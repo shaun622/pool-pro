@@ -143,7 +143,7 @@ export default function Dashboard() {
     )
   }
 
-  // Getting Started checklist - show when setup is incomplete
+  // Getting Started checklist
   const steps = [
     { label: 'Create your business', done: true, action: null },
     { label: 'Add your first client', done: counts.clients > 0, action: () => navigate('/clients'), actionLabel: 'Add Client' },
@@ -153,32 +153,46 @@ export default function Dashboard() {
   const allDone = steps.every(s => s.done)
   const completedSteps = steps.filter(s => s.done).length
 
+  const greeting = () => {
+    const h = new Date().getHours()
+    if (h < 12) return 'Good morning'
+    if (h < 17) return 'Good afternoon'
+    return 'Good evening'
+  }
+
   return (
     <>
       <Header title="Dashboard" />
       <PageWrapper>
-        {/* Welcome */}
-        <div className="mb-5">
-          <h2 className="text-xl font-bold text-gray-900">
-            {business?.name || 'Welcome'}
-          </h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {formatDate(new Date())}
-          </p>
+        {/* Hero Welcome */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-brand p-5 mb-6 shadow-elevated shadow-pool-500/10">
+          {/* Decorative circles */}
+          <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
+          <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/5" />
+
+          <div className="relative">
+            <p className="text-pool-100 text-sm font-medium">{greeting()}</p>
+            <h2 className="text-xl font-bold text-white mt-0.5">
+              {business?.name || 'Welcome'}
+            </h2>
+            <p className="text-pool-200 text-sm mt-1">
+              {formatDate(new Date())}
+            </p>
+          </div>
         </div>
 
-        {/* Getting Started - show until all steps complete */}
+        {/* Getting Started */}
         {!allDone && (
-          <section className="mb-6">
-            <Card className="p-4">
+          <section className="mb-6 animate-fade-in">
+            <Card className="overflow-hidden">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-900">Getting Started</h3>
-                <span className="text-xs text-gray-500">{completedSteps}/{steps.length}</span>
+                <h3 className="text-sm font-bold text-gray-900">Getting Started</h3>
+                <span className="text-xs font-semibold text-pool-600 bg-pool-50 px-2.5 py-0.5 rounded-lg">{completedSteps}/{steps.length}</span>
               </div>
               {/* Progress bar */}
-              <div className="w-full h-2 bg-gray-100 rounded-full mb-4">
+              <div className="w-full h-2 bg-gray-100 rounded-full mb-4 overflow-hidden">
                 <div
-                  className="h-2 bg-pool-500 rounded-full transition-all"
+                  className="h-2 bg-gradient-brand rounded-full transition-all duration-500"
                   style={{ width: `${(completedSteps / steps.length) * 100}%` }}
                 />
               </div>
@@ -186,12 +200,14 @@ export default function Dashboard() {
                 {steps.map((step, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className={cn(
-                      'w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-medium',
-                      step.done ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                      'w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold transition-all',
+                      step.done
+                        ? 'bg-emerald-100 text-emerald-600'
+                        : 'bg-gray-100 text-gray-400'
                     )}>
                       {step.done ? (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       ) : (
                         i + 1
@@ -206,9 +222,12 @@ export default function Dashboard() {
                     {!step.done && step.action && (
                       <button
                         onClick={step.action}
-                        className="text-xs text-pool-500 font-medium min-h-tap flex items-center px-2"
+                        className="text-xs text-pool-600 font-semibold min-h-tap flex items-center px-2 hover:text-pool-700"
                       >
                         {step.actionLabel}
+                        <svg className="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
                       </button>
                     )}
                   </div>
@@ -218,42 +237,69 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Quick Service Section */}
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          {[
+            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-pool-600', bg: 'bg-pool-50', icon: '🔧', to: '/route' },
+            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900', bg: stats.overduePools > 0 ? 'bg-red-50' : 'bg-gray-50', icon: '⚠️', to: '/route' },
+            { label: 'Active Jobs', value: stats.activeJobs, sub: 'in progress', color: 'text-amber-600', bg: 'bg-amber-50', icon: '📋', to: '/jobs' },
+            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-violet-600', bg: 'bg-violet-50', icon: '💰', to: '/jobs' },
+          ].map((stat, i) => (
+            <Card key={i} onClick={() => navigate(stat.to)} className="relative overflow-hidden">
+              <div className={cn('absolute top-3 right-3 w-8 h-8 rounded-lg flex items-center justify-center text-sm', stat.bg)}>
+                {stat.icon}
+              </div>
+              <p className="section-title mb-1">{stat.label}</p>
+              <p className={cn('text-2xl font-bold tracking-tight', stat.color)}>
+                {stat.value}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{stat.sub}</p>
+            </Card>
+          ))}
+        </div>
+
+        {/* Ready to Service */}
         {todayPools.length > 0 && (
           <section className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                Ready to Service
-              </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="section-title">Ready to Service</h3>
               <button
                 onClick={() => navigate('/route')}
-                className="text-xs text-pool-500 font-medium min-h-tap flex items-center"
+                className="text-xs text-pool-600 font-semibold min-h-tap flex items-center hover:text-pool-700"
               >
                 View all
+                <svg className="w-3.5 h-3.5 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {todayPools.map(pool => {
                 const days = daysOverdue(pool.next_due_at)
                 const isOverdue = days > 0
                 return (
-                  <Card key={pool.id} className="p-3">
+                  <Card key={pool.id} className="p-3.5">
                     <div className="flex items-center gap-3">
-                      <div className={cn('w-2.5 h-2.5 rounded-full shrink-0', isOverdue ? 'bg-red-500' : 'bg-green-500')} />
+                      <div className={cn(
+                        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                        isOverdue ? 'bg-red-50' : 'bg-emerald-50'
+                      )}>
+                        <div className={cn('w-2.5 h-2.5 rounded-full', isOverdue ? 'bg-red-500' : 'bg-emerald-500')} />
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{pool.clients?.name}</p>
+                        <p className="text-sm font-semibold text-gray-900 truncate">{pool.clients?.name}</p>
                         <p className="text-xs text-gray-500 truncate">{pool.address}</p>
+                        {isOverdue && (
+                          <p className="text-[11px] text-red-500 font-semibold mt-0.5">{days}d overdue</p>
+                        )}
                       </div>
                       <Button
-                        className="text-xs px-3 py-2 min-h-[36px]"
+                        className="text-xs px-4 py-2 min-h-[36px] rounded-xl shadow-sm"
                         onClick={() => navigate(`/pools/${pool.id}/service`)}
                       >
                         Service
                       </Button>
                     </div>
-                    {isOverdue && (
-                      <p className="text-xs text-red-600 font-medium ml-5 mt-1">{days}d overdue</p>
-                    )}
                   </Card>
                 )
               })}
@@ -261,44 +307,11 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Stat cards 2x2 */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <Card className="p-4" onClick={() => navigate('/route')}>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Serviced this week</p>
-            <p className="text-2xl font-bold text-pool-600 mt-1">
-              {stats.servicedThisWeek}
-            </p>
-          </Card>
-
-          <Card className="p-4" onClick={() => navigate('/route')}>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Overdue</p>
-            <p className={`text-2xl font-bold mt-1 ${stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-              {stats.overduePools}
-            </p>
-          </Card>
-
-          <Card className="p-4" onClick={() => navigate('/jobs')}>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Active jobs</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">
-              {stats.activeJobs}
-            </p>
-          </Card>
-
-          <Card className="p-4" onClick={() => navigate('/jobs')}>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Pending quotes</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">
-              {stats.pendingQuotes}
-            </p>
-          </Card>
-        </div>
-
         {/* Overdue Pools */}
         {overduePools.length > 0 && (
           <section className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">
-              Overdue Pools
-            </h3>
-            <div className="space-y-2">
+            <h3 className="section-title mb-3">Overdue Pools</h3>
+            <div className="space-y-2.5">
               {overduePools.map((pool) => {
                 const days = daysOverdue(pool.next_due_at)
                 const status = getOverdueStatus(pool.next_due_at)
@@ -308,13 +321,13 @@ export default function Dashboard() {
                   <Card
                     key={pool.id}
                     onClick={() => navigate(`/pools/${pool.id}`)}
-                    className="flex items-center justify-between p-4 min-h-tap"
+                    className="flex items-center justify-between"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 truncate">
+                      <p className="font-semibold text-gray-900 truncate text-sm">
                         {pool.clients?.name}
                       </p>
-                      <p className="text-sm text-gray-500 truncate">
+                      <p className="text-xs text-gray-500 truncate">
                         {pool.address}
                       </p>
                     </div>
@@ -331,22 +344,25 @@ export default function Dashboard() {
         {/* Recent Activity */}
         {recentActivity.length > 0 && (
           <section className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">
-              Recent Activity
-            </h3>
-            <Card className="divide-y divide-gray-100">
-              {recentActivity.map((record) => (
-                <div key={record.id} className="px-4 py-3 flex items-center justify-between">
+            <h3 className="section-title mb-3">Recent Activity</h3>
+            <Card className="p-0 overflow-hidden divide-y divide-gray-100">
+              {recentActivity.map((record, i) => (
+                <div key={record.id} className="px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {record.pools?.address || 'Pool'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-400">
                       {record.technician_name && `${record.technician_name} · `}
                       {formatDate(record.serviced_at)}
                     </p>
                   </div>
-                  <Badge variant="success" className="ml-3 shrink-0">Serviced</Badge>
+                  <Badge variant="success" className="shrink-0">Serviced</Badge>
                 </div>
               ))}
             </Card>

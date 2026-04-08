@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import { useBusiness } from '../hooks/useBusiness'
 import { useAuth } from '../hooks/useAuth'
+import { cn } from '../lib/utils'
 
 const PLAN_BADGE = {
   trial: 'warning',
@@ -90,12 +91,17 @@ export default function Settings() {
     <>
       <Header title="Settings" />
       <PageWrapper>
-        <div className="space-y-5">
+        <div className="space-y-4">
           {/* Business Profile */}
-          <Card className="p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Business Profile
-            </h3>
+          <Card className="space-y-4">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Business Profile</h3>
+            </div>
 
             <Input
               label="Business Name"
@@ -128,75 +134,67 @@ export default function Settings() {
               placeholder="https://..."
             />
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">Brand Colour</label>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-gray-600">Brand Colour</label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
                   value={form.brand_colour}
                   onChange={(e) => updateField('brand_colour', e.target.value)}
-                  className="w-10 h-10 rounded border border-gray-300 cursor-pointer"
+                  className="w-11 h-11 rounded-xl border-2 border-gray-200 cursor-pointer p-0.5 shadow-inner-soft"
                 />
-                <span className="text-sm text-gray-500">{form.brand_colour}</span>
+                <span className="text-sm text-gray-400 font-mono">{form.brand_colour}</span>
               </div>
             </div>
 
             <Button
               onClick={handleSave}
               loading={saving}
-              className="w-full min-h-tap"
+              className={cn('w-full min-h-tap', saved && 'bg-gradient-success')}
             >
               {saved ? 'Saved!' : 'Save Changes'}
             </Button>
           </Card>
 
           {/* Staff */}
-          <Card className="p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Staff
-            </h3>
-            <p className="text-sm text-gray-500">
-              Manage your team members. Staff profiles appear on service reports and the client portal.
-            </p>
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/settings/staff')}
-              className="w-full min-h-tap"
-            >
-              Manage Staff
-            </Button>
+          <Card onClick={() => navigate('/settings/staff')} className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">Staff</h3>
+              <p className="text-xs text-gray-400">Manage your team members</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
           </Card>
 
           {/* Subscription */}
-          <Card className="p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Subscription
-            </h3>
-
-            <div className="flex items-center gap-3">
-              <p className="text-gray-900 font-medium">Current Plan</p>
-              <Badge variant={PLAN_BADGE[plan] || 'default'}>
-                {plan.charAt(0).toUpperCase() + plan.slice(1)}
-              </Badge>
+          <Card className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
             </div>
-
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/subscription')}
-              className="w-full min-h-tap"
-            >
-              Manage Subscription
-            </Button>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">Subscription</h3>
+              <p className="text-xs text-gray-400">Manage your plan</p>
+            </div>
+            <Badge variant={PLAN_BADGE[plan] || 'default'}>
+              {plan.charAt(0).toUpperCase() + plan.slice(1)}
+            </Badge>
           </Card>
 
           {/* Sign Out */}
-          <Button
-            variant="danger"
+          <button
             onClick={handleSignOut}
-            className="w-full min-h-tap"
+            className="w-full py-3.5 text-sm font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-colors min-h-tap"
           >
             Sign Out
-          </Button>
+          </button>
         </div>
       </PageWrapper>
     </>

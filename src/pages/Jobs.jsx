@@ -100,46 +100,38 @@ export default function Jobs() {
     <>
       <Header title="Jobs & Quotes" />
       <PageWrapper>
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 mb-4">
-          <button
-            className={cn(
-              'flex-1 py-3 text-sm font-medium text-center min-h-tap transition-colors',
-              activeTab === 'jobs'
-                ? 'text-pool-600 border-b-2 border-pool-500'
-                : 'text-gray-500'
-            )}
-            onClick={() => setActiveTab('jobs')}
-          >
-            Jobs
-          </button>
-          <button
-            className={cn(
-              'flex-1 py-3 text-sm font-medium text-center min-h-tap transition-colors',
-              activeTab === 'quotes'
-                ? 'text-pool-600 border-b-2 border-pool-500'
-                : 'text-gray-500'
-            )}
-            onClick={() => setActiveTab('quotes')}
-          >
-            Quotes
-          </button>
+        {/* Tab switcher */}
+        <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
+          {['jobs', 'quotes'].map(tab => (
+            <button
+              key={tab}
+              className={cn(
+                'flex-1 py-2.5 text-sm font-semibold text-center rounded-lg min-h-tap transition-all duration-200',
+                activeTab === tab
+                  ? 'bg-white text-gray-900 shadow-card'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab === 'jobs' ? 'Jobs' : 'Quotes'}
+            </button>
+          ))}
         </div>
 
         {/* Jobs tab */}
         {activeTab === 'jobs' && (
           <>
             {/* Status filter chips */}
-            <div className="flex gap-2 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
+            <div className="flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
               {JOB_STATUSES.map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
                   className={cn(
-                    'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium min-h-tap transition-colors',
+                    'shrink-0 px-4 py-2 rounded-xl text-xs font-semibold min-h-tap transition-all duration-200',
                     statusFilter === status
-                      ? 'bg-pool-500 text-white'
-                      : 'bg-gray-100 text-gray-600'
+                      ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
+                      : 'bg-white text-gray-600 border border-gray-200 shadow-card'
                   )}
                 >
                   {status === 'all' ? 'All' : JOB_STATUS_LABEL[status]}
@@ -150,7 +142,7 @@ export default function Jobs() {
             {filteredJobs.length === 0 ? (
               <EmptyState
                 icon={
-                  <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.193 23.193 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 }
@@ -158,28 +150,18 @@ export default function Jobs() {
                 description={statusFilter !== 'all' ? 'Try a different filter' : 'Jobs will appear here once created'}
               />
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {filteredJobs.map((job) => (
-                  <Card
-                    key={job.id}
-                    onClick={() => navigate(`/jobs/${job.id}`)}
-                    className="p-4 min-h-tap"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="font-medium text-gray-900 truncate flex-1">
-                        {job.clients?.name}
-                      </p>
+                  <Card key={job.id} onClick={() => navigate(`/jobs/${job.id}`)}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="font-semibold text-gray-900 truncate flex-1">{job.clients?.name}</p>
                       <Badge variant={JOB_STATUS_BADGE[job.status]} className="ml-2 shrink-0">
                         {JOB_STATUS_LABEL[job.status]}
                       </Badge>
                     </div>
-                    <p className="text-sm text-gray-500 truncate">
-                      {job.pools?.address || job.title}
-                    </p>
+                    <p className="text-sm text-gray-500 truncate">{job.pools?.address || job.title}</p>
                     {job.scheduled_at && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        {formatDate(job.scheduled_at)}
-                      </p>
+                      <p className="text-xs text-gray-400 mt-1.5">{formatDate(job.scheduled_at)}</p>
                     )}
                   </Card>
                 ))}
@@ -194,7 +176,7 @@ export default function Jobs() {
             {quotes.length === 0 ? (
               <EmptyState
                 icon={
-                  <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 }
@@ -204,24 +186,16 @@ export default function Jobs() {
                 onAction={() => navigate('/quotes/new')}
               />
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {quotes.map((quote) => (
-                  <Card
-                    key={quote.id}
-                    onClick={() => navigate(`/quotes/${quote.id}`)}
-                    className="p-4 min-h-tap"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="font-medium text-gray-900 truncate flex-1">
-                        {quote.clients?.name}
-                      </p>
+                  <Card key={quote.id} onClick={() => navigate(`/quotes/${quote.id}`)}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="font-semibold text-gray-900 truncate flex-1">{quote.clients?.name}</p>
                       <Badge variant={QUOTE_STATUS_BADGE[quote.status]} className="ml-2 shrink-0">
                         {QUOTE_STATUS_LABEL[quote.status]}
                       </Badge>
                     </div>
-                    <p className="text-sm font-medium text-gray-700">
-                      {formatCurrency(quote.total)}
-                    </p>
+                    <p className="text-sm font-semibold text-gray-700">{formatCurrency(quote.total)}</p>
                   </Card>
                 ))}
               </div>
@@ -233,10 +207,10 @@ export default function Jobs() {
         {activeTab === 'quotes' && (
           <button
             onClick={() => navigate('/quotes/new')}
-            className="fixed bottom-20 right-4 w-14 h-14 bg-pool-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-pool-600 active:bg-pool-700 transition-colors z-20"
+            className="fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20"
           >
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
         )}

@@ -4,7 +4,7 @@ const variants = {
   primary: 'btn-primary',
   secondary: 'btn-secondary',
   danger: 'btn-danger',
-  ghost: 'btn text-gray-600 hover:bg-gray-100',
+  ghost: 'btn text-gray-600 hover:bg-gray-100/80 hover:text-gray-900',
 }
 
 export default function Button({ children, variant = 'primary', className, loading, ...props }) {

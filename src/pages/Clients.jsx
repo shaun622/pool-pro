@@ -9,23 +9,34 @@ import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
+import { cn } from '../lib/utils'
 
 function ClientCard({ client, poolCount, onClick }) {
+  const initials = client.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+
   return (
-    <Card onClick={onClick} className="p-4">
-      <div className="flex items-start justify-between">
+    <Card onClick={onClick}>
+      <div className="flex items-center gap-3.5">
+        <div className="w-11 h-11 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0 shadow-sm shadow-pool-500/20">
+          <span className="text-sm font-bold text-white">{initials}</span>
+        </div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-medium text-gray-900 truncate">{client.name}</h3>
+          <h3 className="font-semibold text-gray-900 truncate">{client.name}</h3>
           {client.email && (
-            <p className="text-sm text-gray-500 truncate mt-0.5">{client.email}</p>
-          )}
-          {client.phone && (
-            <p className="text-sm text-gray-500 mt-0.5">{client.phone}</p>
+            <p className="text-xs text-gray-400 truncate mt-0.5">{client.email}</p>
           )}
         </div>
-        <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
-          {poolCount} {poolCount === 1 ? 'pool' : 'pools'}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className={cn(
+            'text-xs font-semibold px-2.5 py-1 rounded-lg',
+            poolCount > 0 ? 'bg-pool-50 text-pool-600' : 'bg-gray-50 text-gray-400'
+          )}>
+            {poolCount} {poolCount === 1 ? 'pool' : 'pools'}
+          </span>
+          <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
       </div>
     </Card>
   )
@@ -75,27 +86,30 @@ export default function Clients() {
     <>
       <Header title="Clients" />
       <PageWrapper>
-        <div className="mb-4">
-          <Input
-            placeholder="Search clients..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            large
-          />
+        {/* Search */}
+        <div className="mb-5">
+          <div className="relative">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              placeholder="Search clients..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="input pl-10"
+            />
+          </div>
         </div>
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <svg className="animate-spin h-6 w-6 text-pool-500" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filtered.length === 0 ? (
           search ? (
             <EmptyState
               icon={
-                <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               }
@@ -105,7 +119,7 @@ export default function Clients() {
           ) : (
             <EmptyState
               icon={
-                <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               }
@@ -116,7 +130,7 @@ export default function Clients() {
             />
           )
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {filtered.map(client => (
               <ClientCard
                 key={client.id}
@@ -132,7 +146,7 @@ export default function Clients() {
         {!loading && clients.length > 0 && (
           <button
             onClick={() => setModalOpen(true)}
-            className="fixed bottom-20 right-4 min-h-tap min-w-tap w-14 h-14 bg-pool-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-pool-600 active:bg-pool-700 transition-colors z-20"
+            className="fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20"
           >
             <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
