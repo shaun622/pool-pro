@@ -15,6 +15,7 @@ const PoolDetail = lazy(() => import('./pages/PoolDetail'))
 const NewService = lazy(() => import('./pages/NewService'))
 const ServiceDetail = lazy(() => import('./pages/ServiceDetail'))
 const Jobs = lazy(() => import('./pages/Jobs'))
+const Quotes = lazy(() => import('./pages/Quotes'))
 const QuoteBuilder = lazy(() => import('./pages/QuoteBuilder'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Staff = lazy(() => import('./pages/Staff'))
@@ -101,6 +102,7 @@ export default function App() {
                   <Route path="/services/:id" element={<ServiceDetail />} />
                   <Route path="/jobs" element={<Jobs />} />
                   <Route path="/recurring-jobs" element={<RecurringJobs />} />
+                  <Route path="/quotes" element={<Quotes />} />
                   <Route path="/quotes/new" element={<QuoteBuilder />} />
                   <Route path="/quotes/:id" element={<QuoteBuilder />} />
                   <Route path="/settings" element={<Settings />} />

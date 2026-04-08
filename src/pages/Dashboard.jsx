@@ -240,10 +240,10 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           {[
-            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-pool-600', to: '/route' },
+            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900', to: '/route' },
             { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900', to: '/route' },
-            { label: 'Active Jobs', value: stats.activeJobs, sub: 'in progress', color: 'text-amber-600', to: '/jobs' },
-            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-violet-600', to: '/jobs' },
+            { label: 'Active Jobs', value: stats.activeJobs, sub: 'in progress', color: 'text-gray-900', to: '/jobs' },
+            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-gray-900', to: '/quotes' },
           ].map((stat, i) => (
             <Card key={i} onClick={() => navigate(stat.to)}>
               <p className="section-title mb-1">{stat.label}</p>
