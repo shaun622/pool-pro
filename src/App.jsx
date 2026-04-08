@@ -21,6 +21,7 @@ const Staff = lazy(() => import('./pages/Staff'))
 const ChemicalLibrary = lazy(() => import('./pages/ChemicalLibrary'))
 const CommunicationTemplates = lazy(() => import('./pages/settings/CommunicationTemplates'))
 const JobTypeTemplates = lazy(() => import('./pages/settings/JobTypeTemplates'))
+const RecurringJobs = lazy(() => import('./pages/RecurringJobs'))
 const Subscription = lazy(() => import('./pages/Subscription'))
 const PublicQuote = lazy(() => import('./pages/PublicQuote'))
 const PortalLogin = lazy(() => import('./pages/portal/PortalLogin'))
@@ -90,6 +91,7 @@ export default function App() {
                   <Route path="/pools/:id/service" element={<NewService />} />
                   <Route path="/services/:id" element={<ServiceDetail />} />
                   <Route path="/jobs" element={<Jobs />} />
+                  <Route path="/recurring-jobs" element={<RecurringJobs />} />
                   <Route path="/quotes/new" element={<QuoteBuilder />} />
                   <Route path="/quotes/:id" element={<QuoteBuilder />} />
                   <Route path="/settings" element={<Settings />} />

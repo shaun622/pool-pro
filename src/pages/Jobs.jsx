@@ -102,7 +102,7 @@ export default function Jobs() {
       <PageWrapper>
         {/* Tab switcher */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
-          {['jobs', 'quotes'].map(tab => (
+          {['jobs', 'quotes', 'recurring'].map(tab => (
             <button
               key={tab}
               className={cn(
@@ -111,9 +111,9 @@ export default function Jobs() {
                   ? 'bg-white text-gray-900 shadow-card'
                   : 'text-gray-500 hover:text-gray-700'
               )}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => tab === 'recurring' ? navigate('/recurring-jobs') : setActiveTab(tab)}
             >
-              {tab === 'jobs' ? 'Jobs' : 'Quotes'}
+              {tab === 'jobs' ? 'Jobs' : tab === 'quotes' ? 'Quotes' : 'Recurring'}
             </button>
           ))}
         </div>
