@@ -64,6 +64,10 @@ export default function RecurringJobs() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  // Inline create client
+  const [showNewClient, setShowNewClient] = useState(false)
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientSaving, setNewClientSaving] = useState(false)
 
   useEffect(() => {
     if (business?.id) fetchAll()
@@ -112,6 +116,26 @@ export default function RecurringJobs() {
       notes: profile.notes || '',
     })
     setModalOpen(true)
+  }
+
+  async function handleQuickCreateClient() {
+    if (!newClientName.trim()) return
+    setNewClientSaving(true)
+    try {
+      const { data, error } = await supabase.from('clients')
+        .insert({ name: newClientName.trim(), business_id: business.id })
+        .select('id, name, pools:pools(id, address)')
+        .single()
+      if (error) throw error
+      setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setForm(prev => ({ ...prev, client_id: data.id, pool_id: '' }))
+      setNewClientName('')
+      setShowNewClient(false)
+    } catch (err) {
+      alert(err.message || 'Failed to create client')
+    } finally {
+      setNewClientSaving(false)
+    }
   }
 
   function onJobTypeChange(templateId) {
@@ -306,13 +330,35 @@ export default function RecurringJobs() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Recurring Job' : 'New Recurring Job'}>
         <form onSubmit={handleSave} className="space-y-4">
-          <Select
-            label="Client"
-            options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
-            value={form.client_id}
-            onChange={e => setForm(prev => ({ ...prev, client_id: e.target.value, pool_id: '' }))}
-            required
-          />
+          <div>
+            <Select
+              label="Client"
+              options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
+              value={form.client_id}
+              onChange={e => setForm(prev => ({ ...prev, client_id: e.target.value, pool_id: '' }))}
+              required
+            />
+            {!showNewClient ? (
+              <button type="button" onClick={() => setShowNewClient(true)}
+                className="text-xs text-pool-600 font-semibold mt-1.5 hover:text-pool-700">
+                + Create new client
+              </button>
+            ) : (
+              <div className="flex gap-2 mt-2">
+                <Input
+                  placeholder="Client name"
+                  value={newClientName}
+                  onChange={e => setNewClientName(e.target.value)}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button type="button" onClick={handleQuickCreateClient} loading={newClientSaving}
+                  className="text-xs px-3 shrink-0">Add</Button>
+                <button type="button" onClick={() => { setShowNewClient(false); setNewClientName('') }}
+                  className="text-xs text-gray-400 px-2 shrink-0 hover:text-gray-600">Cancel</button>
+              </div>
+            )}
+          </div>
           {clientPools.length > 0 && (
             <Select
               label="Pool"

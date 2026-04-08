@@ -72,6 +72,11 @@ export default function ClientDetail() {
   const [scheduleTime, setScheduleTime] = useState('09:00')
   const [scheduleSaving, setScheduleSaving] = useState(false)
 
+  // Create job modal
+  const [jobModalOpen, setJobModalOpen] = useState(false)
+  const [jobForm, setJobForm] = useState({ pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '', notes: '', price: '' })
+  const [jobSaving, setJobSaving] = useState(false)
+
   useEffect(() => {
     if (!id) return
     supabase
@@ -215,6 +220,34 @@ export default function ClientDetail() {
     }
   }
 
+  // Create job handler
+  const handleJobSubmit = async (e) => {
+    e.preventDefault()
+    if (!jobForm.title.trim()) return
+    setJobSaving(true)
+    try {
+      const { error } = await supabase.from('jobs').insert({
+        business_id: client.business_id,
+        client_id: id,
+        pool_id: jobForm.pool_id || null,
+        title: jobForm.title.trim(),
+        status: 'scheduled',
+        scheduled_date: jobForm.scheduled_date || null,
+        scheduled_time: jobForm.scheduled_time || null,
+        price: jobForm.price ? Number(jobForm.price) : null,
+        notes: jobForm.notes.trim() || null,
+      })
+      if (error) throw error
+      setJobModalOpen(false)
+      setJobForm({ pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '', notes: '', price: '' })
+      navigate('/jobs')
+    } catch (err) {
+      console.error('Error creating job:', err)
+    } finally {
+      setJobSaving(false)
+    }
+  }
+
   // Find assigned staff member
   const assignedStaff = staffList.find(s => s.id === client?.assigned_staff_id)
 
@@ -330,6 +363,33 @@ export default function ClientDetail() {
             <StaffCard staff={assignedStaff} variant="compact" />
           </Card>
         )}
+
+        {/* Quick Actions */}
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant="secondary"
+            className="flex-1 text-sm min-h-[44px]"
+            onClick={() => {
+              setJobForm(prev => ({ ...prev, pool_id: pools[0]?.id || '' }))
+              setJobModalOpen(true)
+            }}
+          >
+            <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.193 23.193 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Create Job
+          </Button>
+          <Button
+            variant="secondary"
+            className="flex-1 text-sm min-h-[44px]"
+            onClick={() => navigate(`/quotes/new?client=${id}`)}
+          >
+            <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Create Quote
+          </Button>
+        </div>
 
         {/* Pools Section */}
         <div className="flex items-center justify-between mb-3">
@@ -665,6 +725,67 @@ export default function ClientDetail() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Create Job Modal */}
+      <Modal open={jobModalOpen} onClose={() => setJobModalOpen(false)} title="Create Job">
+        <form onSubmit={handleJobSubmit} className="space-y-4">
+          <div className="bg-gray-50 rounded-xl p-3 mb-1">
+            <p className="text-sm font-medium text-gray-900">{client?.name}</p>
+            {client?.address && <p className="text-xs text-gray-500">{client.address}</p>}
+          </div>
+          {pools.length > 0 && (
+            <Select
+              label="Pool"
+              name="pool_id"
+              value={jobForm.pool_id}
+              onChange={e => setJobForm(prev => ({ ...prev, pool_id: e.target.value }))}
+              options={[
+                { value: '', label: 'No specific pool' },
+                ...pools.map(p => ({ value: p.id, label: p.address })),
+              ]}
+            />
+          )}
+          <Input
+            label="Job Title"
+            value={jobForm.title}
+            onChange={e => setJobForm(prev => ({ ...prev, title: e.target.value }))}
+            placeholder="e.g. Filter replacement, Green pool cleanup"
+            required
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Date"
+              type="date"
+              value={jobForm.scheduled_date}
+              onChange={e => setJobForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+            />
+            <Input
+              label="Time"
+              type="time"
+              value={jobForm.scheduled_time}
+              onChange={e => setJobForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+            />
+          </div>
+          <Input
+            label="Price ($)"
+            type="number"
+            value={jobForm.price}
+            onChange={e => setJobForm(prev => ({ ...prev, price: e.target.value }))}
+            placeholder="Optional"
+          />
+          <TextArea
+            label="Notes"
+            value={jobForm.notes}
+            onChange={e => setJobForm(prev => ({ ...prev, notes: e.target.value }))}
+            placeholder="Job details..."
+            rows={2}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setJobModalOpen(false)}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={jobSaving}>Create Job</Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Add Pool Modal */}
