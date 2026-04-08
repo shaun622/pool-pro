@@ -90,22 +90,39 @@ serve(async (req) => {
     </html>`
 
     // Send via Resend
-    if (client.email) {
+    let emailSent = false
+    let emailError = null
+
+    if (!client.email) {
+      emailError = 'Client has no email address'
+    } else {
       const resendKey = Deno.env.get('RESEND_API_KEY')
-      if (resendKey) {
-        await fetch('https://api.resend.com/emails', {
+      if (!resendKey) {
+        emailError = 'RESEND_API_KEY is not configured'
+        console.error('RESEND_API_KEY not set in Supabase secrets')
+      } else {
+        const fromAddress = `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`
+        const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${resendKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: `${business?.name || 'PoolPro'} <onboarding@resend.dev>`,
+            from: fromAddress,
             to: [client.email],
             subject: `Quote from ${business?.name || 'PoolPro'} — $${Number(quote.total).toFixed(2)}`,
             html,
           }),
         })
+
+        if (res.ok) {
+          emailSent = true
+        } else {
+          const errBody = await res.text()
+          emailError = `Resend API error (${res.status}): ${errBody}`
+          console.error('Resend API error:', res.status, errBody)
+        }
       }
     }
 
@@ -115,7 +132,7 @@ serve(async (req) => {
       .update({ sent_at: new Date().toISOString(), status: 'sent' })
       .eq('id', quote_id)
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, email_sent: emailSent, email_error: emailError }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
