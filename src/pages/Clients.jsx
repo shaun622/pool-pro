@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -268,155 +268,6 @@ function CRMTab({ businessId }) {
   )
 }
 
-// ─── PIPELINE TAB ──────────────────────────────────
-const PIPELINE_STAGES = [
-  { key: 'lead', label: 'Lead', color: 'bg-purple-500', lightBg: 'bg-purple-50', textColor: 'text-purple-700', icon: '🎯' },
-  { key: 'quoted', label: 'Quoted', color: 'bg-blue-500', lightBg: 'bg-blue-50', textColor: 'text-blue-700', icon: '📋' },
-  { key: 'active', label: 'Active', color: 'bg-green-500', lightBg: 'bg-green-50', textColor: 'text-green-700', icon: '✅' },
-  { key: 'on_hold', label: 'On Hold', color: 'bg-amber-500', lightBg: 'bg-amber-50', textColor: 'text-amber-700', icon: '⏸' },
-  { key: 'lost', label: 'Lost', color: 'bg-red-500', lightBg: 'bg-red-50', textColor: 'text-red-700', icon: '✗' },
-]
-
-function PipelineTab({ businessId }) {
-  const navigate = useNavigate()
-  const [clients, setClients] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [movingClient, setMovingClient] = useState(null) // client being moved
-  const scrollContainerRef = useRef(null)
-
-  useEffect(() => {
-    if (!businessId) return
-    async function fetch() {
-      setLoading(true)
-      const { data } = await supabase
-        .from('clients')
-        .select('*, pools(id, address)')
-        .eq('business_id', businessId)
-        .order('name')
-      setClients(data || [])
-      setLoading(false)
-    }
-    fetch()
-  }, [businessId])
-
-  async function moveToStage(clientId, newStage) {
-    // Optimistic update
-    setClients(prev => prev.map(c => c.id === clientId ? { ...c, pipeline_stage: newStage } : c))
-    setMovingClient(null)
-    await supabase.from('clients').update({ pipeline_stage: newStage }).eq('id', clientId)
-  }
-
-  if (loading) return <LoadingSpinner />
-
-  const stageCounts = PIPELINE_STAGES.reduce((acc, s) => {
-    acc[s.key] = clients.filter(c => (c.pipeline_stage || 'active') === s.key).length
-    return acc
-  }, {})
-
-  return (
-    <>
-      {/* Stage summary */}
-      <div className="flex gap-1.5 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide mb-4">
-        {PIPELINE_STAGES.map(stage => (
-          <div key={stage.key} className={cn('shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl', stage.lightBg)}>
-            <div className={cn('w-2 h-2 rounded-full', stage.color)} />
-            <span className={cn('text-xs font-bold', stage.textColor)}>{stageCounts[stage.key]}</span>
-            <span className="text-xs text-gray-500">{stage.label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Kanban columns - horizontal scroll */}
-      <div ref={scrollContainerRef} className="flex gap-3 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide snap-x snap-mandatory"
-        style={{ scrollSnapType: 'x mandatory' }}>
-        {PIPELINE_STAGES.map(stage => {
-          const stageClients = clients.filter(c => (c.pipeline_stage || 'active') === stage.key)
-          return (
-            <div key={stage.key} className="shrink-0 w-[280px] snap-center">
-              {/* Column header */}
-              <div className={cn('flex items-center gap-2 px-3 py-2.5 rounded-t-xl', stage.lightBg)}>
-                <div className={cn('w-2.5 h-2.5 rounded-full', stage.color)} />
-                <h3 className={cn('text-sm font-bold', stage.textColor)}>{stage.label}</h3>
-                <span className="text-xs text-gray-400 ml-auto">{stageClients.length}</span>
-              </div>
-
-              {/* Column body */}
-              <div className="bg-gray-50/50 border border-gray-100 border-t-0 rounded-b-xl p-2 min-h-[200px] space-y-2">
-                {stageClients.length === 0 ? (
-                  <p className="text-xs text-gray-300 text-center py-8">No clients</p>
-                ) : (
-                  stageClients.map(client => {
-                    const initials = (client.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-                    const poolCount = (client.pools || []).length
-                    const isMoving = movingClient?.id === client.id
-                    return (
-                      <div key={client.id}>
-                        <Card className="!p-3 !rounded-xl">
-                          <div className="flex items-center gap-2.5 mb-2 cursor-pointer" onClick={() => navigate(`/clients/${client.id}`)}>
-                            <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold', stage.lightBg, stage.textColor)}>
-                              {initials}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-gray-900 truncate">{client.name}</p>
-                              <p className="text-[11px] text-gray-400">{poolCount} pool{poolCount !== 1 ? 's' : ''}</p>
-                            </div>
-                          </div>
-                          {/* Quick actions */}
-                          <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100">
-                            <button
-                              onClick={() => setMovingClient(isMoving ? null : client)}
-                              className={cn('flex-1 text-[11px] font-semibold py-1.5 rounded-lg transition-all',
-                                isMoving ? 'bg-pool-100 text-pool-700' : 'text-gray-500 hover:bg-gray-100')}>
-                              {isMoving ? 'Cancel' : 'Move →'}
-                            </button>
-                            {client.phone && (
-                              <a href={`tel:${client.phone}`} onClick={e => e.stopPropagation()}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-50">
-                                <svg className="w-3.5 h-3.5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
-                              </a>
-                            )}
-                            {client.email && (
-                              <a href={`mailto:${client.email}`} onClick={e => e.stopPropagation()}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50">
-                                <svg className="w-3.5 h-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                              </a>
-                            )}
-                          </div>
-                        </Card>
-
-                        {/* Move stage selector */}
-                        {isMoving && (
-                          <div className="flex gap-1 mt-1.5 animate-slide-up">
-                            {PIPELINE_STAGES.filter(s => s.key !== stage.key).map(s => (
-                              <button key={s.key}
-                                onClick={() => moveToStage(client.id, s.key)}
-                                className={cn('flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all border-2 border-transparent hover:border-current',
-                                  s.lightBg, s.textColor)}>
-                                {s.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Swipe hint */}
-      <p className="text-center text-[11px] text-gray-300 mt-2">← Swipe to see all stages →</p>
-    </>
-  )
-}
-
 // ─── SHARED ────────────────────────────────────────
 function LoadingSpinner() {
   return (
@@ -459,14 +310,13 @@ export default function Clients() {
 
   return (
     <>
-      <Header title={activeTab === 'clients' ? 'Clients' : activeTab === 'crm' ? 'CRM' : 'Pipeline'} />
+      <Header title={activeTab === 'clients' ? 'Clients' : 'CRM'} />
       <PageWrapper>
         {/* Tab switcher */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
           {[
             { key: 'clients', label: 'Clients' },
             { key: 'crm', label: 'CRM' },
-            { key: 'pipeline', label: 'Pipeline' },
           ].map(tab => (
             <button
               key={tab.key}
@@ -485,7 +335,6 @@ export default function Clients() {
           <ClientsListTab clients={clients} loading={loading} pools={pools} onAdd={() => setModalOpen(true)} />
         )}
         {activeTab === 'crm' && <CRMTab businessId={business?.id} />}
-        {activeTab === 'pipeline' && <PipelineTab businessId={business?.id} />}
       </PageWrapper>
 
       {/* Add Client Modal */}

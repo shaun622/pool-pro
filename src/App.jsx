@@ -27,7 +27,6 @@ const SurveyResults = lazy(() => import('./pages/settings/SurveyResults'))
 const Integrations = lazy(() => import('./pages/settings/Integrations'))
 const ImportData = lazy(() => import('./pages/settings/ImportData'))
 const PublicSurvey = lazy(() => import('./pages/PublicSurvey'))
-const Pipeline = lazy(() => import('./pages/Pipeline'))
 const Invoices = lazy(() => import('./pages/Invoices'))
 const InvoiceBuilder = lazy(() => import('./pages/InvoiceBuilder'))
 const Reports = lazy(() => import('./pages/Reports'))
@@ -113,7 +112,6 @@ export default function App() {
                   <Route path="/settings/surveys" element={<SurveyResults />} />
                   <Route path="/settings/integrations" element={<Integrations />} />
                   <Route path="/settings/import" element={<ImportData />} />
-                  <Route path="/pipeline" element={<Pipeline />} />
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/invoices/new" element={<InvoiceBuilder />} />
                   <Route path="/invoices/:id" element={<InvoiceBuilder />} />
