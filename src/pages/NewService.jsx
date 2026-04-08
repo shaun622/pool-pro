@@ -390,21 +390,8 @@ export default function NewService() {
         {step === 2 && !completed && (
           <div className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900">Chemicals Added</h2>
-            {chemicalProducts.length > 0 && (
-              <Select
-                label="Quick add from library"
-                options={[
-                  { value: '', label: 'Select a product...' },
-                  ...chemicalProducts.map(p => ({ value: p.id, label: p.name })),
-                ]}
-                onChange={e => { addFromLibrary(e.target.value); e.target.value = '' }}
-              />
-            )}
-            {chemicalsAdded.length === 0 && (
-              <p className="text-sm text-gray-500 py-4 text-center">
-                No chemicals added yet. {chemicalProducts.length === 0 ? 'Tap the button below to add one.' : 'Select from the library above or add manually.'}
-              </p>
-            )}
+
+            {/* Added chemicals */}
             {chemicalsAdded.map((chem, i) => (
               <Card key={i} className="relative">
                 <button
@@ -447,9 +434,53 @@ export default function NewService() {
                 </div>
               </Card>
             ))}
-            <Button variant="secondary" onClick={addChemical} className="w-full min-h-[48px]">
-              + Add Chemical
-            </Button>
+
+            {/* Recent products + add new */}
+            {chemicalProducts.length > 0 ? (
+              <Card className="p-0 overflow-hidden">
+                <p className="px-4 pt-3 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Recent Products</p>
+                <div className="divide-y divide-gray-100">
+                  {chemicalProducts.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => addFromLibrary(p.id)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors min-h-tap"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-pool-50 flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                        <p className="text-xs text-gray-400">{p.default_unit || 'L'}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={addChemical}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left border-t border-gray-100 hover:bg-gray-50 active:bg-gray-100 transition-colors min-h-tap"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-gray-600">Add custom chemical...</p>
+                </button>
+              </Card>
+            ) : (
+              <>
+                {chemicalsAdded.length === 0 && (
+                  <p className="text-sm text-gray-500 py-4 text-center">No chemicals added yet.</p>
+                )}
+                <Button variant="secondary" onClick={addChemical} className="w-full min-h-[48px]">
+                  + Add Chemical
+                </Button>
+              </>
+            )}
+
             <div className="flex gap-3 mt-4">
               <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
                 Back
