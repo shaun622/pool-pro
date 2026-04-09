@@ -8,23 +8,33 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Handle email confirmation redirect (tokens in URL hash)
-    const handleRedirect = async () => {
-      const hash = window.location.hash
-      if (hash && hash.includes('access_token')) {
-        // Supabase will pick up tokens automatically via onAuthStateChange
-        // Clean up the URL
-        window.history.replaceState(null, '', window.location.pathname)
-      }
+    // Handle PKCE flow: exchange code param for session (newer Supabase email confirm)
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (!error && data?.session) {
+          setUser(data.session.user)
+          // Clean up the URL
+          window.history.replaceState(null, '', window.location.pathname)
+        }
+        setLoading(false)
+      })
     }
-    handleRedirect()
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Listen for auth state changes — catches hash-based token redirects
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
+
+      // Clean up URL hash after Supabase has processed the tokens
+      if (event === 'SIGNED_IN' && window.location.hash?.includes('access_token')) {
+        window.history.replaceState(null, '', window.location.pathname)
+      }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Get initial session (also detects hash fragments)
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
@@ -33,7 +43,13 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signUp = useCallback(async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`
+      }
+    })
     if (error) throw error
     return data
   }, [])
