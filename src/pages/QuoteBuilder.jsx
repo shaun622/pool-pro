@@ -108,11 +108,38 @@ export default function QuoteBuilder() {
 
   const poolOptions = useMemo(
     () => [
-      { value: '', label: 'No pool (general)' },
+      { value: '', label: 'No Pool — General Items' },
       ...clientPools.map((p) => ({ value: p.id, label: p.address || p.name })),
     ],
     [clientPools]
   )
+
+  // Inline pool creation
+  const [showNewPool, setShowNewPool] = useState(false)
+  const [newPoolAddress, setNewPoolAddress] = useState('')
+  const [newPoolSaving, setNewPoolSaving] = useState(false)
+
+  async function handleCreatePool() {
+    if (!newPoolAddress.trim() || !clientId || !business?.id) return
+    setNewPoolSaving(true)
+    try {
+      const { data, error } = await supabase.from('pools').insert({
+        client_id: clientId,
+        business_id: business.id,
+        address: newPoolAddress.trim(),
+        next_due_at: new Date().toISOString(),
+      }).select('id, address').single()
+      if (error) throw error
+      setClientPools(prev => [...prev, data])
+      setPoolId(data.id)
+      setNewPoolAddress('')
+      setShowNewPool(false)
+    } catch (err) {
+      console.error('Error creating pool:', err)
+    } finally {
+      setNewPoolSaving(false)
+    }
+  }
 
   const pricingOptions = useMemo(
     () => [
@@ -339,12 +366,39 @@ export default function QuoteBuilder() {
               </div>
             </div>
             {clientId && (
-              <Select
-                label="Pool (optional)"
-                options={poolOptions}
-                value={poolId}
-                onChange={(e) => setPoolId(e.target.value)}
-              />
+              <div>
+                <Select
+                  label="Pool"
+                  options={poolOptions}
+                  value={poolId}
+                  onChange={(e) => setPoolId(e.target.value)}
+                />
+                {!showNewPool ? (
+                  <button type="button" onClick={() => setShowNewPool(true)}
+                    className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700">
+                    + Add new pool
+                  </button>
+                ) : (
+                  <div className="mt-2 flex gap-2 animate-fade-in">
+                    <Input
+                      value={newPoolAddress}
+                      onChange={e => setNewPoolAddress(e.target.value)}
+                      placeholder="Pool address"
+                      className="flex-1"
+                    />
+                    <Button type="button" size="sm" onClick={handleCreatePool} loading={newPoolSaving}
+                      disabled={!newPoolAddress.trim()}>
+                      Add
+                    </Button>
+                    <button type="button" onClick={() => { setShowNewPool(false); setNewPoolAddress('') }}
+                      className="px-2 text-gray-400 hover:text-gray-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </Card>
 
