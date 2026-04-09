@@ -68,7 +68,7 @@ export default function ChemicalLibrary() {
   const [editingProduct, setEditingProduct] = useState(null)
   const [form, setForm] = useState(emptyProduct)
   const [saving, setSaving] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(null) // null = auto (will show when empty)
+  const [showSuggestions, setShowSuggestions] = useState(true)
 
   useEffect(() => {
     if (business?.id) fetchProducts()
@@ -84,10 +84,6 @@ export default function ChemicalLibrary() {
       .order('name', { ascending: true })
     if (error) console.error('Error fetching products:', error)
     setProducts(data || [])
-    // Auto-show suggestions if no products yet (first visit)
-    if (showSuggestions === null) {
-      setShowSuggestions(!(data && data.length > 0))
-    }
     setLoading(false)
   }
 

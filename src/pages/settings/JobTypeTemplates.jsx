@@ -74,7 +74,7 @@ export default function JobTypeTemplates() {
   const [form, setForm] = useState(emptyForm)
   const [newTask, setNewTask] = useState('')
   const [saving, setSaving] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(null) // null = auto (will show when empty)
+  const [showSuggestions, setShowSuggestions] = useState(true)
 
   useEffect(() => {
     if (business?.id) fetchTemplates()
@@ -89,10 +89,6 @@ export default function JobTypeTemplates() {
       .eq('is_active', true)
       .order('name')
     setTemplates(data || [])
-    // Auto-show suggestions if no templates yet (first visit)
-    if (showSuggestions === null) {
-      setShowSuggestions(!(data && data.length > 0))
-    }
     setLoading(false)
   }
 
