@@ -405,7 +405,7 @@ export default function Clients() {
           <TextArea label="Notes" name="notes" value={form.notes} onChange={handleChange} placeholder="Any additional notes..." />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => { setModalOpen(false); setForm(emptyClient) }}>Cancel</Button>
-            <Button type="submit" className="flex-1" loading={saving}>Add Client</Button>
+            <Button type="submit" className="flex-1" loading={saving}>Next</Button>
           </div>
           <p className="text-xs text-center text-gray-400">You'll be taken to add their pool next</p>
         </form>
