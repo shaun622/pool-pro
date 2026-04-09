@@ -12,7 +12,7 @@ import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, cn, FREQUENCY_LABELS } from '../lib/utils'
+import { formatDate, cn, FREQUENCY_LABELS, POOL_TYPES, POOL_SHAPES, SCHEDULE_FREQUENCIES } from '../lib/utils'
 
 // ─── CLIENT CARD ───────────────────────────────────
 function ClientCard({ client, clientPools, onClick }) {
@@ -155,6 +155,12 @@ function useCRMData(businessId) {
 
 // ─── MAIN COMPONENT ────────────────────────────────
 const emptyClient = { name: '', email: '', phone: '', address: '', notes: '' }
+const emptyPool = {
+  address: '', sameAsClient: false, type: 'chlorine', volume_litres: '',
+  shape: 'rectangular', schedule_frequency: 'weekly', access_notes: '',
+  pump_model: '', filter_type: '', heater: '',
+  first_service_date: new Date().toISOString().split('T')[0],
+}
 
 export default function Clients() {
   const navigate = useNavigate()
@@ -167,6 +173,12 @@ export default function Clients() {
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyClient)
   const [saving, setSaving] = useState(false)
+
+  // Two-step: client → optional pool
+  const [modalStep, setModalStep] = useState('client') // 'client' | 'pool'
+  const [createdClientId, setCreatedClientId] = useState(null)
+  const [poolForm, setPoolForm] = useState(emptyPool)
+  const [poolSaving, setPoolSaving] = useState(false)
 
   // CRM data (only fetched when in CRM view)
   const { clients: crmClients, loading: crmLoading, counts } = useCRMData(
@@ -192,14 +204,63 @@ export default function Clients() {
     setSaving(true)
     try {
       const created = await createClient(form)
-      setModalOpen(false)
-      setForm(emptyClient)
-      navigate(`/clients/${created.id}`)
+      setCreatedClientId(created.id)
+      // Move to pool step
+      setPoolForm(prev => ({
+        ...prev,
+        address: form.address || '',
+        sameAsClient: !!form.address,
+      }))
+      setModalStep('pool')
     } catch (err) {
       console.error('Error creating client:', err)
     } finally {
       setSaving(false)
     }
+  }
+
+  const handlePoolChange = (e) => setPoolForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+
+  const handlePoolSameAsClient = (e) => {
+    const checked = e.target.checked
+    setPoolForm(prev => ({ ...prev, sameAsClient: checked, address: checked ? (form.address || '') : '' }))
+  }
+
+  const handlePoolSubmit = async (e) => {
+    e.preventDefault()
+    if (!poolForm.address.trim() || !createdClientId) return
+    setPoolSaving(true)
+    try {
+      const { pump_model, filter_type, heater, volume_litres, sameAsClient, first_service_date, ...rest } = poolForm
+      await supabase.from('pools').insert({
+        ...rest,
+        client_id: createdClientId,
+        business_id: business.id,
+        pool_type: poolForm.type,
+        volume_litres: volume_litres ? Number(volume_litres) : null,
+        equipment: { pump_model, filter_type, heater },
+        next_due_at: first_service_date || new Date().toISOString(),
+      })
+      closeModal()
+      navigate(`/clients/${createdClientId}`)
+    } catch (err) {
+      console.error('Error creating pool:', err)
+    } finally {
+      setPoolSaving(false)
+    }
+  }
+
+  const skipPool = () => {
+    closeModal()
+    navigate(`/clients/${createdClientId}`)
+  }
+
+  const closeModal = () => {
+    setModalOpen(false)
+    setModalStep('client')
+    setForm(emptyClient)
+    setPoolForm(emptyPool)
+    setCreatedClientId(null)
   }
 
   // Header actions
@@ -385,19 +446,80 @@ export default function Clients() {
         )}
       </PageWrapper>
 
-      {/* Add Client Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add Client">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input label="Name" name="name" value={form.name} onChange={handleChange} required placeholder="Full name" />
-          <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@example.com" />
-          <Input label="Phone" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="0400 000 000" />
-          <Input label="Address" name="address" value={form.address} onChange={handleChange} placeholder="Street address" />
-          <TextArea label="Notes" name="notes" value={form.notes} onChange={handleChange} placeholder="Any additional notes..." />
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" className="flex-1" loading={saving}>Add Client</Button>
-          </div>
-        </form>
+      {/* Add Client Modal — Two-step */}
+      <Modal open={modalOpen} onClose={closeModal} title={modalStep === 'client' ? 'Add Client' : 'Add Pool (Optional)'}>
+        {modalStep === 'client' ? (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input label="Name" name="name" value={form.name} onChange={handleChange} required placeholder="Full name" />
+            <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@example.com" />
+            <Input label="Phone" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="0400 000 000" />
+            <Input label="Address" name="address" value={form.address} onChange={handleChange} placeholder="Street address" />
+            <TextArea label="Notes" name="notes" value={form.notes} onChange={handleChange} placeholder="Any additional notes..." />
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="secondary" className="flex-1" onClick={closeModal}>Cancel</Button>
+              <Button type="submit" className="flex-1" loading={saving}>Next</Button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handlePoolSubmit} className="space-y-4">
+            {/* Step indicator */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 flex items-center gap-2">
+              <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-xs text-green-700 font-medium">Client created! Now add their pool, or skip.</p>
+            </div>
+
+            {form.address && (
+              <label className="flex items-center gap-2 min-h-tap cursor-pointer">
+                <input type="checkbox" checked={poolForm.sameAsClient} onChange={handlePoolSameAsClient}
+                  className="w-5 h-5 rounded border-gray-300 text-pool-500 focus:ring-pool-500" />
+                <span className="text-sm text-gray-700">Same address as client</span>
+              </label>
+            )}
+
+            <Input label="Pool Address" name="address" value={poolForm.address} onChange={handlePoolChange}
+              required placeholder="Pool location address" disabled={poolForm.sameAsClient} />
+
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Pool Type" name="type" value={poolForm.type} onChange={handlePoolChange}
+                options={POOL_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))} />
+              <Select label="Shape" name="shape" value={poolForm.shape} onChange={handlePoolChange}
+                options={POOL_SHAPES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Volume (litres)" name="volume_litres" type="number" value={poolForm.volume_litres}
+                onChange={handlePoolChange} placeholder="e.g. 50000" />
+              <Select label="Schedule" name="schedule_frequency" value={poolForm.schedule_frequency}
+                onChange={handlePoolChange}
+                options={SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))} />
+            </div>
+
+            <Input label="First Service Date" name="first_service_date" type="date"
+              value={poolForm.first_service_date} onChange={handlePoolChange} />
+
+            <TextArea label="Access Notes" name="access_notes" value={poolForm.access_notes}
+              onChange={handlePoolChange} placeholder="Gate code, dog, key location..." />
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Equipment</h3>
+              <div className="space-y-3">
+                <Input label="Pump Model" name="pump_model" value={poolForm.pump_model}
+                  onChange={handlePoolChange} placeholder="e.g. Astral CTX 280" />
+                <Input label="Filter Type" name="filter_type" value={poolForm.filter_type}
+                  onChange={handlePoolChange} placeholder="e.g. Sand / Cartridge" />
+                <Input label="Heater" name="heater" value={poolForm.heater}
+                  onChange={handlePoolChange} placeholder="e.g. Raypak 266A" />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="secondary" className="flex-1" onClick={skipPool}>Skip</Button>
+              <Button type="submit" className="flex-1" loading={poolSaving}>Add Pool</Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </>
   )

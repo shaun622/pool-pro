@@ -394,13 +394,15 @@ export default function ClientDetail() {
         {/* Pools Section */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold text-gray-900">Pools</h2>
-          <Button
-            variant="ghost"
-            className="text-sm"
+          <button
             onClick={() => setPoolModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
           >
-            + Add Pool
-          </Button>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Pool
+          </button>
         </div>
 
         {poolsLoading ? (
