@@ -32,6 +32,7 @@ const emptyPool = {
   type: 'chlorine',
   volume_litres: '',
   shape: 'rectangular',
+  regular_service: true,
   schedule_frequency: 'weekly',
   access_notes: '',
   pump_model: '',
@@ -165,13 +166,15 @@ export default function ClientDetail() {
     if (!poolForm.address.trim()) return
     setPoolSaving(true)
     try {
-      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, first_service_date, ...rest } = poolForm
+      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, first_service_date, regular_service, ...rest } = poolForm
       await createPool({
         ...rest,
         client_id: id,
         volume_litres: volume_litres ? Number(volume_litres) : null,
         equipment: { pump_model, filter_type, heater },
-        next_due_at: first_service_date || new Date().toISOString(),
+        schedule_frequency: regular_service ? rest.schedule_frequency : null,
+        next_due_at: regular_service ? (first_service_date || new Date().toISOString()) : null,
+        access_notes: regular_service ? rest.access_notes : null,
       })
       setPoolModalOpen(false)
       setPoolForm(emptyPool)
@@ -839,37 +842,60 @@ export default function ClientDetail() {
               options={shapeOptions}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Volume (litres)"
-              name="volume_litres"
-              type="number"
-              value={poolForm.volume_litres}
-              onChange={handlePoolChange}
-              placeholder="e.g. 50000"
-            />
-            <Select
-              label="Schedule"
-              name="schedule_frequency"
-              value={poolForm.schedule_frequency}
-              onChange={handlePoolChange}
-              options={freqOptions}
-            />
-          </div>
           <Input
-            label="First Service Date"
-            name="first_service_date"
-            type="date"
-            value={poolForm.first_service_date}
+            label="Volume (litres)"
+            name="volume_litres"
+            type="number"
+            value={poolForm.volume_litres}
             onChange={handlePoolChange}
+            placeholder="e.g. 50000"
           />
-          <TextArea
-            label="Access Notes"
-            name="access_notes"
-            value={poolForm.access_notes}
-            onChange={handlePoolChange}
-            placeholder="Gate code, dog, key location..."
-          />
+
+          {/* Regular servicing toggle */}
+          <label className="flex items-center justify-between min-h-tap cursor-pointer">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm font-medium text-gray-700">Regular Servicing</span>
+            </div>
+            <div className={cn('relative w-11 h-6 rounded-full transition-colors',
+              poolForm.regular_service ? 'bg-pool-500' : 'bg-gray-200')}>
+              <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                poolForm.regular_service ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+              <input type="checkbox" className="sr-only"
+                checked={poolForm.regular_service}
+                onChange={e => setPoolForm(prev => ({ ...prev, regular_service: e.target.checked }))} />
+            </div>
+          </label>
+
+          {poolForm.regular_service && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  label="Frequency"
+                  name="schedule_frequency"
+                  value={poolForm.schedule_frequency}
+                  onChange={handlePoolChange}
+                  options={freqOptions}
+                />
+                <Input
+                  label="First Service Date"
+                  name="first_service_date"
+                  type="date"
+                  value={poolForm.first_service_date}
+                  onChange={handlePoolChange}
+                />
+              </div>
+              <TextArea
+                label="Access Notes"
+                name="access_notes"
+                value={poolForm.access_notes}
+                onChange={handlePoolChange}
+                placeholder="Gate code, dog, key location..."
+              />
+            </div>
+          )}
 
           <div>
             <h3 className="text-sm font-medium text-gray-700 mb-2">Equipment</h3>
