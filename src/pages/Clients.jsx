@@ -179,7 +179,9 @@ export default function Clients() {
     return acc
   }, {})
 
-  const filtered = rawClients.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+  // Active clients = those with at least one pool
+  const activeClients = rawClients.filter(c => (poolsByClient[c.id] || []).length > 0)
+  const filtered = activeClients.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
   const filteredCRM = crmFilter === 'all' ? crmClients : crmClients.filter(c => c.crmStatus === crmFilter)
 
   const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -200,26 +202,24 @@ export default function Clients() {
     }
   }
 
-  // Header actions: CRM toggle + Add
+  // Header actions
   const headerAction = (
     <div className="flex items-center gap-1">
-      <button
-        onClick={() => setView(v => v === 'list' ? 'crm' : 'list')}
-        className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
-        title={view === 'list' ? 'CRM view' : 'List view'}
-      >
-        {view === 'list' ? (
-          // Bar chart icon → switch to CRM
-          <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-          </svg>
-        ) : (
-          // List icon → switch to list
-          <svg className="w-5 h-5 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-          </svg>
-        )}
-      </button>
+      {view === 'list' ? (
+        <button
+          onClick={() => setView('crm')}
+          className="min-h-tap px-3 flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
+        >
+          <span className="text-xs font-semibold text-pool-600">View All</span>
+        </button>
+      ) : (
+        <button
+          onClick={() => setView('list')}
+          className="min-h-tap px-3 flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
+        >
+          <span className="text-xs font-semibold text-pool-600">Active</span>
+        </button>
+      )}
       <button
         onClick={() => setModalOpen(true)}
         className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
@@ -233,7 +233,7 @@ export default function Clients() {
 
   return (
     <>
-      <Header title={view === 'list' ? 'Clients' : 'CRM'} right={headerAction} />
+      <Header title={view === 'list' ? 'Active Clients' : 'All Clients'} right={headerAction} />
       <PageWrapper>
         {view === 'list' ? (
           /* ─── LIST VIEW ─── */
