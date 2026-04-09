@@ -38,6 +38,8 @@ export default function QuoteBuilder() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(isEditing)
+  const [quoteStatus, setQuoteStatus] = useState('draft')
+  const [converting, setConverting] = useState(false)
 
   // New client modal
   const [newClientOpen, setNewClientOpen] = useState(false)
@@ -76,6 +78,7 @@ export default function QuoteBuilder() {
       setLineItems(data.line_items?.length ? data.line_items.map(li => ({ ...EMPTY_LINE, ...li })) : [{ ...EMPTY_LINE }])
       setScope(data.scope || '')
       setTerms(data.terms || '')
+      setQuoteStatus(data.status || 'draft')
       setLoading(false)
     }
     fetchQuote()
@@ -232,6 +235,67 @@ export default function QuoteBuilder() {
       setSaving(false)
       setSending(false)
     }
+  }
+
+  async function acceptAndConvert() {
+    if (!id || !clientId) return
+    setConverting(true)
+    try {
+      // Mark quote as accepted
+      await supabase.from('quotes').update({
+        status: 'accepted',
+        responded_at: new Date().toISOString(),
+      }).eq('id', id)
+
+      // Create the job
+      const recurringItems = lineItems.filter(li => li.description && li.recurring)
+      const jobTitle = recurringItems.length > 0
+        ? recurringItems[0].description
+        : lineItems.find(li => li.description)?.description || 'Job from quote'
+
+      const { data: job, error } = await supabase.from('jobs').insert({
+        business_id: business.id,
+        client_id: clientId,
+        pool_id: poolId || null,
+        quote_id: id,
+        title: jobTitle,
+        status: 'scheduled',
+        price: total || null,
+      }).select().single()
+      if (error) throw error
+
+      // Create recurring profiles for recurring line items
+      for (const item of recurringItems) {
+        const intervals = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }
+        const days = intervals[item.recurring] || 30
+        const nextGen = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+        await supabase.from('recurring_job_profiles').insert({
+          business_id: business.id,
+          client_id: clientId,
+          pool_id: poolId || null,
+          title: item.description,
+          recurrence_rule: item.recurring,
+          price: item.unit_price ? Number(item.unit_price) * (item.quantity || 1) : null,
+          next_generation_at: nextGen.toISOString(),
+          last_generated_at: new Date().toISOString(),
+        })
+      }
+
+      navigate('/jobs')
+    } catch (err) {
+      console.error('Error converting quote:', err)
+    } finally {
+      setConverting(false)
+    }
+  }
+
+  async function declineQuote() {
+    if (!id) return
+    await supabase.from('quotes').update({
+      status: 'declined',
+      responded_at: new Date().toISOString(),
+    }).eq('id', id)
+    navigate('/jobs')
   }
 
   if (loading) {
@@ -432,25 +496,107 @@ export default function QuoteBuilder() {
           </Card>
 
           {/* Actions */}
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              className="flex-1 min-h-tap"
-              onClick={() => saveQuote('draft')}
-              loading={saving}
-            >
-              Save Draft
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1 min-h-tap"
-              onClick={() => saveQuote('sent')}
-              loading={sending}
-              disabled={!clientId || lineItems.every((li) => !li.description)}
-            >
-              Send Quote
-            </Button>
-          </div>
+          {isEditing && (quoteStatus === 'sent' || quoteStatus === 'viewed' || quoteStatus === 'follow_up') ? (
+            /* Sent quote — show accept/decline/resend */
+            <div className="space-y-3">
+              <Button
+                className="w-full min-h-tap"
+                onClick={acceptAndConvert}
+                loading={converting}
+              >
+                <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Accept & Create Job
+              </Button>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1 min-h-tap"
+                  onClick={() => saveQuote('sent')}
+                  loading={sending}
+                >
+                  Resend
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="flex-1 min-h-tap"
+                  onClick={() => saveQuote('draft')}
+                  loading={saving}
+                >
+                  Save Changes
+                </Button>
+                <Button
+                  variant="danger"
+                  className="min-h-tap px-4"
+                  onClick={declineQuote}
+                >
+                  Decline
+                </Button>
+              </div>
+            </div>
+          ) : isEditing && quoteStatus === 'accepted' ? (
+            /* Already accepted */
+            <div className="space-y-3">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+                <p className="text-sm font-semibold text-green-700">✓ Quote Accepted</p>
+              </div>
+              <Button
+                variant="secondary"
+                className="w-full min-h-tap"
+                onClick={() => saveQuote('draft')}
+                loading={saving}
+              >
+                Save Changes
+              </Button>
+            </div>
+          ) : isEditing && quoteStatus === 'declined' ? (
+            /* Declined */
+            <div className="space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                <p className="text-sm font-semibold text-red-700">Quote Declined</p>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1 min-h-tap"
+                  onClick={() => saveQuote('sent')}
+                  loading={sending}
+                >
+                  Resend as New
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="flex-1 min-h-tap"
+                  onClick={() => saveQuote('draft')}
+                  loading={saving}
+                >
+                  Save as Draft
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* New or draft quote */
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1 min-h-tap"
+                onClick={() => saveQuote('draft')}
+                loading={saving}
+              >
+                Save Draft
+              </Button>
+              <Button
+                variant="primary"
+                className="flex-1 min-h-tap"
+                onClick={() => saveQuote('sent')}
+                loading={sending}
+                disabled={!clientId || lineItems.every((li) => !li.description)}
+              >
+                Send Quote
+              </Button>
+            </div>
+          )}
         </div>
       </PageWrapper>
 
