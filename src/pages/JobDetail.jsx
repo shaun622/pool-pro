@@ -49,24 +49,42 @@ export default function JobDetail() {
   async function loadJob() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      // Fetch job first
+      const { data: jobData, error: jobError } = await supabase
         .from('jobs')
-        .select('*, clients(id, name, email, phone, address), pools(id, address, pool_type)')
+        .select('*')
         .eq('id', id)
         .single()
 
-      if (error) throw error
-      setJob(data)
+      if (jobError) throw jobError
 
-      // If job was created from a quote, load it
-      if (data.quote_id) {
-        const { data: q } = await supabase
-          .from('quotes')
-          .select('id, line_items, scope, total, status')
-          .eq('id', data.quote_id)
-          .single()
-        setQuote(q)
+      // Fetch related data in parallel
+      const promises = []
+
+      if (jobData.client_id) {
+        promises.push(
+          supabase.from('clients').select('id, name, email, phone, address')
+            .eq('id', jobData.client_id).single().then(r => ({ clients: r.data }))
+        )
       }
+      if (jobData.pool_id) {
+        promises.push(
+          supabase.from('pools').select('id, address, pool_type')
+            .eq('id', jobData.pool_id).single().then(r => ({ pools: r.data }))
+        )
+      }
+      if (jobData.quote_id) {
+        promises.push(
+          supabase.from('quotes').select('id, line_items, scope, total, status')
+            .eq('id', jobData.quote_id).single().then(r => ({ quote: r.data }))
+        )
+      }
+
+      const results = await Promise.all(promises)
+      const related = results.reduce((acc, r) => ({ ...acc, ...r }), {})
+
+      setJob({ ...jobData, clients: related.clients || null, pools: related.pools || null })
+      if (related.quote) setQuote(related.quote)
     } catch (err) {
       console.error('Error loading job:', err)
     } finally {

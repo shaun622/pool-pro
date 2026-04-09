@@ -108,6 +108,11 @@ export default function Jobs() {
   })
   const [jobSaving, setJobSaving] = useState(false)
 
+  // Inline pool creation
+  const [showNewPool, setShowNewPool] = useState(false)
+  const [newPoolAddress, setNewPoolAddress] = useState('')
+  const [newPoolSaving, setNewPoolSaving] = useState(false)
+
   async function fetchData() {
     if (!business?.id) return
     setLoading(true)
@@ -151,11 +156,37 @@ export default function Jobs() {
       .then(({ data }) => setClientPools(data || []))
   }, [jobForm.client_id])
 
-  const resetJobForm = () => setJobForm({
-    client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
-    scheduled_time: '', notes: '', price: '',
-    is_recurring: false, recurrence_rule: 'weekly', custom_interval_days: '', preferred_day_of_week: '',
-  })
+  const resetJobForm = () => {
+    setJobForm({
+      client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
+      scheduled_time: '', notes: '', price: '',
+      is_recurring: false, recurrence_rule: 'weekly', custom_interval_days: '', preferred_day_of_week: '',
+    })
+    setShowNewPool(false)
+    setNewPoolAddress('')
+  }
+
+  async function handleCreatePool() {
+    if (!newPoolAddress.trim() || !jobForm.client_id) return
+    setNewPoolSaving(true)
+    try {
+      const { data, error } = await supabase.from('pools').insert({
+        client_id: jobForm.client_id,
+        business_id: business.id,
+        address: newPoolAddress.trim(),
+        next_due_at: new Date().toISOString(),
+      }).select('id, address').single()
+      if (error) throw error
+      setClientPools(prev => [...prev, data])
+      setJobForm(prev => ({ ...prev, pool_id: data.id }))
+      setNewPoolAddress('')
+      setShowNewPool(false)
+    } catch (err) {
+      console.error('Error creating pool:', err)
+    } finally {
+      setNewPoolSaving(false)
+    }
+  }
 
   async function handleJobSubmit(e) {
     e.preventDefault()
@@ -504,13 +535,43 @@ export default function Jobs() {
             options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
             required
           />
-          {clientPools.length > 0 && (
-            <Select
-              label="Pool"
-              value={jobForm.pool_id}
-              onChange={e => setJobForm(prev => ({ ...prev, pool_id: e.target.value }))}
-              options={[{ value: '', label: 'No specific pool' }, ...clientPools.map(p => ({ value: p.id, label: p.address }))]}
-            />
+          {jobForm.client_id && (
+            <div>
+              <Select
+                label="Pool"
+                value={jobForm.pool_id}
+                onChange={e => setJobForm(prev => ({ ...prev, pool_id: e.target.value }))}
+                options={[
+                  { value: '', label: 'No Pool — General Items' },
+                  ...clientPools.map(p => ({ value: p.id, label: p.address })),
+                ]}
+              />
+              {!showNewPool ? (
+                <button type="button" onClick={() => setShowNewPool(true)}
+                  className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700">
+                  + Add new pool
+                </button>
+              ) : (
+                <div className="mt-2 flex gap-2 animate-fade-in">
+                  <Input
+                    value={newPoolAddress}
+                    onChange={e => setNewPoolAddress(e.target.value)}
+                    placeholder="Pool address"
+                    className="flex-1"
+                  />
+                  <Button type="button" size="sm" onClick={handleCreatePool} loading={newPoolSaving}
+                    disabled={!newPoolAddress.trim()}>
+                    Add
+                  </Button>
+                  <button type="button" onClick={() => { setShowNewPool(false); setNewPoolAddress('') }}
+                    className="px-2 text-gray-400 hover:text-gray-600">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           <Input
             label="Job Title"
