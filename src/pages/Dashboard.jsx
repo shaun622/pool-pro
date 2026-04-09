@@ -5,6 +5,7 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import ActivityPanel, { ActivityBell } from '../components/ui/ActivityPanel'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, daysOverdue, getOverdueStatus, cn } from '../lib/utils'
@@ -12,6 +13,7 @@ import { formatDate, daysOverdue, getOverdueStatus, cn } from '../lib/utils'
 export default function Dashboard() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
+  const [activityOpen, setActivityOpen] = useState(false)
 
   const [stats, setStats] = useState({
     servicedThisWeek: 0,
@@ -133,7 +135,7 @@ export default function Dashboard() {
   if (bizLoading || loading) {
     return (
       <>
-        <Header title="Dashboard" />
+        <Header title="Dashboard" right={<ActivityBell onClick={() => setActivityOpen(true)} />} />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -162,7 +164,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <Header title="Dashboard" />
+      <Header title="Dashboard" right={<ActivityBell onClick={() => setActivityOpen(true)} />} />
       <PageWrapper>
         {/* Hero Welcome */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-brand p-5 mb-6 shadow-elevated shadow-pool-500/10">
@@ -366,6 +368,7 @@ export default function Dashboard() {
           </section>
         )}
       </PageWrapper>
+      <ActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
     </>
   )
 }

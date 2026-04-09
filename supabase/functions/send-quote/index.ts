@@ -132,6 +132,15 @@ serve(async (req) => {
       .update({ sent_at: new Date().toISOString(), status: 'sent' })
       .eq('id', quote_id)
 
+    // Log activity
+    await supabase.from('activity_feed').insert({
+      business_id: business.id,
+      type: 'quote_sent',
+      title: `Quote sent to ${client.name}`,
+      description: `$${Number(quote.total).toFixed(2)}${emailSent ? '' : ' (email failed)'}`,
+      link_to: `/quotes/${quote_id}`,
+    })
+
     return new Response(JSON.stringify({ success: true, email_sent: emailSent, email_error: emailError }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

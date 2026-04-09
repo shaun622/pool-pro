@@ -72,6 +72,17 @@ serve(async (req) => {
       }
     }
 
+    // Log activity
+    await supabase.from('activity_feed').insert({
+      business_id: quote.business_id,
+      type: response === 'accepted' ? 'quote_accepted' : 'quote_declined',
+      title: response === 'accepted'
+        ? `${quote.clients.name} accepted your quote`
+        : `${quote.clients.name} declined your quote`,
+      description: `$${Number(quote.total).toFixed(2)}`,
+      link_to: `/quotes/${quote.id}`,
+    })
+
     return new Response(JSON.stringify({ success: true, status: response }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

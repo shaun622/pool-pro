@@ -108,23 +108,33 @@ export default function Jobs() {
   })
   const [jobSaving, setJobSaving] = useState(false)
 
+  async function fetchData() {
+    if (!business?.id) return
+    setLoading(true)
+    const [jobsRes, quotesRes] = await Promise.all([
+      supabase.from('jobs').select('*, clients(name), pools(address)')
+        .eq('business_id', business.id)
+        .order('scheduled_at', { ascending: false }),
+      supabase.from('quotes').select('*, clients(name)')
+        .eq('business_id', business.id)
+        .order('created_at', { ascending: false }),
+    ])
+    setJobs(jobsRes.data || [])
+    setQuotes(quotesRes.data || [])
+    setLoading(false)
+  }
+
   useEffect(() => {
     if (!business?.id) return
-    async function fetchData() {
-      setLoading(true)
-      const [jobsRes, quotesRes] = await Promise.all([
-        supabase.from('jobs').select('*, clients(name), pools(address)')
-          .eq('business_id', business.id)
-          .order('scheduled_at', { ascending: false }),
-        supabase.from('quotes').select('*, clients(name)')
-          .eq('business_id', business.id)
-          .order('created_at', { ascending: false }),
-      ])
-      setJobs(jobsRes.data || [])
-      setQuotes(quotesRes.data || [])
-      setLoading(false)
-    }
     fetchData()
+
+    // Realtime subscriptions — auto-refresh on changes
+    const channel = supabase.channel('jobs-quotes-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes', filter: `business_id=eq.${business.id}` }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `business_id=eq.${business.id}` }, () => fetchData())
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [business?.id])
 
   // Fetch clients when modal opens
@@ -185,6 +195,15 @@ export default function Jobs() {
         })
       }
 
+      // Log activity
+      await supabase.from('activity_feed').insert({
+        business_id: business.id,
+        type: 'job_created',
+        title: `Job created: ${jobForm.title.trim()}`,
+        description: data.clients?.name || '',
+        link_to: `/jobs/${data.id}`,
+      })
+
       setJobs(prev => [data, ...prev])
       setJobModalOpen(false)
       resetJobForm()
@@ -192,6 +211,54 @@ export default function Jobs() {
       console.error('Error creating job:', err)
     } finally {
       setJobSaving(false)
+    }
+  }
+
+  async function convertQuoteToJob(quote) {
+    try {
+      const items = quote.line_items || []
+      const recurringItems = items.filter(li => li.description && li.recurring)
+      const jobTitle = recurringItems.length > 0
+        ? recurringItems[0].description
+        : items.find(li => li.description)?.description || 'Job from quote'
+      const total = items.reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0)
+
+      const { data: job, error } = await supabase.from('jobs').insert({
+        business_id: business.id,
+        client_id: quote.client_id,
+        pool_id: quote.pool_id || null,
+        quote_id: quote.id,
+        title: jobTitle,
+        status: 'scheduled',
+        price: total || null,
+      }).select('*, clients(name), pools(address)').single()
+      if (error) throw error
+
+      // Create recurring profiles for recurring line items
+      for (const item of recurringItems) {
+        const intervals = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }
+        const days = intervals[item.recurring] || 30
+        const nextGen = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+        await supabase.from('recurring_job_profiles').insert({
+          business_id: business.id,
+          client_id: quote.client_id,
+          pool_id: quote.pool_id || null,
+          title: item.description,
+          recurrence_rule: item.recurring,
+          price: item.unit_price ? Number(item.unit_price) * (item.quantity || 1) : null,
+          next_generation_at: nextGen.toISOString(),
+          last_generated_at: new Date().toISOString(),
+        })
+      }
+
+      // Mark quote as converted
+      await supabase.from('quotes').update({ status: 'accepted', pipeline_stage: 'converted' }).eq('id', quote.id)
+
+      setJobs(prev => [job, ...prev])
+      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, status: 'accepted', pipeline_stage: 'converted' } : q))
+      setTab('jobs')
+    } catch (err) {
+      console.error('Error converting quote to job:', err)
     }
   }
 
@@ -397,6 +464,18 @@ export default function Jobs() {
                           </div>
                         </div>
                       </div>
+                      {/* Convert to Job button for accepted quotes */}
+                      {quote.status === 'accepted' && stage !== 'converted' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); convertQuoteToJob(quote) }}
+                          className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-gradient-brand text-white text-xs font-semibold shadow-sm active:scale-[0.98] transition-all"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.193 23.193 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          Convert to Job
+                        </button>
+                      )}
                     </Card>
                   )
                 })}

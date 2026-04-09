@@ -536,11 +536,21 @@ export default function QuoteBuilder() {
               </div>
             </div>
           ) : isEditing && quoteStatus === 'accepted' ? (
-            /* Already accepted */
+            /* Already accepted — show convert to job */
             <div className="space-y-3">
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
                 <p className="text-sm font-semibold text-green-700">✓ Quote Accepted</p>
               </div>
+              <Button
+                className="w-full min-h-tap"
+                onClick={acceptAndConvert}
+                loading={converting}
+              >
+                <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.193 23.193 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Convert to Job
+              </Button>
               <Button
                 variant="secondary"
                 className="w-full min-h-tap"
