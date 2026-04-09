@@ -203,8 +203,17 @@ export default function Clients() {
     if (!form.name.trim()) return
     setSaving(true)
     try {
-      const created = await createClient(form)
+      const clientData = {
+        name: form.name.trim(),
+        email: form.email.trim() || null,
+        phone: form.phone.trim() || null,
+        address: form.address.trim() || null,
+        notes: form.notes.trim() || null,
+      }
+      const created = await createClient(clientData)
+      if (!created?.id) throw new Error('No client ID returned')
       setCreatedClientId(created.id)
+      setSaving(false)
       // Move to pool step
       setPoolForm(prev => ({
         ...prev,
@@ -214,7 +223,6 @@ export default function Clients() {
       setModalStep('pool')
     } catch (err) {
       console.error('Error creating client:', err)
-    } finally {
       setSaving(false)
     }
   }
@@ -231,15 +239,21 @@ export default function Clients() {
     if (!poolForm.address.trim() || !createdClientId) return
     setPoolSaving(true)
     try {
-      const { pump_model, filter_type, heater, volume_litres, sameAsClient, first_service_date, ...rest } = poolForm
       await supabase.from('pools').insert({
-        ...rest,
         client_id: createdClientId,
         business_id: business.id,
+        address: poolForm.address.trim(),
         pool_type: poolForm.type,
-        volume_litres: volume_litres ? Number(volume_litres) : null,
-        equipment: { pump_model, filter_type, heater },
-        next_due_at: first_service_date || new Date().toISOString(),
+        shape: poolForm.shape,
+        volume_litres: poolForm.volume_litres ? Number(poolForm.volume_litres) : null,
+        schedule_frequency: poolForm.schedule_frequency,
+        access_notes: poolForm.access_notes.trim() || null,
+        equipment: {
+          pump_model: poolForm.pump_model || '',
+          filter_type: poolForm.filter_type || '',
+          heater: poolForm.heater || '',
+        },
+        next_due_at: poolForm.first_service_date || new Date().toISOString(),
       })
       closeModal()
       navigate(`/clients/${createdClientId}`)
