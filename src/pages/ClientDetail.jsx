@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -43,6 +43,7 @@ const emptyPool = {
 export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { updateClient, deleteClient } = useClients()
   const { pools, loading: poolsLoading, createPool, updatePool } = usePools(id)
   const { staff: staffList, loading: staffLoading } = useStaff()
@@ -59,8 +60,15 @@ export default function ClientDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Add pool modal
+  // Add pool modal — auto-open if ?addPool=1
   const [poolModalOpen, setPoolModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('addPool') && !poolModalOpen) {
+      setPoolModalOpen(true)
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams])
   const [poolForm, setPoolForm] = useState(emptyPool)
   const [poolSaving, setPoolSaving] = useState(false)
 
