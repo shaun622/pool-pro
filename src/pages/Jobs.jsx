@@ -114,7 +114,7 @@ export default function Jobs() {
     const [jobsRes, quotesRes] = await Promise.all([
       supabase.from('jobs').select('*, clients(name), pools(address)')
         .eq('business_id', business.id)
-        .order('scheduled_at', { ascending: false }),
+        .order('created_at', { ascending: false }),
       supabase.from('quotes').select('*, clients(name)')
         .eq('business_id', business.id)
         .order('created_at', { ascending: false }),
@@ -230,6 +230,7 @@ export default function Jobs() {
         quote_id: quote.id,
         title: jobTitle,
         status: 'scheduled',
+        scheduled_date: new Date().toISOString().split('T')[0],
         price: total || null,
       }).select('*, clients(name), pools(address)').single()
       if (error) throw error

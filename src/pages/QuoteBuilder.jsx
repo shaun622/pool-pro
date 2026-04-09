@@ -260,6 +260,7 @@ export default function QuoteBuilder() {
         quote_id: id,
         title: jobTitle,
         status: 'scheduled',
+        scheduled_date: new Date().toISOString().split('T')[0],
         price: total || null,
       }).select().single()
       if (error) throw error

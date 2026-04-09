@@ -48,6 +48,7 @@ serve(async (req) => {
         quote_id: quote.id,
         title: `Job from quote for ${quote.clients.name}`,
         status: 'scheduled',
+        scheduled_date: new Date().toISOString().split('T')[0],
       })
 
       // Notify business owner
