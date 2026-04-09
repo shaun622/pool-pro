@@ -28,7 +28,7 @@ export function useActivity() {
     fetchActivities()
 
     // Realtime — new activities appear instantly
-    const channel = supabase.channel('activity-feed')
+    const channel = supabase.channel(`activity-feed-${business.id}-${Date.now()}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',

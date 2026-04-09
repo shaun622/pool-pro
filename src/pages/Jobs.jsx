@@ -134,7 +134,7 @@ export default function Jobs() {
     fetchData()
 
     // Realtime subscriptions — auto-refresh on changes
-    const channel = supabase.channel('jobs-quotes-realtime')
+    const channel = supabase.channel(`jobs-quotes-${business.id}-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes', filter: `business_id=eq.${business.id}` }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `business_id=eq.${business.id}` }, () => fetchData())
       .subscribe()
