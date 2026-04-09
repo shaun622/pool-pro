@@ -381,7 +381,7 @@ export default function Jobs() {
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-500 truncate">{job.pools?.address || job.title}</p>
-                    {job.scheduled_at && <p className="text-xs text-gray-400 mt-1.5">{formatDate(job.scheduled_at)}</p>}
+                    {job.scheduled_date && <p className="text-xs text-gray-400 mt-1.5">{formatDate(job.scheduled_date)}</p>}
                   </Card>
                 ))}
               </div>
