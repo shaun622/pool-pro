@@ -68,7 +68,7 @@ export default function ChemicalLibrary() {
   const [editingProduct, setEditingProduct] = useState(null)
   const [form, setForm] = useState(emptyProduct)
   const [saving, setSaving] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(null) // null = auto (will show when empty)
 
   useEffect(() => {
     if (business?.id) fetchProducts()
@@ -84,6 +84,10 @@ export default function ChemicalLibrary() {
       .order('name', { ascending: true })
     if (error) console.error('Error fetching products:', error)
     setProducts(data || [])
+    // Auto-show suggestions if no products yet (first visit)
+    if (showSuggestions === null) {
+      setShowSuggestions(!(data && data.length > 0))
+    }
     setLoading(false)
   }
 
@@ -227,7 +231,7 @@ export default function ChemicalLibrary() {
         }
       />
       <PageWrapper>
-        {products.length === 0 ? (
+        {products.length === 0 && !showSuggestions ? (
           <EmptyState
             icon={
               <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -244,7 +248,7 @@ export default function ChemicalLibrary() {
             {/* Quick actions */}
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowSuggestions(!showSuggestions)} className="flex-1 text-xs">
-                {showSuggestions ? 'Hide Suggestions' : 'Suggested Chemicals'}
+                {showSuggestions ? 'Hide Suggestions' : 'Show Suggestions'}
               </Button>
               <Button onClick={openAdd} className="flex-1 text-xs">
                 + Add Chemical

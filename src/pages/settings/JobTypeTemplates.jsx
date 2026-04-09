@@ -74,7 +74,7 @@ export default function JobTypeTemplates() {
   const [form, setForm] = useState(emptyForm)
   const [newTask, setNewTask] = useState('')
   const [saving, setSaving] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(null) // null = auto (will show when empty)
 
   useEffect(() => {
     if (business?.id) fetchTemplates()
@@ -89,6 +89,10 @@ export default function JobTypeTemplates() {
       .eq('is_active', true)
       .order('name')
     setTemplates(data || [])
+    // Auto-show suggestions if no templates yet (first visit)
+    if (showSuggestions === null) {
+      setShowSuggestions(!(data && data.length > 0))
+    }
     setLoading(false)
   }
 
@@ -221,7 +225,7 @@ export default function JobTypeTemplates() {
         }
       />
       <PageWrapper>
-        {templates.length === 0 ? (
+        {templates.length === 0 && !showSuggestions ? (
           <EmptyState
             icon={
               <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -237,7 +241,7 @@ export default function JobTypeTemplates() {
           <div className="space-y-5">
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowSuggestions(!showSuggestions)} className="flex-1 text-xs">
-                {showSuggestions ? 'Hide Suggestions' : 'Suggested Types'}
+                {showSuggestions ? 'Hide Suggestions' : 'Show Suggestions'}
               </Button>
               <Button onClick={openAdd} className="flex-1 text-xs">
                 + Add Job Type
