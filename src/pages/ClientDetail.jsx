@@ -13,6 +13,7 @@ import { usePools } from '../hooks/usePools'
 import { useStaff } from '../hooks/useStaff'
 import StaffCard from '../components/ui/StaffCard'
 import { supabase } from '../lib/supabase'
+import { geocodeAddress } from '../lib/mapbox'
 import {
   formatDate,
   getOverdueStatus,
@@ -167,6 +168,8 @@ export default function ClientDetail() {
     setPoolSaving(true)
     try {
       const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, first_service_date, regular_service, ...rest } = poolForm
+      // Geocode the address
+      const geo = await geocodeAddress(rest.address)
       await createPool({
         ...rest,
         client_id: id,
@@ -175,6 +178,9 @@ export default function ClientDetail() {
         schedule_frequency: regular_service ? rest.schedule_frequency : null,
         next_due_at: regular_service ? (first_service_date || new Date().toISOString()) : null,
         access_notes: regular_service ? rest.access_notes : null,
+        latitude: geo?.lat ?? null,
+        longitude: geo?.lng ?? null,
+        geocoded_at: geo ? new Date().toISOString() : null,
       })
       setPoolModalOpen(false)
       setPoolForm(emptyPool)
