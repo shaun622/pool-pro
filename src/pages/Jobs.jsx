@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -6,8 +6,11 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input, { Select, TextArea } from '../components/ui/Input'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
+import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
+import StopDetailModal from '../components/ui/StopDetailModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
@@ -87,6 +90,37 @@ function getQuoteTotal(quote) {
   return (quote.line_items || []).reduce((s, i) => s + (i.amount || i.quantity * i.unit_price || 0), 0)
 }
 
+// Convert a job row into the "stop" shape expected by StopDetailModal
+function jobToStop(j) {
+  const duration = j.estimated_duration_minutes || 60
+  let timeDisp = null
+  if (j.scheduled_time) {
+    const [h, m] = j.scheduled_time.split(':').map(Number)
+    const startD = new Date(); startD.setHours(h || 0, m || 0, 0, 0)
+    const endD = new Date(startD.getTime() + duration * 60000)
+    const fmt = x => x.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
+    timeDisp = `${fmt(startD)} – ${fmt(endD)}`
+  }
+  return {
+    type: 'job',
+    id: j.id,
+    title: j.title || 'Job',
+    client_name: j.clients?.name,
+    address: j.pools?.address || null,
+    status: j.status,
+    scheduled_date: j.scheduled_date,
+    scheduled_time: j.scheduled_time,
+    time_display: timeDisp,
+    duration,
+    price: j.price,
+    notes: j.notes,
+    phone: j.clients?.phone,
+    email: j.clients?.email,
+    lat: j.pools?.latitude ? Number(j.pools.latitude) : null,
+    lng: j.pools?.longitude ? Number(j.pools.longitude) : null,
+  }
+}
+
 export default function Jobs() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
@@ -97,27 +131,70 @@ export default function Jobs() {
   const [stageFilter, setStageFilter] = useState('all')
   const [loading, setLoading] = useState(true)
 
+  // Job detail modal
+  const [selectedJob, setSelectedJob] = useState(null)
+
   // Create job modal
   const [jobModalOpen, setJobModalOpen] = useState(false)
   const [clients, setClients] = useState([])
   const [clientPools, setClientPools] = useState([])
   const [jobForm, setJobForm] = useState({
     client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
-    scheduled_time: '', notes: '', price: '',
+    scheduled_time: '09:00', notes: '', price: '',
     is_recurring: false, recurrence_rule: 'weekly', custom_interval_days: '', preferred_day_of_week: '',
   })
   const [jobSaving, setJobSaving] = useState(false)
+  const jobSubmittingRef = useRef(false)
 
-  // Inline pool creation
+  // Inline pool creation (uses full PoolFormFields component)
   const [showNewPool, setShowNewPool] = useState(false)
-  const [newPoolAddress, setNewPoolAddress] = useState('')
+  const [newPoolForm, setNewPoolForm] = useState(emptyPool)
   const [newPoolSaving, setNewPoolSaving] = useState(false)
+
+  // Inline client creation
+  const [showNewClient, setShowNewClient] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' })
+  const [newClientSaving, setNewClientSaving] = useState(false)
+
+  const handleCreateClientInline = async () => {
+    if (!newClientForm.name.trim() || !business?.id) return
+    setNewClientSaving(true)
+    try {
+      const { data, error } = await supabase.from('clients').insert({
+        business_id: business.id,
+        name: newClientForm.name.trim(),
+        email: newClientForm.email.trim() || null,
+        phone: newClientForm.phone.trim() || null,
+        address: newClientForm.address.trim() || null,
+        notes: newClientForm.notes.trim() || null,
+      }).select('id, name, address').single()
+      if (error) throw error
+      setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setJobForm(prev => ({ ...prev, client_id: data.id, pool_id: '' }))
+      // Pre-seed the pool form with the client's address so "Same as client" has something to copy.
+      const clientAddress = newClientForm.address.trim()
+      setNewPoolForm({
+        ...emptyPool,
+        address: clientAddress,
+        sameAsClient: !!clientAddress,
+      })
+      setNewClientForm({ name: '', email: '', phone: '', address: '', notes: '' })
+      setShowNewClient(false)
+      // Jump straight into the Add Pool step
+      setShowNewPool(true)
+    } catch (err) {
+      console.error('Error creating client inline:', err)
+      alert(err?.message || 'Failed to create client')
+    } finally {
+      setNewClientSaving(false)
+    }
+  }
 
   async function fetchData() {
     if (!business?.id) return
     setLoading(true)
     const [jobsRes, quotesRes] = await Promise.all([
-      supabase.from('jobs').select('*, clients(name), pools(address)')
+      supabase.from('jobs').select('*, clients(name, email, phone), pools(address, latitude, longitude)')
         .eq('business_id', business.id)
         .order('created_at', { ascending: false }),
       supabase.from('quotes').select('*, clients(name)')
@@ -145,7 +222,7 @@ export default function Jobs() {
   // Fetch clients when modal opens
   useEffect(() => {
     if (!jobModalOpen || !business?.id || clients.length > 0) return
-    supabase.from('clients').select('id, name').eq('business_id', business.id).order('name')
+    supabase.from('clients').select('id, name, address').eq('business_id', business.id).order('name')
       .then(({ data }) => setClients(data || []))
   }, [jobModalOpen, business?.id])
 
@@ -159,30 +236,31 @@ export default function Jobs() {
   const resetJobForm = () => {
     setJobForm({
       client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
-      scheduled_time: '', notes: '', price: '',
+      scheduled_time: '09:00', notes: '', price: '',
       is_recurring: false, recurrence_rule: 'weekly', custom_interval_days: '', preferred_day_of_week: '',
     })
     setShowNewPool(false)
-    setNewPoolAddress('')
+    setNewPoolForm(emptyPool)
   }
 
   async function handleCreatePool() {
-    if (!newPoolAddress.trim() || !jobForm.client_id) return
+    if (!newPoolForm.address.trim() || !jobForm.client_id) return
     setNewPoolSaving(true)
     try {
+      const payload = await buildPoolPayload(newPoolForm)
       const { data, error } = await supabase.from('pools').insert({
+        ...payload,
         client_id: jobForm.client_id,
         business_id: business.id,
-        address: newPoolAddress.trim(),
-        next_due_at: new Date().toISOString(),
       }).select('id, address').single()
       if (error) throw error
       setClientPools(prev => [...prev, data])
       setJobForm(prev => ({ ...prev, pool_id: data.id }))
-      setNewPoolAddress('')
+      setNewPoolForm(emptyPool)
       setShowNewPool(false)
     } catch (err) {
       console.error('Error creating pool:', err)
+      alert(err?.message || 'Failed to create pool')
     } finally {
       setNewPoolSaving(false)
     }
@@ -191,6 +269,8 @@ export default function Jobs() {
   async function handleJobSubmit(e) {
     e.preventDefault()
     if (!jobForm.client_id || !jobForm.title.trim()) return
+    if (jobSubmittingRef.current) return // guard against double submission
+    jobSubmittingRef.current = true
     setJobSaving(true)
     try {
       const { data, error } = await supabase.from('jobs').insert({
@@ -235,13 +315,15 @@ export default function Jobs() {
         link_to: `/jobs/${data.id}`,
       })
 
-      setJobs(prev => [data, ...prev])
+      // Don't locally prepend — realtime subscription will refresh the list
+      // and prevent a duplicate showing briefly.
       setJobModalOpen(false)
       resetJobForm()
     } catch (err) {
       console.error('Error creating job:', err)
     } finally {
       setJobSaving(false)
+      jobSubmittingRef.current = false
     }
   }
 
@@ -384,11 +466,11 @@ export default function Jobs() {
           /* ─── JOBS TAB ─── */
           <>
             {/* Status filter pills */}
-            <div className="flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
+            <div className="flex gap-1.5 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
               {JOB_STATUSES.map(status => (
                 <button key={status} onClick={() => setStatusFilter(status)}
-                  className={cn('shrink-0 px-4 py-2 rounded-xl text-xs font-semibold min-h-tap transition-all duration-200',
-                    statusFilter === status ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
+                  className={cn('shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
+                    statusFilter === status ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
                       : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
                   {status === 'all' ? `All (${jobs.length})` : `${JOB_STATUS_LABEL[status]} (${jobs.filter(j => j.status === status).length})`}
                 </button>
@@ -404,16 +486,7 @@ export default function Jobs() {
             ) : (
               <div className="space-y-2.5">
                 {filteredJobs.map(job => (
-                  <Card key={job.id} onClick={() => navigate(`/jobs/${job.id}`)}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="font-semibold text-gray-900 truncate flex-1">{job.clients?.name}</p>
-                      <Badge variant={JOB_STATUS_BADGE[job.status]} className="ml-2 shrink-0">
-                        {JOB_STATUS_LABEL[job.status]}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-gray-500 truncate">{job.pools?.address || job.title}</p>
-                    {job.scheduled_date && <p className="text-xs text-gray-400 mt-1.5">{formatDate(job.scheduled_date)}</p>}
-                  </Card>
+                  <JobListCard key={job.id} job={job} onClick={() => setSelectedJob(job)} />
                 ))}
               </div>
             )}
@@ -525,17 +598,92 @@ export default function Jobs() {
         </button>
       </PageWrapper>
 
+      {/* Job Detail Modal */}
+      <StopDetailModal
+        open={!!selectedJob}
+        onClose={() => setSelectedJob(null)}
+        stop={selectedJob ? jobToStop(selectedJob) : null}
+        stopNumber={1}
+        onUpdated={() => { fetchData(); setSelectedJob(null) }}
+      />
+
       {/* Create Job Modal */}
       <Modal open={jobModalOpen} onClose={() => setJobModalOpen(false)} title="Create Job">
         <form onSubmit={handleJobSubmit} className="space-y-4">
-          <Select
-            label="Client"
-            value={jobForm.client_id}
-            onChange={e => setJobForm(prev => ({ ...prev, client_id: e.target.value, pool_id: '' }))}
-            options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
-            required
-          />
-          {jobForm.client_id && (
+          {!showNewClient ? (
+            <div>
+              <Select
+                label="Client"
+                value={jobForm.client_id}
+                onChange={e => setJobForm(prev => ({ ...prev, client_id: e.target.value, pool_id: '' }))}
+                options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
+                required={!showNewClient}
+              />
+              <button type="button" onClick={() => setShowNewClient(true)}
+                className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700">
+                + Add new client
+              </button>
+            </div>
+          ) : (
+            <div
+              className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40 animate-fade-in"
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateClientInline() } }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Client</span>
+                <button type="button"
+                  onClick={() => { setShowNewClient(false); setNewClientForm({ name: '', email: '', phone: '', address: '', notes: '' }) }}
+                  className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <Input
+                label="Name"
+                value={newClientForm.name}
+                onChange={e => setNewClientForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Full name"
+                required
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={newClientForm.email}
+                onChange={e => setNewClientForm(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="email@example.com"
+              />
+              <Input
+                label="Phone"
+                type="tel"
+                value={newClientForm.phone}
+                onChange={e => setNewClientForm(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="0400 000 000"
+              />
+              <AddressAutocomplete
+                label="Address"
+                value={newClientForm.address}
+                onChange={(v) => setNewClientForm(prev => ({ ...prev, address: v }))}
+                onSelect={({ address }) => setNewClientForm(prev => ({ ...prev, address }))}
+                placeholder="Start typing a street address..."
+              />
+              <TextArea
+                label="Notes"
+                value={newClientForm.notes}
+                onChange={e => setNewClientForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Any additional notes..."
+              />
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); handleCreateClientInline() }}
+                disabled={!newClientForm.name.trim() || newClientSaving}
+                className="w-full px-3 py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold shadow-sm hover:shadow-md active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {newClientSaving ? 'Saving…' : 'Next'}
+              </button>
+            </div>
+          )}
+          {jobForm.client_id && !showNewClient && (
             <div>
               <Select
                 label="Pool"
@@ -552,22 +700,32 @@ export default function Jobs() {
                   + Add new pool
                 </button>
               ) : (
-                <div className="mt-2 flex gap-2 animate-fade-in">
-                  <Input
-                    value={newPoolAddress}
-                    onChange={e => setNewPoolAddress(e.target.value)}
-                    placeholder="Pool address"
-                    className="flex-1"
+                <div
+                  className="mt-2 space-y-4 p-3 rounded-lg border border-pool-200 bg-pool-50/40 animate-fade-in"
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault() } }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Pool</span>
+                    <button type="button"
+                      onClick={() => { setShowNewPool(false); setNewPoolForm(emptyPool) }}
+                      className="text-gray-400 hover:text-gray-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <PoolFormFields
+                    poolForm={newPoolForm}
+                    setPoolForm={setNewPoolForm}
+                    clientAddress={clients.find(c => c.id === jobForm.client_id)?.address || ''}
                   />
-                  <Button type="button" size="sm" onClick={handleCreatePool} loading={newPoolSaving}
-                    disabled={!newPoolAddress.trim()}>
-                    Add
-                  </Button>
-                  <button type="button" onClick={() => { setShowNewPool(false); setNewPoolAddress('') }}
-                    className="px-2 text-gray-400 hover:text-gray-600">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); handleCreatePool() }}
+                    disabled={!newPoolForm.address.trim() || newPoolSaving}
+                    className="w-full px-3 py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold shadow-sm hover:shadow-md active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {newPoolSaving ? 'Saving…' : 'Add Pool'}
                   </button>
                 </div>
               )}
@@ -671,5 +829,95 @@ export default function Jobs() {
         </form>
       </Modal>
     </>
+  )
+}
+
+// ─── Rich job list card (with date badge + icons) ──────────
+function JobListCard({ job, onClick }) {
+  const statusVariant = JOB_STATUS_BADGE[job.status] || 'default'
+  const statusLabel = JOB_STATUS_LABEL[job.status] || 'Scheduled'
+
+  // Format date for badge: "10 Apr"
+  const dateBadge = (() => {
+    if (!job.scheduled_date) return null
+    const d = new Date(job.scheduled_date + 'T00:00:00')
+    if (isNaN(d.getTime())) return null
+    const day = d.getDate()
+    const month = d.toLocaleDateString('en-AU', { month: 'short' })
+    return { day, month }
+  })()
+
+  // Format time: "10:03 pm"
+  const timeDisplay = (() => {
+    if (!job.scheduled_time) return null
+    const [h, m] = job.scheduled_time.split(':').map(Number)
+    const d = new Date()
+    d.setHours(h || 0, m || 0, 0, 0)
+    return d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
+  })()
+
+  const duration = job.estimated_duration_minutes || 60
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-card hover:shadow-card-hover active:scale-[0.99] transition-all overflow-hidden flex"
+    >
+      {/* Left date badge */}
+      <div className="bg-gradient-brand text-white flex flex-col items-center justify-center px-4 py-3 shrink-0 w-[72px]">
+        <svg className="w-5 h-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        {dateBadge ? (
+          <>
+            <span className="text-xs font-bold leading-tight">{dateBadge.day} {dateBadge.month}</span>
+          </>
+        ) : (
+          <span className="text-[10px] font-semibold opacity-80">No date</span>
+        )}
+      </div>
+
+      {/* Right content */}
+      <div className="flex-1 min-w-0 p-3.5">
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <h3 className="font-bold text-gray-900 truncate">{job.title || 'Job'}</h3>
+          <Badge variant={statusVariant} className="shrink-0 text-[10px]">{statusLabel}</Badge>
+        </div>
+
+        {/* Client */}
+        {job.clients?.name && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-1">
+            <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <span className="truncate">{job.clients.name}</span>
+          </div>
+        )}
+
+        {/* Address */}
+        {job.pools?.address && (
+          <div className="flex items-center gap-1.5 text-xs text-pool-600 mb-1">
+            <svg className="w-3.5 h-3.5 text-pool-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="truncate">{job.pools.address}</span>
+          </div>
+        )}
+
+        {/* Time · duration */}
+        {timeDisplay && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{timeDisplay}</span>
+            <span className="text-gray-300">·</span>
+            <span>{duration}m</span>
+          </div>
+        )}
+      </div>
+    </button>
   )
 }

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { MapContainer, TileLayer, Marker } from 'react-leaflet'
+import L from 'leaflet'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -9,6 +11,21 @@ import Input, { Select, TextArea } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
+import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
+
+// Numbered pin factory (matches StopDetailModal)
+function pinIcon(color = '#0CA5EB') {
+  return L.divIcon({
+    className: 'numbered-pin',
+    html: `<div style="
+      background:${color};color:white;width:34px;height:34px;border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
+      border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);
+    "><svg style="transform:rotate(45deg);width:14px;height:14px" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg></div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 34],
+  })
+}
 
 const JOB_STATUS_BADGE = {
   scheduled: 'primary',
@@ -69,7 +86,7 @@ export default function JobDetail() {
       }
       if (jobData.pool_id) {
         promises.push(
-          supabase.from('pools').select('id, address, pool_type')
+          supabase.from('pools').select('id, address, pool_type, type, latitude, longitude')
             .eq('id', jobData.pool_id).single().then(r => ({ pools: r.data }))
         )
       }
@@ -208,31 +225,87 @@ export default function JobDetail() {
     )
   }
 
+  const hasCoords = job.pools?.latitude != null && job.pools?.longitude != null
+  const lat = hasCoords ? Number(job.pools.latitude) : null
+  const lng = hasCoords ? Number(job.pools.longitude) : null
+
+  // Format time as "9:00 am"
+  const timeLabel = (() => {
+    if (!job.scheduled_time) return null
+    const [h, m] = job.scheduled_time.split(':').map(Number)
+    const d = new Date()
+    d.setHours(h || 0, m || 0, 0, 0)
+    return d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
+  })()
+
   return (
     <>
       <Header title="Job Details" back="/jobs" right={headerAction} />
       <PageWrapper>
-        {/* Status + Title Header */}
-        <div className="mb-5">
-          <div className="flex items-center gap-2.5 mb-2">
-            <Badge variant={JOB_STATUS_BADGE[job.status]} className="text-xs">
+        {/* Mini map hero */}
+        {hasCoords && MAPBOX_TILE_URL && (
+          <div className="h-44 rounded-2xl overflow-hidden border border-gray-100 shadow-card mb-4">
+            <MapContainer
+              center={[lat, lng]}
+              zoom={15}
+              scrollWheelZoom={false}
+              style={{ height: '100%', width: '100%' }}
+              zoomControl={false}
+            >
+              <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
+              <Marker position={[lat, lng]} icon={pinIcon()} />
+            </MapContainer>
+          </div>
+        )}
+
+        {/* Hero title card */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-4 mb-4">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-bold text-gray-900 leading-tight">{job.title}</h2>
+              {job.clients?.name && (
+                <p className="text-sm text-gray-500 mt-0.5">{job.clients.name}</p>
+              )}
+            </div>
+            <Badge variant={JOB_STATUS_BADGE[job.status]} className="shrink-0">
               {JOB_STATUS_LABEL[job.status]}
             </Badge>
+          </div>
+
+          {/* Key facts row */}
+          <div className="flex items-center gap-4 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+            {job.scheduled_date && (
+              <div className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="font-medium text-gray-700">{formatDate(job.scheduled_date)}</span>
+              </div>
+            )}
+            {timeLabel && (
+              <div className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="font-medium text-gray-700">{timeLabel}</span>
+              </div>
+            )}
             {job.price && (
-              <span className="text-sm font-bold text-gray-700">{formatCurrency(job.price)}</span>
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="font-bold text-pool-700">{formatCurrency(job.price)}</span>
+              </div>
             )}
           </div>
-          <h2 className="text-xl font-bold text-gray-900">{job.title}</h2>
         </div>
 
         {/* Quick Status Actions */}
         {job.status !== 'completed' && (
-          <div className="flex gap-2 mb-5">
+          <div className="flex gap-2 mb-4">
             {job.status === 'scheduled' && (
               <button
                 onClick={() => updateStatus('in_progress')}
                 disabled={statusUpdating}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -245,10 +318,10 @@ export default function JobDetail() {
               <button
                 onClick={() => updateStatus('completed')}
                 disabled={statusUpdating}
-                className={cn('flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold active:scale-[0.98] transition-all min-h-tap disabled:opacity-50',
+                className={cn('flex items-center justify-center gap-1.5 py-3 rounded-xl text-sm font-semibold active:scale-[0.98] transition-all disabled:opacity-50',
                   job.status === 'in_progress'
-                    ? 'flex-1 bg-gradient-success text-white shadow-md shadow-emerald-500/20'
-                    : 'flex-1 bg-white border border-gray-200 text-gray-700 shadow-card'
+                    ? 'flex-1 bg-gradient-brand text-white shadow-md shadow-pool-500/20'
+                    : 'flex-1 bg-white border border-gray-200 text-gray-700 shadow-card hover:bg-gray-50'
                 )}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -261,7 +334,7 @@ export default function JobDetail() {
               <button
                 onClick={() => updateStatus('on_hold')}
                 disabled={statusUpdating}
-                className="px-4 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-card active:scale-[0.98] transition-all min-h-tap disabled:opacity-50"
+                className="px-4 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-card active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -273,7 +346,7 @@ export default function JobDetail() {
               <button
                 onClick={() => updateStatus('in_progress')}
                 disabled={statusUpdating}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 Resume Job
               </button>
@@ -281,16 +354,18 @@ export default function JobDetail() {
           </div>
         )}
 
-        {/* Completed banner */}
+        {/* Completed banner — pool-blue theme */}
         {job.status === 'completed' && (
-          <div className="mb-5 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-2">
-            <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <p className="text-sm font-semibold text-green-800">Job Completed</p>
+          <div className="mb-4 p-3.5 bg-pool-50 border border-pool-100 rounded-2xl flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0 shadow-md shadow-pool-500/20">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-pool-900">Job Completed</p>
               {job.completed_at && (
-                <p className="text-xs text-green-600">{formatDate(job.completed_at)}</p>
+                <p className="text-xs text-pool-600">{formatDate(job.completed_at)}</p>
               )}
             </div>
           </div>
@@ -318,8 +393,8 @@ export default function JobDetail() {
             )}
             {job.price && (
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-pool-50 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
@@ -364,16 +439,16 @@ export default function JobDetail() {
               <div className="flex gap-1 shrink-0">
                 {job.clients.phone && (
                   <a href={`tel:${job.clients.phone}`} onClick={e => e.stopPropagation()}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-green-50 transition-colors">
-                    <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 transition-colors">
+                    <svg className="w-4 h-4 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                     </svg>
                   </a>
                 )}
                 {job.clients.email && (
                   <a href={`mailto:${job.clients.email}`} onClick={e => e.stopPropagation()}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors">
-                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 transition-colors">
+                    <svg className="w-4 h-4 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </a>

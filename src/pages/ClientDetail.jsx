@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -15,42 +15,24 @@ import StaffCard from '../components/ui/StaffCard'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { supabase } from '../lib/supabase'
 import { geocodeAddress } from '../lib/mapbox'
+import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import {
   formatDate,
   getOverdueStatus,
   daysOverdue,
   statusDot,
   calculateNextDue,
-  POOL_TYPES,
-  POOL_SHAPES,
   SCHEDULE_FREQUENCIES,
   FREQUENCY_LABELS,
   cn,
 } from '../lib/utils'
-
-const emptyPool = {
-  address: '',
-  latitude: null,
-  longitude: null,
-  sameAsClient: false,
-  type: 'chlorine',
-  volume_litres: '',
-  shape: 'rectangular',
-  regular_service: true,
-  schedule_frequency: 'weekly',
-  access_notes: '',
-  pump_model: '',
-  filter_type: '',
-  heater: '',
-  first_service_date: new Date().toISOString().split('T')[0],
-}
 
 export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { updateClient, deleteClient } = useClients()
-  const { pools, loading: poolsLoading, createPool, updatePool } = usePools(id)
+  const { pools, loading: poolsLoading, createPool, updatePool, deletePool } = usePools(id)
   const { staff: staffList, loading: staffLoading } = useStaff()
 
   const [client, setClient] = useState(null)
@@ -58,7 +40,7 @@ export default function ClientDetail() {
 
   // Edit client modal
   const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', billing_frequency: '', service_rate: '', assigned_staff_id: '' })
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', service_rate: '', assigned_staff_id: '' })
   const [editSaving, setEditSaving] = useState(false)
 
   // Delete confirmation
@@ -76,19 +58,28 @@ export default function ClientDetail() {
   }, [searchParams])
   const [poolForm, setPoolForm] = useState(emptyPool)
   const [poolSaving, setPoolSaving] = useState(false)
+  const [poolToDelete, setPoolToDelete] = useState(null)
+  const [poolDeleting, setPoolDeleting] = useState(false)
 
   // Schedule modal
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [schedulePoolId, setSchedulePoolId] = useState(null)
   const [scheduleDate, setScheduleDate] = useState('')
   const [scheduleFreq, setScheduleFreq] = useState('weekly')
+  const [scheduleRecurring, setScheduleRecurring] = useState(true)
+  const [schedulePrice, setSchedulePrice] = useState('')
   const [scheduleTime, setScheduleTime] = useState('09:00')
   const [scheduleSaving, setScheduleSaving] = useState(false)
 
   // Create job modal
   const [jobModalOpen, setJobModalOpen] = useState(false)
-  const [jobForm, setJobForm] = useState({ pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '', notes: '', price: '' })
+  const [jobForm, setJobForm] = useState({ pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '09:00', notes: '', price: '' })
+  const [jobShowNewPool, setJobShowNewPool] = useState(false)
+  const [jobNewPoolAddress, setJobNewPoolAddress] = useState('')
+  const [jobNewPoolCoords, setJobNewPoolCoords] = useState({ lat: null, lng: null })
+  const [jobNewPoolSaving, setJobNewPoolSaving] = useState(false)
   const [jobSaving, setJobSaving] = useState(false)
+  const jobSubmittingRef = useRef(false)
 
   useEffect(() => {
     if (!id) return
@@ -110,7 +101,6 @@ export default function ClientDetail() {
           phone: data.phone || '',
           address: data.address || '',
           notes: data.notes || '',
-          billing_frequency: data.billing_frequency || '',
           service_rate: data.service_rate || '',
           assigned_staff_id: data.assigned_staff_id || '',
         })
@@ -128,11 +118,25 @@ export default function ClientDetail() {
     if (!editForm.name.trim()) return
     setEditSaving(true)
     try {
-      const updated = await updateClient(id, editForm)
+      // Sanitize: empty strings are invalid for numeric/uuid columns,
+      // must be null so Postgres accepts the update.
+      const updates = {
+        name: editForm.name.trim(),
+        email: editForm.email?.trim() || null,
+        phone: editForm.phone?.trim() || null,
+        address: editForm.address?.trim() || null,
+        notes: editForm.notes?.trim() || null,
+        service_rate: editForm.service_rate === '' || editForm.service_rate == null
+          ? null
+          : Number(editForm.service_rate),
+        assigned_staff_id: editForm.assigned_staff_id || null,
+      }
+      const updated = await updateClient(id, updates)
       setClient(updated)
       setEditOpen(false)
     } catch (err) {
       console.error('Error updating client:', err)
+      alert(err?.message || 'Failed to save changes')
     } finally {
       setEditSaving(false)
     }
@@ -151,46 +155,13 @@ export default function ClientDetail() {
     }
   }
 
-  // Pool form handlers
-  const handlePoolChange = (e) => {
-    setPoolForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
-  }
-
-  const handleSameAsClient = (e) => {
-    const checked = e.target.checked
-    setPoolForm(prev => ({
-      ...prev,
-      sameAsClient: checked,
-      address: checked ? (client?.address || '') : '',
-    }))
-  }
-
   const handlePoolSubmit = async (e) => {
     e.preventDefault()
     if (!poolForm.address.trim()) return
     setPoolSaving(true)
     try {
-      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, first_service_date, regular_service, latitude, longitude, ...rest } = poolForm
-      // Use captured coords from autocomplete, or fall back to Nominatim geocoding
-      let lat = latitude
-      let lng = longitude
-      if (lat == null || lng == null) {
-        const geo = await geocodeAddress(rest.address)
-        lat = geo?.lat ?? null
-        lng = geo?.lng ?? null
-      }
-      await createPool({
-        ...rest,
-        client_id: id,
-        volume_litres: volume_litres ? Number(volume_litres) : null,
-        equipment: { pump_model, filter_type, heater },
-        schedule_frequency: regular_service ? rest.schedule_frequency : null,
-        next_due_at: regular_service ? (first_service_date || new Date().toISOString()) : null,
-        access_notes: regular_service ? rest.access_notes : null,
-        latitude: lat,
-        longitude: lng,
-        geocoded_at: lat != null ? new Date().toISOString() : null,
-      })
+      const payload = await buildPoolPayload(poolForm)
+      await createPool({ ...payload, client_id: id })
       setPoolModalOpen(false)
       setPoolForm(emptyPool)
     } catch (err) {
@@ -200,12 +171,32 @@ export default function ClientDetail() {
     }
   }
 
+  const handleDeletePool = async () => {
+    if (!poolToDelete) return
+    setPoolDeleting(true)
+    try {
+      await deletePool(poolToDelete.id)
+      setPoolToDelete(null)
+    } catch (err) {
+      console.error('Error deleting pool:', err)
+      alert(err?.message || 'Failed to remove pool')
+    } finally {
+      setPoolDeleting(false)
+    }
+  }
+
   // Schedule handler
   const openSchedule = (poolId) => {
     setSchedulePoolId(poolId)
     const pool = pools.find(p => p.id === poolId)
     setScheduleDate(pool?.next_due_at ? new Date(pool.next_due_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
     setScheduleFreq(pool?.schedule_frequency || 'weekly')
+    setScheduleRecurring(!!pool?.schedule_frequency)
+    setSchedulePrice(
+      pool?.service_price != null
+        ? String(pool.service_price)
+        : (client?.service_rate != null && client?.service_rate !== '' ? String(client.service_rate) : '')
+    )
     setScheduleTime('09:00')
     setScheduleOpen(true)
   }
@@ -236,7 +227,8 @@ export default function ClientDetail() {
     try {
       await updatePool(schedulePoolId, {
         next_due_at: new Date(scheduleDate).toISOString(),
-        schedule_frequency: scheduleFreq,
+        schedule_frequency: scheduleRecurring ? scheduleFreq : null,
+        service_price: schedulePrice ? Number(schedulePrice) : null,
       })
     } catch (err) {
       console.error('Error scheduling:', err)
@@ -246,10 +238,43 @@ export default function ClientDetail() {
     }
   }
 
+  // Inline pool creation from Create Job modal
+  const handleCreatePoolInline = async () => {
+    if (!jobNewPoolAddress.trim()) return
+    setJobNewPoolSaving(true)
+    try {
+      let { lat, lng } = jobNewPoolCoords
+      if (lat == null || lng == null) {
+        const geo = await geocodeAddress(jobNewPoolAddress.trim())
+        lat = geo?.lat ?? null
+        lng = geo?.lng ?? null
+      }
+      const created = await createPool({
+        client_id: id,
+        address: jobNewPoolAddress.trim(),
+        latitude: lat,
+        longitude: lng,
+        next_due_at: new Date().toISOString(),
+      })
+      if (created?.id) {
+        setJobForm(prev => ({ ...prev, pool_id: created.id }))
+      }
+      setJobNewPoolAddress('')
+      setJobNewPoolCoords({ lat: null, lng: null })
+      setJobShowNewPool(false)
+    } catch (err) {
+      console.error('Error creating pool inline:', err)
+    } finally {
+      setJobNewPoolSaving(false)
+    }
+  }
+
   // Create job handler
   const handleJobSubmit = async (e) => {
     e.preventDefault()
     if (!jobForm.title.trim()) return
+    if (jobSubmittingRef.current) return // guard against double submission
+    jobSubmittingRef.current = true
     setJobSaving(true)
     try {
       const { error } = await supabase.from('jobs').insert({
@@ -265,12 +290,13 @@ export default function ClientDetail() {
       })
       if (error) throw error
       setJobModalOpen(false)
-      setJobForm({ pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '', notes: '', price: '' })
+      setJobForm({ pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '09:00', notes: '', price: '' })
       navigate('/jobs')
     } catch (err) {
       console.error('Error creating job:', err)
     } finally {
       setJobSaving(false)
+      jobSubmittingRef.current = false
     }
   }
 
@@ -295,17 +321,6 @@ export default function ClientDetail() {
 
   if (!client) return null
 
-  const typeOptions = POOL_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))
-  const shapeOptions = POOL_SHAPES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))
-  const freqOptions = SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))
-  const billingOptions = [
-    { value: '', label: 'Not set' },
-    { value: 'per_visit', label: 'Per visit' },
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'fortnightly', label: 'Fortnightly' },
-    { value: 'monthly', label: 'Monthly' },
-    { value: 'quarterly', label: 'Quarterly' },
-  ]
 
   return (
     <>
@@ -362,16 +377,12 @@ export default function ClientDetail() {
                 <span className="text-gray-700">{client.address}</span>
               </div>
             )}
-            {(client.service_rate || client.billing_frequency) && (
+            {client.service_rate && (
               <div className="flex items-center gap-2 text-sm pt-1 border-t border-gray-100 mt-2">
                 <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-gray-700">
-                  {client.service_rate ? `$${client.service_rate}` : ''}
-                  {client.service_rate && client.billing_frequency ? ' / ' : ''}
-                  {client.billing_frequency ? client.billing_frequency.replace('_', ' ') : ''}
-                </span>
+                <span className="text-gray-700">${client.service_rate}</span>
               </div>
             )}
             {client.notes && (
@@ -548,6 +559,19 @@ export default function ClientDetail() {
                       </svg>
                       Start Service
                     </Button>
+                    <button
+                      type="button"
+                      aria-label="Remove pool"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPoolToDelete(pool)
+                      }}
+                      className="shrink-0 w-11 h-11 rounded-lg border border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors flex items-center justify-center"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                 </Card>
               )
@@ -593,23 +617,14 @@ export default function ClientDetail() {
 
           <div className="border-t border-gray-100 pt-4">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Pricing</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Service Rate ($)"
-                name="service_rate"
-                type="number"
-                value={editForm.service_rate}
-                onChange={handleEditChange}
-                placeholder="e.g. 85"
-              />
-              <Select
-                label="Billing Frequency"
-                name="billing_frequency"
-                value={editForm.billing_frequency}
-                onChange={handleEditChange}
-                options={billingOptions}
-              />
-            </div>
+            <Input
+              label="Service Rate ($) (optional)"
+              name="service_rate"
+              type="number"
+              value={editForm.service_rate}
+              onChange={handleEditChange}
+              placeholder="e.g. 85"
+            />
           </div>
 
           {/* Staff Assignment */}
@@ -680,6 +695,35 @@ export default function ClientDetail() {
         </div>
       </Modal>
 
+      {/* Remove Pool Confirmation Modal */}
+      <Modal open={!!poolToDelete} onClose={() => !poolDeleting && setPoolToDelete(null)} title="Remove Pool">
+        <p className="text-sm text-gray-600 mb-2">
+          Are you sure you want to remove <strong>{poolToDelete?.address}</strong>?
+        </p>
+        <p className="text-sm text-gray-500 mb-6">
+          This will also delete all associated service records for this pool. This action cannot be undone.
+        </p>
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            className="flex-1"
+            onClick={() => setPoolToDelete(null)}
+            disabled={poolDeleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            loading={poolDeleting}
+            onClick={handleDeletePool}
+          >
+            Remove
+          </Button>
+        </div>
+      </Modal>
+
       {/* Schedule Modal */}
       <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule Service">
         <div className="space-y-4">
@@ -715,12 +759,41 @@ export default function ClientDetail() {
             onChange={e => setScheduleDate(e.target.value)}
           />
 
-          {/* Repeat frequency */}
-          <Select
-            label="Repeats"
-            value={scheduleFreq}
-            onChange={e => setScheduleFreq(e.target.value)}
-            options={SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))}
+          {/* Recurring toggle */}
+          <label className="flex items-center justify-between min-h-tap cursor-pointer">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="text-sm font-medium text-gray-700">Recurring service</span>
+            </div>
+            <div className={cn('relative w-11 h-6 rounded-full transition-colors',
+              scheduleRecurring ? 'bg-pool-500' : 'bg-gray-200')}>
+              <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                scheduleRecurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+              <input type="checkbox" className="sr-only"
+                checked={scheduleRecurring}
+                onChange={e => setScheduleRecurring(e.target.checked)} />
+            </div>
+          </label>
+
+          {/* Frequency (only when recurring) */}
+          {scheduleRecurring && (
+            <Select
+              label="Repeats"
+              value={scheduleFreq}
+              onChange={e => setScheduleFreq(e.target.value)}
+              options={SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))}
+            />
+          )}
+
+          {/* Service price */}
+          <Input
+            label={scheduleRecurring ? 'Price per service ($)' : 'Service price ($)'}
+            type="number"
+            value={schedulePrice}
+            onChange={e => setSchedulePrice(e.target.value)}
+            placeholder="Optional"
           />
 
           {/* Summary */}
@@ -731,7 +804,9 @@ export default function ClientDetail() {
                 {new Date(scheduleDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
               <p className="text-xs text-pool-500 mt-1">
-                Repeating {(FREQUENCY_LABELS[scheduleFreq] || scheduleFreq).toLowerCase()}
+                {scheduleRecurring
+                  ? `Repeating ${(FREQUENCY_LABELS[scheduleFreq] || scheduleFreq).toLowerCase()}`
+                  : 'One-off service (no repeat)'}
               </p>
             </div>
           )}
@@ -762,18 +837,78 @@ export default function ClientDetail() {
             <p className="text-sm font-medium text-gray-900">{client?.name}</p>
             {client?.address && <p className="text-xs text-gray-500">{client.address}</p>}
           </div>
-          {pools.length > 0 && (
-            <Select
-              label="Pool"
-              name="pool_id"
-              value={jobForm.pool_id}
-              onChange={e => setJobForm(prev => ({ ...prev, pool_id: e.target.value }))}
-              options={[
-                { value: '', label: 'No specific pool' },
-                ...pools.map(p => ({ value: p.id, label: p.address })),
-              ]}
-            />
-          )}
+          <div>
+            {!jobShowNewPool ? (
+              <>
+                <Select
+                  label="Pool"
+                  name="pool_id"
+                  value={jobForm.pool_id}
+                  onChange={e => setJobForm(prev => ({ ...prev, pool_id: e.target.value }))}
+                  options={[
+                    { value: '', label: pools.length ? 'No specific pool' : 'No pools yet' },
+                    ...pools.map(p => ({ value: p.id, label: p.address })),
+                  ]}
+                />
+                <button
+                  type="button"
+                  onClick={() => setJobShowNewPool(true)}
+                  className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700"
+                >
+                  + Add new pool
+                </button>
+              </>
+            ) : (
+              <div
+                className="space-y-2 animate-fade-in"
+                onKeyDown={(e) => {
+                  // Prevent Enter inside the autocomplete from submitting the outer Create Job form
+                  if (e.key === 'Enter') e.preventDefault()
+                }}
+              >
+                <AddressAutocomplete
+                  label="New pool address"
+                  value={jobNewPoolAddress}
+                  onChange={(v) => {
+                    setJobNewPoolAddress(v)
+                    setJobNewPoolCoords({ lat: null, lng: null })
+                  }}
+                  onSelect={({ address, lat, lng }) => {
+                    setJobNewPoolAddress(address)
+                    setJobNewPoolCoords({ lat, lng })
+                  }}
+                  placeholder="Start typing a street address..."
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); handleCreatePoolInline() }}
+                    disabled={!jobNewPoolAddress.trim() || jobNewPoolSaving}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-all min-h-tap"
+                  >
+                    {jobNewPoolSaving ? (
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : 'Add Pool'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      setJobShowNewPool(false)
+                      setJobNewPoolAddress('')
+                      setJobNewPoolCoords({ lat: null, lng: null })
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 min-h-tap"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <Input
             label="Job Title"
             value={jobForm.title}
@@ -819,135 +954,11 @@ export default function ClientDetail() {
       {/* Add Pool Modal */}
       <Modal open={poolModalOpen} onClose={() => setPoolModalOpen(false)} title="Add Pool">
         <form onSubmit={handlePoolSubmit} className="space-y-4">
-          {/* Same as client address checkbox */}
-          {client.address && (
-            <label className="flex items-center gap-2 min-h-tap cursor-pointer">
-              <input
-                type="checkbox"
-                checked={poolForm.sameAsClient}
-                onChange={handleSameAsClient}
-                className="w-5 h-5 rounded border-gray-300 text-pool-500 focus:ring-pool-500"
-              />
-              <span className="text-sm text-gray-700">Same address as client</span>
-            </label>
-          )}
-
-          {poolForm.sameAsClient ? (
-            <Input
-              label="Pool Address"
-              value={poolForm.address}
-              disabled
-            />
-          ) : (
-            <AddressAutocomplete
-              label="Pool Address"
-              value={poolForm.address}
-              onChange={(v) => setPoolForm(prev => ({ ...prev, address: v, latitude: null, longitude: null }))}
-              onSelect={({ address, lat, lng }) =>
-                setPoolForm(prev => ({ ...prev, address, latitude: lat, longitude: lng }))
-              }
-              placeholder="Start typing a street address..."
-              required
-            />
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Pool Type"
-              name="type"
-              value={poolForm.type}
-              onChange={handlePoolChange}
-              options={typeOptions}
-            />
-            <Select
-              label="Shape"
-              name="shape"
-              value={poolForm.shape}
-              onChange={handlePoolChange}
-              options={shapeOptions}
-            />
-          </div>
-          <Input
-            label="Volume (litres)"
-            name="volume_litres"
-            type="number"
-            value={poolForm.volume_litres}
-            onChange={handlePoolChange}
-            placeholder="e.g. 50000"
+          <PoolFormFields
+            poolForm={poolForm}
+            setPoolForm={setPoolForm}
+            clientAddress={client.address}
           />
-
-          {/* Regular servicing toggle */}
-          <label className="flex items-center justify-between min-h-tap cursor-pointer">
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700">Regular Servicing</span>
-            </div>
-            <div className={cn('relative w-11 h-6 rounded-full transition-colors',
-              poolForm.regular_service ? 'bg-pool-500' : 'bg-gray-200')}>
-              <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                poolForm.regular_service ? 'translate-x-[22px]' : 'translate-x-0.5')} />
-              <input type="checkbox" className="sr-only"
-                checked={poolForm.regular_service}
-                onChange={e => setPoolForm(prev => ({ ...prev, regular_service: e.target.checked }))} />
-            </div>
-          </label>
-
-          {poolForm.regular_service && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="grid grid-cols-2 gap-3">
-                <Select
-                  label="Frequency"
-                  name="schedule_frequency"
-                  value={poolForm.schedule_frequency}
-                  onChange={handlePoolChange}
-                  options={freqOptions}
-                />
-                <Input
-                  label="First Service Date"
-                  name="first_service_date"
-                  type="date"
-                  value={poolForm.first_service_date}
-                  onChange={handlePoolChange}
-                />
-              </div>
-              <TextArea
-                label="Access Notes"
-                name="access_notes"
-                value={poolForm.access_notes}
-                onChange={handlePoolChange}
-                placeholder="Gate code, dog, key location..."
-              />
-            </div>
-          )}
-
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Equipment</h3>
-            <div className="space-y-3">
-              <Input
-                label="Pump Model"
-                name="pump_model"
-                value={poolForm.pump_model}
-                onChange={handlePoolChange}
-                placeholder="e.g. Astral CTX 280"
-              />
-              <Input
-                label="Filter Type"
-                name="filter_type"
-                value={poolForm.filter_type}
-                onChange={handlePoolChange}
-                placeholder="e.g. Sand / Cartridge"
-              />
-              <Input
-                label="Heater"
-                name="heater"
-                value={poolForm.heater}
-                onChange={handlePoolChange}
-                placeholder="e.g. Raypak 266A"
-              />
-            </div>
-          </div>
-
           <div className="flex gap-3 pt-2">
             <Button
               type="button"

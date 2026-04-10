@@ -43,6 +43,23 @@ function formatDateLong(d) {
   return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
+// Parse a pool's schedule_frequency to interval days.
+// Supports: 'weekly', 'fortnightly', 'biweekly', 'monthly', 'every_2_weeks',
+// 'every_3_weeks', 'every_4_weeks', numeric strings (days), or { days: n }.
+function frequencyToDays(freq) {
+  if (!freq) return null
+  if (typeof freq === 'number') return freq
+  const f = String(freq).toLowerCase().trim()
+  if (f === 'weekly' || f === 'every_week' || f === '1w') return 7
+  if (f === 'fortnightly' || f === 'biweekly' || f === 'every_2_weeks' || f === '2w') return 14
+  if (f === 'every_3_weeks' || f === '3w') return 21
+  if (f === 'every_4_weeks' || f === '4w') return 28
+  if (f === 'monthly' || f === 'every_month' || f === '1m') return 30
+  const n = parseInt(f, 10)
+  if (!isNaN(n) && n > 0) return n
+  return null
+}
+
 function formatTimeRange(start, durationMin) {
   if (!start) return null
   const [h, m] = start.split(':').map(Number)
@@ -72,7 +89,7 @@ function FitBounds({ stops }) {
 // ─── Main page ─────────────────────────────────
 export default function Route() {
   const { business, loading: bizLoading } = useBusiness()
-  const [view, setView] = useState('list') // 'list' | 'upcoming' | 'map'
+  const [view, setView] = useState('list') // 'list' | 'week' | 'upcoming' | 'map'
   const [showCalendar, setShowCalendar] = useState(false)
 
   if (bizLoading) return <LoadingPage />
@@ -113,6 +130,8 @@ function ScheduleView({ business, view, setView }) {
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
   const [routeInfo, setRouteInfo] = useState(null) // { distance_km, duration_min, coordinates }
+  const [upcomingPage, setUpcomingPage] = useState(0) // 0 = next 7 days, 1 = following 7, etc.
+  const UPCOMING_PAGE_DAYS = 7
 
   async function fetchData() {
     if (!business?.id) return
@@ -132,13 +151,12 @@ function ScheduleView({ business, view, setView }) {
         .lte('scheduled_date', ymd(to))
         .order('scheduled_date')
         .order('scheduled_time'),
+      // Load ALL pools with next_due_at — we project recurrences forward for Upcoming
       supabase
         .from('pools')
         .select('*, clients(name, email, phone)')
         .eq('business_id', business.id)
-        .not('next_due_at', 'is', null)
-        .gte('next_due_at', from.toISOString())
-        .lte('next_due_at', to.toISOString()),
+        .not('next_due_at', 'is', null),
     ])
     setAllJobs(jobsRes.data || [])
     setAllPools(poolsRes.data || [])
@@ -195,30 +213,155 @@ function ScheduleView({ business, view, setView }) {
     return () => { cancelled = true }
   }, [stopsForDate])
 
-  // Build upcoming groups (next 14 days including today)
-  const upcomingGroups = useMemo(() => {
+  // Build week groups — Mon..Sun of the week containing selectedDate, with
+  // recurring pool-service projections.
+  const weekGroups = useMemo(() => {
+    // Find Monday of the week containing selectedDate
+    const weekStart = new Date(selectedDate)
+    weekStart.setHours(0, 0, 0, 0)
+    const dow = weekStart.getDay() // 0=Sun..6=Sat
+    const diffToMon = (dow + 6) % 7 // days since Monday
+    weekStart.setDate(weekStart.getDate() - diffToMon)
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekEnd.getDate() + 6)
+    weekEnd.setHours(23, 59, 59, 999)
+
+    const byDay = new Map()
+    const ensure = (d) => {
+      const key = ymd(d)
+      if (!byDay.has(key)) byDay.set(key, { date: new Date(d), stops: [] })
+      return byDay.get(key)
+    }
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart)
+      d.setDate(d.getDate() + i)
+      ensure(d)
+    }
+
+    for (const j of allJobs) {
+      if (!j.scheduled_date) continue
+      const d = new Date(j.scheduled_date + 'T00:00:00')
+      if (d < weekStart || d > weekEnd) continue
+      ensure(d).stops.push(jobToStop(j))
+    }
+
+    for (const p of allPools) {
+      if (!p.next_due_at) continue
+      const intervalDays = frequencyToDays(p.schedule_frequency)
+      const firstDue = new Date(p.next_due_at)
+      if (isNaN(firstDue.getTime())) continue
+
+      const occurrences = []
+      if (!intervalDays) {
+        if (firstDue >= weekStart && firstDue <= weekEnd) occurrences.push(firstDue)
+      } else {
+        let cursor = new Date(firstDue)
+        while (cursor > weekEnd) cursor.setDate(cursor.getDate() - intervalDays)
+        while (cursor < weekStart) cursor.setDate(cursor.getDate() + intervalDays)
+        while (cursor <= weekEnd) {
+          occurrences.push(new Date(cursor))
+          cursor.setDate(cursor.getDate() + intervalDays)
+        }
+      }
+      for (const occ of occurrences) {
+        ensure(occ).stops.push(poolToStop({ ...p, next_due_at: occ.toISOString() }))
+      }
+    }
+
     const groups = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart)
+      d.setDate(d.getDate() + i)
+      const g = byDay.get(ymd(d))
+      if (!g) continue
+      g.stops.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
+      groups.push(g)
+    }
+    return { weekStart, weekEnd, groups }
+  }, [allJobs, allPools, selectedDate])
+
+  // Build upcoming groups — paginated 7 days at a time, including recurring
+  // projections of pool services based on schedule_frequency.
+  const upcomingGroups = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    for (let i = 0; i < 14; i++) {
-      const day = new Date(today)
-      day.setDate(day.getDate() + i)
-      const stops = []
-      for (const j of allJobs) {
-        if (!j.scheduled_date) continue
-        const d = new Date(j.scheduled_date + 'T00:00:00')
-        if (sameYMD(d, day)) stops.push(jobToStop(j))
+
+    const windowStart = new Date(today)
+    windowStart.setDate(windowStart.getDate() + upcomingPage * UPCOMING_PAGE_DAYS)
+    const windowEnd = new Date(windowStart)
+    windowEnd.setDate(windowEnd.getDate() + UPCOMING_PAGE_DAYS - 1)
+    windowEnd.setHours(23, 59, 59, 999)
+
+    // Build a map of ymd -> stops[]
+    const byDay = new Map()
+    const ensure = (d) => {
+      const key = ymd(d)
+      if (!byDay.has(key)) byDay.set(key, { date: new Date(d), stops: [] })
+      return byDay.get(key)
+    }
+    // Seed all 7 days so we can show empty ones if needed
+    for (let i = 0; i < UPCOMING_PAGE_DAYS; i++) {
+      const d = new Date(windowStart)
+      d.setDate(d.getDate() + i)
+      ensure(d)
+    }
+
+    // Jobs that fall inside the window
+    for (const j of allJobs) {
+      if (!j.scheduled_date) continue
+      const d = new Date(j.scheduled_date + 'T00:00:00')
+      if (d < windowStart || d > windowEnd) continue
+      ensure(d).stops.push(jobToStop(j))
+    }
+
+    // Pools: project recurring occurrences across the window
+    for (const p of allPools) {
+      if (!p.next_due_at) continue
+      const intervalDays = frequencyToDays(p.schedule_frequency)
+      const firstDue = new Date(p.next_due_at)
+      if (isNaN(firstDue.getTime())) continue
+
+      const occurrences = []
+      if (!intervalDays) {
+        // One-off service — only include if in window
+        if (firstDue >= windowStart && firstDue <= windowEnd) occurrences.push(firstDue)
+      } else {
+        // Walk backwards from firstDue to today (in case firstDue is in the past)
+        // then forward until past windowEnd.
+        let cursor = new Date(firstDue)
+        // If firstDue is after windowEnd, step backwards to find the first <= windowEnd
+        while (cursor > windowEnd) {
+          cursor.setDate(cursor.getDate() - intervalDays)
+        }
+        // Step forward from (potentially old) cursor until inside/after window
+        while (cursor < windowStart) {
+          cursor.setDate(cursor.getDate() + intervalDays)
+        }
+        // Now collect occurrences within the window
+        while (cursor <= windowEnd) {
+          occurrences.push(new Date(cursor))
+          cursor.setDate(cursor.getDate() + intervalDays)
+        }
       }
-      for (const p of allPools) {
-        if (!p.next_due_at) continue
-        const d = new Date(p.next_due_at)
-        if (sameYMD(d, day)) stops.push(poolToStop(p))
+
+      for (const occ of occurrences) {
+        const stop = poolToStop({ ...p, next_due_at: occ.toISOString() })
+        ensure(occ).stops.push(stop)
       }
-      stops.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
-      if (stops.length) groups.push({ date: day, stops })
+    }
+
+    // Sort stops per day and return ordered groups for the window
+    const groups = []
+    for (let i = 0; i < UPCOMING_PAGE_DAYS; i++) {
+      const d = new Date(windowStart)
+      d.setDate(d.getDate() + i)
+      const g = byDay.get(ymd(d))
+      if (!g) continue
+      g.stops.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
+      groups.push(g)
     }
     return groups
-  }, [allJobs, allPools])
+  }, [allJobs, allPools, upcomingPage])
 
   function prevDay() { setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() - 1); return n }) }
   function nextDay() { setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() + 1); return n }) }
@@ -253,7 +396,8 @@ function ScheduleView({ business, view, setView }) {
       {/* Tab switcher */}
       <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
         {[
-          { key: 'list', label: 'List' },
+          { key: 'list', label: 'Today' },
+          { key: 'week', label: 'Week' },
           { key: 'upcoming', label: 'Upcoming' },
           { key: 'map', label: 'Map' },
         ].map(t => (
@@ -292,8 +436,25 @@ function ScheduleView({ business, view, setView }) {
         <LoadingSpinner />
       ) : view === 'list' ? (
         <ListView stops={stopsForDate} onSelect={setSelectedStop} />
+      ) : view === 'week' ? (
+        <WeekView
+          weekStart={weekGroups.weekStart}
+          weekEnd={weekGroups.weekEnd}
+          groups={weekGroups.groups}
+          selectedDate={selectedDate}
+          onSelect={setSelectedStop}
+          onPrev={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })}
+          onNext={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })}
+          onPickDay={(d) => { setSelectedDate(d); setView('list') }}
+        />
       ) : view === 'upcoming' ? (
-        <UpcomingView groups={upcomingGroups} onSelect={setSelectedStop} />
+        <UpcomingView
+          groups={upcomingGroups}
+          onSelect={setSelectedStop}
+          page={upcomingPage}
+          onPrev={() => setUpcomingPage(p => Math.max(0, p - 1))}
+          onNext={() => setUpcomingPage(p => p + 1)}
+        />
       ) : (
         <MapView stops={stopsForDate} routeInfo={routeInfo} onSelect={setSelectedStop} />
       )}
@@ -329,31 +490,163 @@ function ListView({ stops, onSelect }) {
   )
 }
 
+// ─── Week view ────────────────────────────────
+function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, onNext, onPickDay }) {
+  const fmt = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  const totalStops = groups.reduce((s, g) => s + g.stops.length, 0)
+
+  return (
+    <div className="space-y-4">
+      {/* Week navigator */}
+      <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-card p-3">
+        <button onClick={onPrev} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
+          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        <div className="text-center">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Week</p>
+          <p className="text-sm font-bold text-gray-900">{fmt(weekStart)} – {fmt(weekEnd)}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">{totalStops} stop{totalStops === 1 ? '' : 's'}</p>
+        </div>
+        <button onClick={onNext} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
+          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+
+      {/* Day chip strip (Mon..Sun) */}
+      <div className="grid grid-cols-7 gap-1.5">
+        {groups.map((g, gi) => {
+          const isSelected = sameYMD(g.date, selectedDate)
+          const isToday = sameYMD(g.date, new Date())
+          const dayShort = g.date.toLocaleDateString('en-AU', { weekday: 'short' }).slice(0, 3)
+          return (
+            <button
+              key={gi}
+              onClick={() => onPickDay(g.date)}
+              className={cn(
+                'flex flex-col items-center py-2 rounded-xl border transition-all',
+                isSelected
+                  ? 'bg-gradient-brand text-white border-transparent shadow-card'
+                  : isToday
+                    ? 'bg-pool-50 border-pool-200 text-pool-700'
+                    : 'bg-white border-gray-100 text-gray-700'
+              )}
+            >
+              <span className="text-[10px] font-bold uppercase opacity-80">{dayShort}</span>
+              <span className="text-base font-bold leading-tight">{g.date.getDate()}</span>
+              {g.stops.length > 0 && (
+                <span className={cn(
+                  'mt-0.5 text-[9px] font-bold px-1.5 rounded-full',
+                  isSelected ? 'bg-white/25' : 'bg-pool-100 text-pool-700'
+                )}>
+                  {g.stops.length}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Day sections */}
+      {totalStops === 0 ? (
+        <EmptyState
+          icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+          title="Nothing this week"
+          description="No jobs or recurring services"
+        />
+      ) : (
+        <div className="space-y-5">
+          {groups.map((g, gi) => (
+            g.stops.length > 0 && (
+              <section key={gi}>
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+                  {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
+                </h3>
+                <div className="space-y-2.5">
+                  {g.stops.map((stop, idx) => (
+                    <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
+                  ))}
+                </div>
+              </section>
+            )
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Upcoming view ────────────────────────────
-function UpcomingView({ groups, onSelect }) {
-  if (!groups.length) {
-    return (
-      <EmptyState
-        icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-        title="Nothing coming up"
-        description="Your next 14 days are clear"
-      />
-    )
-  }
+function UpcomingView({ groups, onSelect, page, onPrev, onNext }) {
+  const rangeLabel = (() => {
+    if (!groups.length) return ''
+    const first = groups[0].date
+    const last = groups[groups.length - 1].date
+    const fmt = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+    return `${fmt(first)} – ${fmt(last)}`
+  })()
+
+  const hasAnyStops = groups.some(g => g.stops.length > 0)
+
   return (
     <div className="space-y-5">
-      {groups.map((g, gi) => (
-        <section key={gi}>
-          <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
-            {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
-          </h3>
-          <div className="space-y-2.5">
-            {g.stops.map((stop, idx) => (
-              <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {/* Range header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+            {page === 0 ? 'Next 7 days' : `Week ${page + 1}`}
+          </p>
+          <p className="text-sm font-semibold text-gray-900">{rangeLabel}</p>
+        </div>
+      </div>
+
+      {!hasAnyStops ? (
+        <EmptyState
+          icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+          title="Nothing coming up"
+          description="No jobs or recurring services in this range"
+        />
+      ) : (
+        groups.map((g, gi) => (
+          <section key={gi}>
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+              {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
+            </h3>
+            {g.stops.length === 0 ? (
+              <p className="text-xs text-gray-400 italic pl-1">No jobs or services</p>
+            ) : (
+              <div className="space-y-2.5">
+                {g.stops.map((stop, idx) => (
+                  <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
+                ))}
+              </div>
+            )}
+          </section>
+        ))
+      )}
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <button
+          onClick={onPrev}
+          disabled={page === 0}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors min-h-tap',
+            page === 0
+              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-card'
+          )}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          Previous
+        </button>
+        <button
+          onClick={onNext}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-card min-h-tap transition-colors"
+        >
+          Next
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
     </div>
   )
 }
