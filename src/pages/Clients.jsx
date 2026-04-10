@@ -6,6 +6,7 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input, { TextArea } from '../components/ui/Input'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useClients } from '../hooks/useClients'
@@ -401,7 +402,13 @@ export default function Clients() {
           <Input label="Name" name="name" value={form.name} onChange={handleChange} required placeholder="Full name" />
           <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@example.com" />
           <Input label="Phone" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="0400 000 000" />
-          <Input label="Address" name="address" value={form.address} onChange={handleChange} placeholder="Street address" />
+          <AddressAutocomplete
+            label="Address"
+            value={form.address}
+            onChange={(v) => setForm(prev => ({ ...prev, address: v }))}
+            onSelect={({ address }) => setForm(prev => ({ ...prev, address }))}
+            placeholder="Start typing a street address..."
+          />
           <TextArea label="Notes" name="notes" value={form.notes} onChange={handleChange} placeholder="Any additional notes..." />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => { setModalOpen(false); setForm(emptyClient) }}>Cancel</Button>

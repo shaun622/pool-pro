@@ -12,6 +12,7 @@ import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { useStaff } from '../hooks/useStaff'
 import StaffCard from '../components/ui/StaffCard'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { supabase } from '../lib/supabase'
 import { geocodeAddress } from '../lib/mapbox'
 import {
@@ -29,6 +30,8 @@ import {
 
 const emptyPool = {
   address: '',
+  latitude: null,
+  longitude: null,
   sameAsClient: false,
   type: 'chlorine',
   volume_litres: '',
@@ -167,9 +170,15 @@ export default function ClientDetail() {
     if (!poolForm.address.trim()) return
     setPoolSaving(true)
     try {
-      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, first_service_date, regular_service, ...rest } = poolForm
-      // Geocode the address
-      const geo = await geocodeAddress(rest.address)
+      const { pump_model, filter_type, heater, volume_litres, sameAsClient, route_day, first_service_date, regular_service, latitude, longitude, ...rest } = poolForm
+      // Use captured coords from autocomplete, or fall back to Nominatim geocoding
+      let lat = latitude
+      let lng = longitude
+      if (lat == null || lng == null) {
+        const geo = await geocodeAddress(rest.address)
+        lat = geo?.lat ?? null
+        lng = geo?.lng ?? null
+      }
       await createPool({
         ...rest,
         client_id: id,
@@ -178,9 +187,9 @@ export default function ClientDetail() {
         schedule_frequency: regular_service ? rest.schedule_frequency : null,
         next_due_at: regular_service ? (first_service_date || new Date().toISOString()) : null,
         access_notes: regular_service ? rest.access_notes : null,
-        latitude: geo?.lat ?? null,
-        longitude: geo?.lng ?? null,
-        geocoded_at: geo ? new Date().toISOString() : null,
+        latitude: lat,
+        longitude: lng,
+        geocoded_at: lat != null ? new Date().toISOString() : null,
       })
       setPoolModalOpen(false)
       setPoolForm(emptyPool)
@@ -574,11 +583,11 @@ export default function ClientDetail() {
             onChange={handleEditChange}
             placeholder="0400 000 000"
           />
-          <Input
+          <AddressAutocomplete
             label="Address"
-            name="address"
             value={editForm.address}
-            onChange={handleEditChange}
+            onChange={(v) => setEditForm(prev => ({ ...prev, address: v }))}
+            onSelect={({ address }) => setEditForm(prev => ({ ...prev, address }))}
             placeholder="Street address"
           />
 
@@ -823,15 +832,24 @@ export default function ClientDetail() {
             </label>
           )}
 
-          <Input
-            label="Pool Address"
-            name="address"
-            value={poolForm.address}
-            onChange={handlePoolChange}
-            required
-            placeholder="Pool location address"
-            disabled={poolForm.sameAsClient}
-          />
+          {poolForm.sameAsClient ? (
+            <Input
+              label="Pool Address"
+              value={poolForm.address}
+              disabled
+            />
+          ) : (
+            <AddressAutocomplete
+              label="Pool Address"
+              value={poolForm.address}
+              onChange={(v) => setPoolForm(prev => ({ ...prev, address: v, latitude: null, longitude: null }))}
+              onSelect={({ address, lat, lng }) =>
+                setPoolForm(prev => ({ ...prev, address, latitude: lat, longitude: lng }))
+              }
+              placeholder="Start typing a street address..."
+              required
+            />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Select
               label="Pool Type"

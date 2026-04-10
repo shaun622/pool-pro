@@ -1,44 +1,54 @@
-// Mapbox utilities: geocoding + directions
-// All calls go directly to the Mapbox API from the browser.
+// Mapping utilities
+//   - Mapbox: map tiles ONLY (basemap for Leaflet)
+//   - Nominatim: background geocoding (free, no key)
+//   - OSRM: road routing (free public demo server, no key)
+//   - Google Places: address autocomplete (see AddressAutocomplete component)
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
 
 export const MAPBOX_AVAILABLE = Boolean(MAPBOX_TOKEN)
 
 /**
- * Forward geocode an address to [lng, lat].
- * Returns null if no results or on error.
+ * Forward geocode an address to { lat, lng } using Nominatim (OpenStreetMap).
+ * Free, no API key required. Australian results only.
  */
 export async function geocodeAddress(address) {
-  if (!MAPBOX_TOKEN || !address) return null
+  if (!address) return null
   try {
     const encoded = encodeURIComponent(address)
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${MAPBOX_TOKEN}&country=au&limit=1`
-    const res = await fetch(url)
+    const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1&countrycodes=au`
+    const res = await fetch(url, {
+      headers: {
+        // Nominatim requires a user agent
+        'Accept-Language': 'en',
+      },
+    })
     if (!res.ok) return null
     const data = await res.json()
-    if (!data.features?.length) return null
-    const [lng, lat] = data.features[0].center
-    return { lat, lng, place_name: data.features[0].place_name }
+    if (!data.length) return null
+    const first = data[0]
+    return {
+      lat: parseFloat(first.lat),
+      lng: parseFloat(first.lon),
+      place_name: first.display_name,
+    }
   } catch (err) {
-    console.error('Geocode error:', err)
+    console.error('Geocode (Nominatim) error:', err)
     return null
   }
 }
 
 /**
- * Get a driving route between multiple waypoints using Mapbox Directions API.
+ * Get a driving route between multiple waypoints using OSRM public demo server.
+ * Free, no key required.
  * waypoints: array of { lat, lng }
  * Returns: { coordinates: [[lng,lat],...], distance_km, duration_min }
- * Returns null on error.
  */
 export async function getRoute(waypoints) {
-  if (!MAPBOX_TOKEN || !waypoints || waypoints.length < 2) return null
+  if (!waypoints || waypoints.length < 2) return null
   try {
-    const coords = waypoints
-      .map(w => `${w.lng},${w.lat}`)
-      .join(';')
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`
+    const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';')
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?geometries=geojson&overview=full`
     const res = await fetch(url)
     if (!res.ok) return null
     const data = await res.json()
@@ -50,7 +60,7 @@ export async function getRoute(waypoints) {
       duration_min: route.duration / 60,
     }
   } catch (err) {
-    console.error('Directions error:', err)
+    console.error('Route (OSRM) error:', err)
     return null
   }
 }
@@ -72,8 +82,8 @@ export function haversineKm(a, b) {
 }
 
 /**
- * Returns a Mapbox Static tile URL template for Leaflet.
- * Uses the streets-v12 style.
+ * Mapbox Static tile URL template for Leaflet (streets-v12 style).
+ * ONLY used for the basemap visuals.
  */
 export const MAPBOX_TILE_URL = MAPBOX_TOKEN
   ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`

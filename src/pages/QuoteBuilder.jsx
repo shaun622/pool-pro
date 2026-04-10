@@ -5,6 +5,7 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
@@ -689,11 +690,12 @@ export default function QuoteBuilder() {
             onChange={e => setNewClientForm(prev => ({ ...prev, phone: e.target.value }))}
             placeholder="0400 000 000"
           />
-          <Input
+          <AddressAutocomplete
             label="Address"
             value={newClientForm.address}
-            onChange={e => setNewClientForm(prev => ({ ...prev, address: e.target.value }))}
-            placeholder="Street address"
+            onChange={(v) => setNewClientForm(prev => ({ ...prev, address: v }))}
+            onSelect={({ address }) => setNewClientForm(prev => ({ ...prev, address }))}
+            placeholder="Start typing a street address..."
           />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setNewClientOpen(false)}>
