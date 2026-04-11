@@ -245,7 +245,7 @@ export default function Clients() {
   return (
     <>
       <Header title={view === 'list' ? 'Active Clients' : 'All Clients'} right={headerAction} />
-      <PageWrapper>
+      <PageWrapper width="wide">
         {view === 'list' ? (
           /* ─── LIST VIEW ─── */
           <>
@@ -274,7 +274,7 @@ export default function Clients() {
                 />
               )
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
                 {filtered.map(client => (
                   <ClientCard key={client.id} client={client} clientPools={poolsByClient[client.id] || []}
                     onClick={() => navigate(`/clients/${client.id}`)} />
@@ -332,7 +332,7 @@ export default function Clients() {
                 description="Try a different filter"
               />
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
                 {filteredCRM.map(client => {
                   const st = STATUS_STYLES[client.crmStatus] || STATUS_STYLES.active
                   return (

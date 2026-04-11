@@ -165,21 +165,38 @@ export default function Dashboard() {
   return (
     <>
       <Header title="Dashboard" right={<ActivityBell onClick={() => setActivityOpen(true)} />} />
-      <PageWrapper>
+      <PageWrapper width="wide">
         {/* Hero Welcome */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-brand p-5 mb-6 shadow-elevated shadow-pool-500/10">
+        <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-brand p-5 md:p-8 mb-6 shadow-elevated shadow-pool-500/10">
           {/* Decorative circles */}
-          <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
-          <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/5" />
+          <div className="absolute -top-8 -right-8 w-32 md:w-56 h-32 md:h-56 rounded-full bg-white/10" />
+          <div className="absolute -bottom-4 -left-4 w-20 md:w-40 h-20 md:h-40 rounded-full bg-white/5" />
 
-          <div className="relative">
-            <p className="text-pool-100 text-sm font-medium">{greeting()}</p>
-            <h2 className="text-xl font-bold text-white mt-0.5">
-              {business?.name || 'Welcome'}
-            </h2>
-            <p className="text-pool-200 text-sm mt-1">
-              {formatDate(new Date())}
-            </p>
+          <div className="relative md:flex md:items-end md:justify-between md:gap-8">
+            <div>
+              <p className="text-pool-100 text-sm font-medium">{greeting()}</p>
+              <h2 className="text-xl md:text-3xl font-bold text-white mt-0.5">
+                {business?.name || 'Welcome'}
+              </h2>
+              <p className="text-pool-200 text-sm md:text-base mt-1">
+                {formatDate(new Date())}
+              </p>
+            </div>
+            <div className="hidden md:flex items-center gap-3">
+              <Button
+                variant="secondary"
+                className="bg-white/15 text-white border-white/20 hover:bg-white/25 backdrop-blur"
+                onClick={() => navigate('/route')}
+              >
+                View Schedule
+              </Button>
+              <Button
+                className="bg-white text-pool-600 hover:bg-pool-50"
+                onClick={() => navigate('/jobs')}
+              >
+                Open Jobs
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -240,7 +257,7 @@ export default function Dashboard() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
           {[
             { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900', to: '/route' },
             { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900', to: '/route' },
@@ -257,9 +274,11 @@ export default function Dashboard() {
           ))}
         </div>
 
+        <div className="md:grid md:grid-cols-3 md:gap-6">
+        <div className="md:col-span-2 md:space-y-6">
         {/* Ready to Service */}
         {todayPools.length > 0 && (
-          <section className="mb-6">
+          <section className="mb-6 md:mb-0">
             <div className="flex items-center justify-between mb-3">
               <h3 className="section-title">Ready to Service</h3>
               <button
@@ -308,7 +327,7 @@ export default function Dashboard() {
 
         {/* Overdue Pools */}
         {overduePools.length > 0 && (
-          <section className="mb-6">
+          <section className="mb-6 md:mb-0">
             <h3 className="section-title mb-3">Overdue Pools</h3>
             <div className="space-y-2.5">
               {overduePools.map((pool) => {
@@ -340,9 +359,11 @@ export default function Dashboard() {
           </section>
         )}
 
+        </div>
+        <div className="md:col-span-1">
         {/* Recent Activity */}
         {recentActivity.length > 0 && (
-          <section className="mb-6">
+          <section className="mb-6 md:mb-0">
             <h3 className="section-title mb-3">Recent Activity</h3>
             <Card className="p-0 overflow-hidden divide-y divide-gray-100">
               {recentActivity.map((record, i) => (
@@ -367,6 +388,8 @@ export default function Dashboard() {
             </Card>
           </section>
         )}
+        </div>
+        </div>
       </PageWrapper>
       <ActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
     </>

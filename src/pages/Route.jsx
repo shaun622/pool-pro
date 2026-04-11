@@ -119,7 +119,7 @@ export default function Route() {
           </button>
         }
       />
-      <PageWrapper>
+      <PageWrapper width="wide">
         {showCalendar ? (
           <CalendarView business={business} onClose={() => setShowCalendar(false)} />
         ) : (

@@ -424,7 +424,7 @@ export default function Jobs() {
   return (
     <>
       <Header title="Jobs" right={headerAction} />
-      <PageWrapper>
+      <PageWrapper width="wide">
         {/* Jobs / Quotes toggle */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
           <button
@@ -486,7 +486,7 @@ export default function Jobs() {
                 description={statusFilter !== 'all' ? 'Try a different filter' : 'Create a job or send a quote to get started'}
               />
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
                 {filteredJobs.map(job => (
                   <JobListCard key={job.id} job={job} onClick={() => setSelectedJob(job)} />
                 ))}
@@ -550,7 +550,7 @@ export default function Jobs() {
                 onAction={() => navigate('/quotes/new')}
               />
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
                 {filteredQuotes.map(quote => {
                   const stage = getQuoteStage(quote)
                   const stageDef = PIPELINE_STAGES.find(s => s.key === stage) || PIPELINE_STAGES[0]
