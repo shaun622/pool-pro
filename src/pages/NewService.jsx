@@ -265,7 +265,7 @@ export default function NewService() {
 
   return (
     <>
-      <Header title={completed ? "Service Complete" : "New Service"} backTo={`/pools/${poolId}`} />
+      <Header title={completed ? "Service Complete" : "New Service"} backTo={-1} />
       <PageWrapper>
         {/* Progress bar */}
         {!completed && <div className="mb-6">
