@@ -6,8 +6,9 @@ import Modal from './Modal'
 import Button from './Button'
 import Badge from './Badge'
 import Input, { TextArea, Select } from './Input'
+import AddressAutocomplete from './AddressAutocomplete'
 import { supabase } from '../../lib/supabase'
-import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
+import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, geocodeAddress } from '../../lib/mapbox'
 import { FREQUENCY_LABELS, SCHEDULE_FREQUENCIES, cn } from '../../lib/utils'
 
 // Numbered pin factory
@@ -23,6 +24,16 @@ function numberedIcon(n, color = '#0CA5EB') {
     iconAnchor: [17, 34],
   })
 }
+
+const RECURRENCE_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: '6_weekly', label: 'Every 6 Weeks' },
+  { value: 'quarterly', label: 'Quarterly' },
+]
+
+const RECURRENCE_DAYS = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }
 
 const STATUS_VARIANTS = {
   scheduled: 'primary',
@@ -44,13 +55,34 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       if (stop.type === 'job') {
         setForm({
           title: stop.title || '',
+          address: stop.address || '',
+          address_lat: stop.lat ?? null,
+          address_lng: stop.lng ?? null,
           scheduled_date: stop.scheduled_date || '',
           scheduled_time: stop.scheduled_time || '',
           estimated_duration_minutes: stop.duration || '',
           price: stop.price || '',
           status: stop.status || 'scheduled',
           notes: stop.notes || '',
+          is_recurring: false,
+          recurrence_rule: 'weekly',
+          recurring_profile_id: null,
         })
+        // Fetch any matching recurring profile so the toggle reflects reality.
+        if (stop.client_id) {
+          supabase
+            .from('recurring_job_profiles')
+            .select('id, recurrence_rule')
+            .eq('client_id', stop.client_id)
+            .eq('title', stop.title || '')
+            .limit(1)
+            .then(({ data }) => {
+              const profile = data?.[0]
+              if (profile) {
+                setForm(f => ({ ...f, is_recurring: true, recurrence_rule: profile.recurrence_rule || 'weekly', recurring_profile_id: profile.id }))
+              }
+            })
+        }
       } else {
         setForm({
           next_due_at: stop.next_due_at ? stop.next_due_at.split('T')[0] : '',
@@ -69,17 +101,140 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     setSaving(true)
     try {
       if (stop.type === 'job') {
-        const updates = {
-          title: form.title,
-          scheduled_date: form.scheduled_date || null,
-          scheduled_time: form.scheduled_time || null,
-          estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
-          price: form.price ? Number(form.price) : null,
-          status: form.status,
-          notes: form.notes || null,
+        // Resolve target job id. If this is a projected stop (no real row), materialize it.
+        let jobId = stop.id
+        let businessId = null
+        let poolId = stop.pool_id || null
+        const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
+
+        if (isProjected) {
+          // Need a business_id — pull it from the recurring profile
+          if (form.recurring_profile_id) {
+            const { data: profileRow } = await supabase
+              .from('recurring_job_profiles')
+              .select('business_id, pool_id')
+              .eq('id', form.recurring_profile_id)
+              .single()
+            businessId = profileRow?.business_id || null
+            if (!poolId) poolId = profileRow?.pool_id || null
+          }
+          if (!businessId) throw new Error('Could not determine business for new job')
+          const { data: inserted, error: insErr } = await supabase.from('jobs').insert({
+            business_id: businessId,
+            client_id: stop.client_id,
+            pool_id: poolId,
+            recurring_profile_id: form.recurring_profile_id || null,
+            title: form.title,
+            status: form.status || 'scheduled',
+            scheduled_date: form.scheduled_date || null,
+            scheduled_time: form.scheduled_time || null,
+            estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
+            price: form.price ? Number(form.price) : null,
+            notes: form.notes || null,
+          }).select('id').single()
+          if (insErr) throw insErr
+          jobId = inserted.id
+        } else {
+          const updates = {
+            title: form.title,
+            scheduled_date: form.scheduled_date || null,
+            scheduled_time: form.scheduled_time || null,
+            estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
+            price: form.price ? Number(form.price) : null,
+            status: form.status,
+            notes: form.notes || null,
+          }
+          const { error } = await supabase.from('jobs').update(updates).eq('id', jobId)
+          if (error) throw error
         }
-        const { error } = await supabase.from('jobs').update(updates).eq('id', stop.id)
-        if (error) throw error
+
+        // Sync pool address (job's address comes from its linked pool)
+        const newAddr = (form.address || '').trim()
+        const oldAddr = (stop.address || '').trim()
+        if (newAddr && newAddr !== oldAddr) {
+          let lat = form.address_lat
+          let lng = form.address_lng
+          if (lat == null || lng == null) {
+            try {
+              const geo = await geocodeAddress(newAddr)
+              if (geo) { lat = geo.lat; lng = geo.lng }
+            } catch { /* non-fatal */ }
+          }
+          if (poolId) {
+            await supabase.from('pools').update({
+              address: newAddr,
+              latitude: lat ?? null,
+              longitude: lng ?? null,
+            }).eq('id', poolId)
+          } else if (stop.client_id) {
+            // No pool linked yet — create one and link the job to it
+            if (!businessId) {
+              const { data: jobRow } = await supabase.from('jobs').select('business_id').eq('id', jobId).single()
+              businessId = jobRow?.business_id || null
+            }
+            if (businessId) {
+              const { data: newPool, error: poolErr } = await supabase.from('pools').insert({
+                business_id: businessId,
+                client_id: stop.client_id,
+                address: newAddr,
+                latitude: lat ?? null,
+                longitude: lng ?? null,
+                type: 'chlorine',
+                shape: 'rectangular',
+                geocoded_at: lat != null ? new Date().toISOString() : null,
+              }).select('id').single()
+              if (poolErr) throw poolErr
+              if (newPool?.id) {
+                poolId = newPool.id
+                await supabase.from('jobs').update({ pool_id: poolId }).eq('id', jobId)
+              }
+            }
+          }
+        }
+
+        // Sync recurring profile
+        if (form.is_recurring) {
+          const days = RECURRENCE_DAYS[form.recurrence_rule] || 7
+          const nextGen = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+          if (form.recurring_profile_id) {
+            await supabase.from('recurring_job_profiles').update({
+              title: form.title,
+              pool_id: poolId || null,
+              recurrence_rule: form.recurrence_rule,
+              preferred_time: form.scheduled_time || null,
+              price: form.price ? Number(form.price) : null,
+              notes: form.notes || null,
+            }).eq('id', form.recurring_profile_id)
+            // Make sure the job points at the profile so dedupe works
+            await supabase.from('jobs').update({ recurring_profile_id: form.recurring_profile_id }).eq('id', jobId)
+          } else if (stop.client_id) {
+            if (!businessId) {
+              const { data: jobRow } = await supabase.from('jobs').select('business_id').eq('id', jobId).single()
+              businessId = jobRow?.business_id || null
+            }
+            if (businessId) {
+              const { data: newProfile, error: profErr } = await supabase.from('recurring_job_profiles').insert({
+                business_id: businessId,
+                client_id: stop.client_id,
+                pool_id: poolId || null,
+                title: form.title,
+                recurrence_rule: form.recurrence_rule,
+                preferred_time: form.scheduled_time || null,
+                price: form.price ? Number(form.price) : null,
+                notes: form.notes || null,
+                next_generation_at: nextGen,
+                last_generated_at: new Date().toISOString(),
+              }).select('id').single()
+              if (profErr) throw profErr
+              if (newProfile?.id) {
+                await supabase.from('jobs').update({ recurring_profile_id: newProfile.id }).eq('id', jobId)
+              }
+            }
+          }
+        } else if (form.recurring_profile_id) {
+          // Toggle was turned off — delete the profile
+          await supabase.from('recurring_job_profiles').delete().eq('id', form.recurring_profile_id)
+        }
       } else {
         let nextDue = null
         if (form.next_due_at) {
@@ -97,7 +252,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       setEditing(false)
       onUpdated?.()
     } catch (err) {
-      console.error('Save error:', err)
+      console.error('Save error:', err?.message, err?.details, err?.hint, err)
       alert(err.message || 'Failed to save')
     } finally {
       setSaving(false)
@@ -210,10 +365,43 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         {editing && stop.type === 'job' && (
           <div className="space-y-3">
             <Input label="Title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            <AddressAutocomplete
+              label="Site Address"
+              value={form.address}
+              onChange={(v) => setForm(f => ({ ...f, address: v, address_lat: null, address_lng: null }))}
+              onSelect={({ address, lat, lng }) => setForm(f => ({ ...f, address, address_lat: lat, address_lng: lng }))}
+              placeholder="Start typing a street address..."
+            />
             <div className="grid grid-cols-2 gap-3">
               <Input label="Date" type="date" value={form.scheduled_date} onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))} />
               <Input label="Time" type="time" value={form.scheduled_time} onChange={e => setForm(f => ({ ...f, scheduled_time: e.target.value }))} />
             </div>
+
+            {/* Recurring toggle */}
+            <label className="flex items-center justify-between min-h-tap cursor-pointer">
+              <div className="flex items-center gap-2">
+                <RepeatIcon />
+                <span className="text-sm font-medium text-gray-700">Recurring job</span>
+              </div>
+              <div className={cn('relative w-11 h-6 rounded-full transition-colors',
+                form.is_recurring ? 'bg-pool-500' : 'bg-gray-200')}>
+                <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                  form.is_recurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+                <input type="checkbox" className="sr-only"
+                  checked={form.is_recurring}
+                  onChange={e => setForm(f => ({ ...f, is_recurring: e.target.checked }))} />
+              </div>
+            </label>
+
+            {form.is_recurring && (
+              <Select
+                label="Frequency"
+                value={form.recurrence_rule}
+                onChange={e => setForm(f => ({ ...f, recurrence_rule: e.target.value }))}
+                options={RECURRENCE_OPTIONS}
+              />
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <Input label="Duration (min)" type="number" value={form.estimated_duration_minutes} onChange={e => setForm(f => ({ ...f, estimated_duration_minutes: e.target.value }))} />
               <Input label="Price ($)" type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />

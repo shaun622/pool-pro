@@ -55,9 +55,18 @@ function frequencyToDays(freq) {
   if (f === 'every_3_weeks' || f === '3w') return 21
   if (f === 'every_4_weeks' || f === '4w') return 28
   if (f === 'monthly' || f === 'every_month' || f === '1m') return 30
+  if (f === '6_weekly' || f === 'every_6_weeks' || f === '6w') return 42
+  if (f === 'quarterly' || f === '3m') return 90
   const n = parseInt(f, 10)
   if (!isNaN(n) && n > 0) return n
   return null
+}
+
+// Interval for a recurring_job_profile (supports 'custom' via custom_interval_days).
+function profileIntervalDays(profile) {
+  if (!profile) return null
+  if (profile.recurrence_rule === 'custom') return Number(profile.custom_interval_days) || 7
+  return frequencyToDays(profile.recurrence_rule)
 }
 
 function formatTimeRange(start, durationMin) {
@@ -127,11 +136,13 @@ function ScheduleView({ business, view, setView }) {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [allJobs, setAllJobs] = useState([])
   const [allPools, setAllPools] = useState([])
+  const [allProfiles, setAllProfiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
   const [routeInfo, setRouteInfo] = useState(null) // { distance_km, duration_min, coordinates }
-  const [upcomingPage, setUpcomingPage] = useState(0) // 0 = next 7 days, 1 = following 7, etc.
-  const UPCOMING_PAGE_DAYS = 7
+  const [upcomingPage, setUpcomingPage] = useState(0) // 0 = next 5 jobs, 1 = following 5, etc.
+  const UPCOMING_PAGE_SIZE = 5
+  const UPCOMING_HORIZON_DAYS = 180
 
   async function fetchData() {
     if (!business?.id) return
@@ -142,7 +153,7 @@ function ScheduleView({ business, view, setView }) {
     const to = new Date()
     to.setDate(to.getDate() + 60)
 
-    const [jobsRes, poolsRes] = await Promise.all([
+    const [jobsRes, poolsRes, profilesRes] = await Promise.all([
       supabase
         .from('jobs')
         .select('*, clients(name, email, phone), pools(address, latitude, longitude)')
@@ -157,9 +168,16 @@ function ScheduleView({ business, view, setView }) {
         .select('*, clients(name, email, phone)')
         .eq('business_id', business.id)
         .not('next_due_at', 'is', null),
+      // Load active recurring job profiles so we can project future occurrences
+      supabase
+        .from('recurring_job_profiles')
+        .select('*, clients(name, email, phone), pools(address, latitude, longitude)')
+        .eq('business_id', business.id)
+        .eq('is_active', true),
     ])
     setAllJobs(jobsRes.data || [])
     setAllPools(poolsRes.data || [])
+    setAllProfiles(profilesRes.data || [])
     setLoading(false)
   }
 
@@ -268,6 +286,35 @@ function ScheduleView({ business, view, setView }) {
       }
     }
 
+    // Recurring job profiles — project future occurrences across the week
+    const takenByProfile = new Map() // profile_id -> Set of ymd that already have a real job row
+    for (const j of allJobs) {
+      if (j.recurring_profile_id && j.scheduled_date) {
+        if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
+        takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
+      }
+    }
+    for (const profile of allProfiles) {
+      const intervalDays = profileIntervalDays(profile)
+      if (!intervalDays) continue
+      // Anchor: next_generation_at, falling back to last_generated_at, then today
+      const anchorStr = profile.next_generation_at || profile.last_generated_at
+      const anchor = anchorStr ? new Date(anchorStr) : new Date()
+      if (isNaN(anchor.getTime())) continue
+      let cursor = new Date(anchor)
+      cursor.setHours(0, 0, 0, 0)
+      while (cursor > weekEnd) cursor.setDate(cursor.getDate() - intervalDays)
+      while (cursor < weekStart) cursor.setDate(cursor.getDate() + intervalDays)
+      while (cursor <= weekEnd) {
+        const key = ymd(cursor)
+        const taken = takenByProfile.get(profile.id)
+        if (!taken || !taken.has(key)) {
+          ensure(cursor).stops.push(profileToStop(profile, cursor))
+        }
+        cursor.setDate(cursor.getDate() + intervalDays)
+      }
+    }
+
     const groups = []
     for (let i = 0; i < 7; i++) {
       const d = new Date(weekStart)
@@ -278,43 +325,29 @@ function ScheduleView({ business, view, setView }) {
       groups.push(g)
     }
     return { weekStart, weekEnd, groups }
-  }, [allJobs, allPools, selectedDate])
+  }, [allJobs, allPools, allProfiles, selectedDate])
 
-  // Build upcoming groups — paginated 7 days at a time, including recurring
-  // projections of pool services based on schedule_frequency.
-  const upcomingGroups = useMemo(() => {
+  // Build upcoming: collect all stops across the horizon, sort chronologically,
+  // and paginate 5 at a time. Includes recurring projections of pool services.
+  const { upcomingGroups, upcomingHasMore } = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+    const horizonEnd = new Date(today)
+    horizonEnd.setDate(horizonEnd.getDate() + UPCOMING_HORIZON_DAYS)
+    horizonEnd.setHours(23, 59, 59, 999)
 
-    const windowStart = new Date(today)
-    windowStart.setDate(windowStart.getDate() + upcomingPage * UPCOMING_PAGE_DAYS)
-    const windowEnd = new Date(windowStart)
-    windowEnd.setDate(windowEnd.getDate() + UPCOMING_PAGE_DAYS - 1)
-    windowEnd.setHours(23, 59, 59, 999)
+    const allStops = []
 
-    // Build a map of ymd -> stops[]
-    const byDay = new Map()
-    const ensure = (d) => {
-      const key = ymd(d)
-      if (!byDay.has(key)) byDay.set(key, { date: new Date(d), stops: [] })
-      return byDay.get(key)
-    }
-    // Seed all 7 days so we can show empty ones if needed
-    for (let i = 0; i < UPCOMING_PAGE_DAYS; i++) {
-      const d = new Date(windowStart)
-      d.setDate(d.getDate() + i)
-      ensure(d)
-    }
-
-    // Jobs that fall inside the window
+    // Jobs from today forward
     for (const j of allJobs) {
       if (!j.scheduled_date) continue
       const d = new Date(j.scheduled_date + 'T00:00:00')
-      if (d < windowStart || d > windowEnd) continue
-      ensure(d).stops.push(jobToStop(j))
+      if (d < today || d > horizonEnd) continue
+      const stop = jobToStop(j)
+      allStops.push({ date: d, stop, sortTime: stop.sortTime || '99:99' })
     }
 
-    // Pools: project recurring occurrences across the window
+    // Pools: project recurring occurrences from today to horizon
     for (const p of allPools) {
       if (!p.next_due_at) continue
       const intervalDays = frequencyToDays(p.schedule_frequency)
@@ -323,22 +356,12 @@ function ScheduleView({ business, view, setView }) {
 
       const occurrences = []
       if (!intervalDays) {
-        // One-off service — only include if in window
-        if (firstDue >= windowStart && firstDue <= windowEnd) occurrences.push(firstDue)
+        if (firstDue >= today && firstDue <= horizonEnd) occurrences.push(firstDue)
       } else {
-        // Walk backwards from firstDue to today (in case firstDue is in the past)
-        // then forward until past windowEnd.
         let cursor = new Date(firstDue)
-        // If firstDue is after windowEnd, step backwards to find the first <= windowEnd
-        while (cursor > windowEnd) {
-          cursor.setDate(cursor.getDate() - intervalDays)
-        }
-        // Step forward from (potentially old) cursor until inside/after window
-        while (cursor < windowStart) {
-          cursor.setDate(cursor.getDate() + intervalDays)
-        }
-        // Now collect occurrences within the window
-        while (cursor <= windowEnd) {
+        while (cursor > today) cursor.setDate(cursor.getDate() - intervalDays)
+        while (cursor < today) cursor.setDate(cursor.getDate() + intervalDays)
+        while (cursor <= horizonEnd) {
           occurrences.push(new Date(cursor))
           cursor.setDate(cursor.getDate() + intervalDays)
         }
@@ -346,22 +369,61 @@ function ScheduleView({ business, view, setView }) {
 
       for (const occ of occurrences) {
         const stop = poolToStop({ ...p, next_due_at: occ.toISOString() })
-        ensure(occ).stops.push(stop)
+        allStops.push({ date: new Date(occ), stop, sortTime: stop.sortTime || '99:99' })
       }
     }
 
-    // Sort stops per day and return ordered groups for the window
-    const groups = []
-    for (let i = 0; i < UPCOMING_PAGE_DAYS; i++) {
-      const d = new Date(windowStart)
-      d.setDate(d.getDate() + i)
-      const g = byDay.get(ymd(d))
-      if (!g) continue
-      g.stops.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
-      groups.push(g)
+    // Recurring job profiles: project future occurrences
+    const takenByProfile = new Map()
+    for (const j of allJobs) {
+      if (j.recurring_profile_id && j.scheduled_date) {
+        if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
+        takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
+      }
     }
-    return groups
-  }, [allJobs, allPools, upcomingPage])
+    for (const profile of allProfiles) {
+      const intervalDays = profileIntervalDays(profile)
+      if (!intervalDays) continue
+      const anchorStr = profile.next_generation_at || profile.last_generated_at
+      const anchor = anchorStr ? new Date(anchorStr) : new Date()
+      if (isNaN(anchor.getTime())) continue
+      let cursor = new Date(anchor)
+      cursor.setHours(0, 0, 0, 0)
+      while (cursor > today) cursor.setDate(cursor.getDate() - intervalDays)
+      while (cursor < today) cursor.setDate(cursor.getDate() + intervalDays)
+      while (cursor <= horizonEnd) {
+        const key = ymd(cursor)
+        const taken = takenByProfile.get(profile.id)
+        if (!taken || !taken.has(key)) {
+          const stop = profileToStop(profile, cursor)
+          allStops.push({ date: new Date(cursor), stop, sortTime: stop.sortTime || '99:99' })
+        }
+        cursor.setDate(cursor.getDate() + intervalDays)
+      }
+    }
+
+    // Sort chronologically (date, then time)
+    allStops.sort((a, b) => {
+      const dc = a.date - b.date
+      if (dc !== 0) return dc
+      return a.sortTime.localeCompare(b.sortTime)
+    })
+
+    // Slice page
+    const start = upcomingPage * UPCOMING_PAGE_SIZE
+    const pageStops = allStops.slice(start, start + UPCOMING_PAGE_SIZE)
+    const hasMore = allStops.length > start + UPCOMING_PAGE_SIZE
+
+    // Group by day for the view
+    const byKey = new Map()
+    for (const { date, stop } of pageStops) {
+      const key = ymd(date)
+      if (!byKey.has(key)) byKey.set(key, { date: new Date(date), stops: [] })
+      byKey.get(key).stops.push(stop)
+    }
+    const groups = [...byKey.values()]
+    return { upcomingGroups: groups, upcomingHasMore: hasMore }
+  }, [allJobs, allPools, allProfiles, upcomingPage])
 
   function prevDay() { setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() - 1); return n }) }
   function nextDay() { setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() + 1); return n }) }
@@ -445,11 +507,12 @@ function ScheduleView({ business, view, setView }) {
           onSelect={setSelectedStop}
           onPrev={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })}
           onNext={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })}
-          onPickDay={(d) => { setSelectedDate(d); setView('list') }}
+          onPickDay={(d) => setSelectedDate(d)}
         />
       ) : view === 'upcoming' ? (
         <UpcomingView
           groups={upcomingGroups}
+          hasMore={upcomingHasMore}
           onSelect={setSelectedStop}
           page={upcomingPage}
           onPrev={() => setUpcomingPage(p => Math.max(0, p - 1))}
@@ -546,54 +609,49 @@ function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, 
         })}
       </div>
 
-      {/* Day sections */}
-      {totalStops === 0 ? (
-        <EmptyState
-          icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-          title="Nothing this week"
-          description="No jobs or recurring services"
-        />
-      ) : (
-        <div className="space-y-5">
-          {groups.map((g, gi) => (
-            g.stops.length > 0 && (
-              <section key={gi}>
-                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
-                  {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
-                </h3>
-                <div className="space-y-2.5">
-                  {g.stops.map((stop, idx) => (
-                    <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
-                  ))}
-                </div>
-              </section>
-            )
-          ))}
-        </div>
-      )}
+      {/* Day sections — start from the selected day, continue to end of week */}
+      <div className="space-y-4">
+        {groups.filter(g => g.date >= new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())).map((g, gi) => (
+          <section key={gi}>
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+              {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
+            </h3>
+            {g.stops.length > 0 ? (
+              <div className="space-y-2.5">
+                {g.stops.map((stop, idx) => (
+                  <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs italic text-gray-400 pl-0.5">No services</p>
+            )}
+          </section>
+        ))}
+      </div>
     </div>
   )
 }
 
 // ─── Upcoming view ────────────────────────────
-function UpcomingView({ groups, onSelect, page, onPrev, onNext }) {
+function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
   const rangeLabel = (() => {
     if (!groups.length) return ''
     const first = groups[0].date
     const last = groups[groups.length - 1].date
     const fmt = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+    if (sameYMD(first, last)) return fmt(first)
     return `${fmt(first)} – ${fmt(last)}`
   })()
 
   const hasAnyStops = groups.some(g => g.stops.length > 0)
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Range header */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
-            {page === 0 ? 'Next 7 days' : `Week ${page + 1}`}
+            {page === 0 ? 'Next 5 jobs' : `Jobs ${page * 5 + 1}–${page * 5 + 5}`}
           </p>
           <p className="text-sm font-semibold text-gray-900">{rangeLabel}</p>
         </div>
@@ -608,15 +666,15 @@ function UpcomingView({ groups, onSelect, page, onPrev, onNext }) {
       ) : (
         groups.map((g, gi) => (
           <section key={gi}>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+            <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
               {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
             </h3>
             {g.stops.length === 0 ? (
               <p className="text-xs text-gray-400 italic pl-1">No jobs or services</p>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {g.stops.map((stop, idx) => (
-                  <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
+                  <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} compact />
                 ))}
               </div>
             )}
@@ -641,7 +699,13 @@ function UpcomingView({ groups, onSelect, page, onPrev, onNext }) {
         </button>
         <button
           onClick={onNext}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-card min-h-tap transition-colors"
+          disabled={!hasMore}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors min-h-tap',
+            !hasMore
+              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-card'
+          )}
         >
           Next
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
@@ -702,8 +766,39 @@ function MapView({ stops, routeInfo, onSelect }) {
 }
 
 // ─── Stop card ────────────────────────────────
-function StopCard({ stop, number, onClick }) {
+function StopCard({ stop, number, onClick, compact = false }) {
   const color = stop.status === 'completed' ? '#10b981' : stop.status === 'in_progress' ? '#f59e0b' : '#0CA5EB'
+
+  if (compact) {
+    return (
+      <button
+        onClick={onClick}
+        className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-card px-3.5 py-2.5 hover:shadow-card-hover transition-shadow"
+        style={{ borderLeft: `4px solid ${color}` }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-full bg-pool-50 text-pool-700 font-bold text-xs flex items-center justify-center shrink-0">
+            {number}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-900 truncate">
+                {stop.title}
+                {stop.client_name && <span className="text-gray-400 font-normal"> · {stop.client_name}</span>}
+              </p>
+              {stop.time_display && (
+                <span className="text-xs text-gray-500 shrink-0">{stop.time_display.split(' – ')[0]}</span>
+              )}
+            </div>
+            {stop.address && (
+              <p className="text-xs text-pool-600 truncate mt-0.5">{stop.address}</p>
+            )}
+          </div>
+        </div>
+      </button>
+    )
+  }
+
   return (
     <button
       onClick={onClick}
@@ -898,6 +993,8 @@ function jobToStop(j) {
     type: 'job',
     id: j.id,
     title: j.title || 'Job',
+    client_id: j.client_id,
+    pool_id: j.pool_id,
     client_name: j.clients?.name,
     address: j.pools?.address || null,
     status: j.status,
@@ -912,6 +1009,36 @@ function jobToStop(j) {
     email: j.clients?.email,
     lat: j.pools?.latitude ? Number(j.pools.latitude) : null,
     lng: j.pools?.longitude ? Number(j.pools.longitude) : null,
+  }
+}
+
+// Build a stop from a recurring_job_profile projected onto a specific date.
+function profileToStop(profile, occurrenceDate) {
+  const duration = 60
+  const time = profile.preferred_time ? String(profile.preferred_time).slice(0, 5) : null
+  const timeDisp = time ? formatTimeRange(time, duration) : null
+  return {
+    type: 'job',
+    // Prefix id so it's distinct from actual job rows, and unique per occurrence
+    id: `profile-${profile.id}-${ymd(occurrenceDate)}`,
+    title: profile.title || 'Recurring Job',
+    client_id: profile.client_id,
+    pool_id: profile.pool_id,
+    client_name: profile.clients?.name,
+    address: profile.pools?.address || null,
+    status: 'scheduled',
+    scheduled_date: ymd(occurrenceDate),
+    scheduled_time: time,
+    sortTime: time,
+    time_display: timeDisp,
+    duration,
+    price: profile.price,
+    notes: profile.notes,
+    phone: profile.clients?.phone,
+    email: profile.clients?.email,
+    lat: profile.pools?.latitude ? Number(profile.pools.latitude) : null,
+    lng: profile.pools?.longitude ? Number(profile.pools.longitude) : null,
+    projected: true,
   }
 }
 

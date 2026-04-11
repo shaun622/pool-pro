@@ -105,6 +105,8 @@ function jobToStop(j) {
     type: 'job',
     id: j.id,
     title: j.title || 'Job',
+    client_id: j.client_id,
+    pool_id: j.pool_id,
     client_name: j.clients?.name,
     address: j.pools?.address || null,
     status: j.status,
