@@ -246,6 +246,39 @@ export default function Clients() {
     <>
       <Header title={view === 'list' ? 'Active Clients' : 'All Clients'} right={headerAction} />
       <PageWrapper width="wide">
+        {/* Desktop view switcher — proper buttons */}
+        <div className="hidden md:flex items-center justify-between mb-5">
+          <div className="inline-flex rounded-xl bg-gray-100 p-1">
+            <button
+              onClick={() => setView('list')}
+              className={cn(
+                'px-5 py-2 rounded-lg text-sm font-semibold transition-all',
+                view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              Active Clients
+            </button>
+            <button
+              onClick={() => setView('crm')}
+              className={cn(
+                'px-5 py-2 rounded-lg text-sm font-semibold transition-all',
+                view === 'crm' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              All Clients
+            </button>
+          </div>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-brand shadow-md shadow-pool-500/20 hover:shadow-lg hover:shadow-pool-500/30 transition-all flex items-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Client
+          </button>
+        </div>
+
         {view === 'list' ? (
           /* ─── LIST VIEW ─── */
           <>
@@ -346,11 +379,21 @@ export default function Clients() {
                             <p className="text-sm font-semibold text-gray-900 truncate">{client.name}</p>
                             <Badge variant={st.badge} className="text-[10px] shrink-0">{st.label}</Badge>
                           </div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs text-gray-400">{client.poolCount} pool{client.poolCount !== 1 ? 's' : ''}</span>
-                            <span className="text-xs text-gray-400">{client.totalServices} services</span>
+                          {(client.email || client.phone) && (
+                            <div className="space-y-0.5 mt-1">
+                              {client.email && (
+                                <p className="text-xs text-gray-500 truncate">{client.email}</p>
+                              )}
+                              {client.phone && (
+                                <p className="text-xs text-gray-500 truncate">{client.phone}</p>
+                              )}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <span className="text-[11px] text-gray-400">{client.poolCount} pool{client.poolCount !== 1 ? 's' : ''}</span>
+                            <span className="text-[11px] text-gray-400">{client.totalServices} services</span>
                             {client.lastServiceDate && (
-                              <span className="text-xs text-gray-400">Last: {formatDate(client.lastServiceDate)}</span>
+                              <span className="text-[11px] text-gray-400">Last: {formatDate(client.lastServiceDate)}</span>
                             )}
                           </div>
                           {client.overduePools > 0 && (
