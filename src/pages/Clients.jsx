@@ -302,8 +302,8 @@ export default function Clients() {
               ))}
             </div>
 
-            {/* Filter pills */}
-            <div className="flex gap-2 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
+            {/* Filter — wraps on mobile, no horizontal scroll */}
+            <div className="flex flex-wrap gap-2 pb-3">
               {[
                 { key: 'all', label: `All (${counts.all})` },
                 { key: 'active', label: `Active (${counts.active})` },
@@ -312,7 +312,7 @@ export default function Clients() {
                 { key: 'inactive', label: `Inactive (${counts.inactive})` },
               ].map(f => (
                 <button key={f.key} onClick={() => setCrmFilter(f.key)}
-                  className={cn('shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold min-h-tap transition-all',
+                  className={cn('px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all',
                     crmFilter === f.key ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
                       : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
                   {f.label}

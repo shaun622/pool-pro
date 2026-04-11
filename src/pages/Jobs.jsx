@@ -467,11 +467,11 @@ export default function Jobs() {
         {tab === 'jobs' ? (
           /* ─── JOBS TAB ─── */
           <>
-            {/* Status filter pills */}
-            <div className="flex gap-1.5 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
+            {/* Status filter — wraps on mobile, no horizontal scroll */}
+            <div className="flex flex-wrap gap-1.5 pb-3">
               {JOB_STATUSES.map(status => (
                 <button key={status} onClick={() => setStatusFilter(status)}
-                  className={cn('shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
+                  className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
                     statusFilter === status ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
                       : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
                   {status === 'all' ? `All (${jobs.length})` : `${JOB_STATUS_LABEL[status]} (${jobs.filter(j => j.status === status).length})`}
@@ -524,8 +524,8 @@ export default function Jobs() {
               </Card>
             )}
 
-            {/* Stage filter pills */}
-            <div className="flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
+            {/* Stage filter — wraps on mobile, no horizontal scroll */}
+            <div className="flex flex-wrap gap-2 pb-4">
               {[
                 { key: 'all', label: `All (${quotes.length})` },
                 ...PIPELINE_STAGES.filter(s => grouped[s.key].length > 0).map(s => ({
@@ -533,7 +533,7 @@ export default function Jobs() {
                 }))
               ].map(f => (
                 <button key={f.key} onClick={() => setStageFilter(f.key)}
-                  className={cn('shrink-0 px-4 py-2 rounded-xl text-xs font-semibold min-h-tap transition-all duration-200',
+                  className={cn('px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all duration-200',
                     stageFilter === f.key ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
                       : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
                   {f.label}

@@ -15,10 +15,10 @@ export default function TopNav() {
 
   return (
     <nav className="hidden md:block sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-gray-200/60 shadow-nav">
-      <div className="max-w-7xl mx-auto px-8 h-14 grid grid-cols-3 items-center">
+      <div className="max-w-7xl mx-auto px-8 h-14 flex items-center justify-between">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 group justify-self-start"
+          className="flex items-center gap-2 group"
         >
           <div className="w-8 h-8 rounded-xl bg-gradient-brand flex items-center justify-center shadow-glow">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -28,7 +28,7 @@ export default function TopNav() {
           <span className="text-base font-bold text-gray-900 group-hover:text-pool-600 transition-colors">PoolPro</span>
         </button>
 
-        <div className="flex items-center gap-1 justify-self-center">
+        <div className="flex items-center gap-1">
           {tabs.map(tab => {
             const active = tab.path === '/'
               ? location.pathname === '/'
