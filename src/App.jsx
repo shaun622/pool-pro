@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { BusinessProvider, useBusiness } from './hooks/useBusiness'
-import BottomNav from './components/layout/BottomNav'
+import AppShell from './components/layout/AppShell'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
@@ -63,12 +63,7 @@ function BusinessGuard() {
     if (user?.user_metadata?.role === 'customer') return <Navigate to="/portal" replace />
     return <Navigate to="/onboarding" replace />
   }
-  return (
-    <>
-      <Outlet />
-      <BottomNav />
-    </>
-  )
+  return <AppShell />
 }
 
 export default function App() {
