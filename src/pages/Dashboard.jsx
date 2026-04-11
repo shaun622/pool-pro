@@ -183,19 +183,18 @@ export default function Dashboard() {
               </p>
             </div>
             <div className="hidden md:flex items-center gap-3">
-              <Button
-                variant="secondary"
-                className="bg-white/15 text-white border-white/20 hover:bg-white/25 backdrop-blur"
+              <button
                 onClick={() => navigate('/route')}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-white/15 border border-white/25 hover:bg-white/25 backdrop-blur transition-colors"
               >
                 View Schedule
-              </Button>
-              <Button
-                className="bg-white text-pool-600 hover:bg-pool-50"
+              </button>
+              <button
                 onClick={() => navigate('/jobs')}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-pool-700 bg-white hover:bg-pool-50 shadow-md transition-colors"
               >
                 Open Jobs
-              </Button>
+              </button>
             </div>
           </div>
         </div>
