@@ -184,7 +184,17 @@ export default function Clients() {
   // Active clients = those with at least one pool
   const activeClients = rawClients.filter(c => (poolsByClient[c.id] || []).length > 0)
   const filtered = activeClients.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
-  const filteredCRM = crmFilter === 'all' ? crmClients : crmClients.filter(c => c.crmStatus === crmFilter)
+  const filteredCRM = crmClients.filter(c => {
+    if (crmFilter !== 'all' && c.crmStatus !== crmFilter) return false
+    if (!search.trim()) return true
+    const q = search.toLowerCase()
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q)
+    )
+  })
 
   const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
@@ -318,6 +328,11 @@ export default function Clients() {
         ) : (
           /* ─── CRM VIEW ─── */
           <>
+            {/* Search */}
+            <div className="mb-4">
+              <Input placeholder="Search by name, email, phone, or address..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+
             {/* Summary cards */}
             <div className="grid grid-cols-4 gap-2 mb-4">
               {[
