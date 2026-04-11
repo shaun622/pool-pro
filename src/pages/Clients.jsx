@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -11,79 +11,70 @@ import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
-import { useBusiness } from '../hooks/useBusiness'
-import { supabase } from '../lib/supabase'
-import { formatDate, cn, FREQUENCY_LABELS } from '../lib/utils'
+import { cn } from '../lib/utils'
+
+// ─── STATUS LOGIC ──────────────────────────────────
+const STATUS = {
+  overdue:     { label: 'Overdue',     badge: 'danger',  dot: 'bg-red-500',    text: 'text-red-600',    pillActive: 'bg-red-500 text-white',    pillIdle: 'text-red-600 bg-red-50' },
+  due_soon:    { label: 'Due Soon',    badge: 'warning', dot: 'bg-amber-500',  text: 'text-amber-600',  pillActive: 'bg-amber-500 text-white',  pillIdle: 'text-amber-700 bg-amber-50' },
+  up_to_date:  { label: 'Up to Date',  badge: 'success', dot: 'bg-green-500',  text: 'text-green-600',  pillActive: 'bg-green-500 text-white',  pillIdle: 'text-green-700 bg-green-50' },
+  no_schedule: { label: 'No Schedule', badge: 'default', dot: 'bg-gray-300',   text: 'text-gray-500',   pillActive: 'bg-gray-700 text-white',   pillIdle: 'text-gray-600 bg-gray-100' },
+}
+
+function computeStatus(clientPools) {
+  if (!clientPools.length) return 'no_schedule'
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const soonCutoff = new Date(startOfToday)
+  soonCutoff.setDate(soonCutoff.getDate() + 3)
+
+  let hasSchedule = false
+  let anyOverdue = false
+  let anyDueSoon = false
+  for (const p of clientPools) {
+    if (!p.next_due_at) continue
+    hasSchedule = true
+    const due = new Date(p.next_due_at)
+    if (due < startOfToday) anyOverdue = true
+    else if (due <= soonCutoff) anyDueSoon = true
+  }
+  if (anyOverdue) return 'overdue'
+  if (anyDueSoon) return 'due_soon'
+  if (hasSchedule) return 'up_to_date'
+  return 'no_schedule'
+}
 
 // ─── CLIENT CARD ───────────────────────────────────
-function ClientCard({ client, clientPools, onClick }) {
-  const initials = client.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+function ClientCard({ client, clientPools, status, onClick }) {
+  const initials = (client.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const st = STATUS[status]
   const poolCount = clientPools.length
-
-  // Find the most urgent pool (soonest due or most overdue)
-  const now = new Date()
-  const nextDuePool = clientPools
-    .filter(p => p.next_due_at)
-    .sort((a, b) => new Date(a.next_due_at) - new Date(b.next_due_at))[0]
-
-  const overduePools = clientPools.filter(p => p.next_due_at && new Date(p.next_due_at) < now)
-  const isDueToday = nextDuePool && !overduePools.includes(nextDuePool) &&
-    new Date(nextDuePool.next_due_at) <= new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
 
   return (
     <Card onClick={onClick}>
-      <div className="flex items-center gap-3.5">
-        {/* Avatar with status indicator */}
-        <div className="relative shrink-0">
-          <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center shadow-sm',
-            overduePools.length > 0 ? 'bg-red-500 shadow-red-500/20'
-              : isDueToday ? 'bg-amber-500 shadow-amber-500/20'
-              : 'bg-gradient-brand shadow-pool-500/20')}>
-            <span className="text-sm font-bold text-white">{initials}</span>
+      <div className="flex items-start gap-3">
+        <div className="w-11 h-11 rounded-xl bg-gradient-brand shadow-sm shadow-pool-500/20 flex items-center justify-center shrink-0">
+          <span className="text-sm font-bold text-white">{initials}</span>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <h3 className="text-sm font-semibold text-gray-900 truncate">{client.name}</h3>
+            <Badge variant={st.badge} className="text-[10px] shrink-0">{st.label}</Badge>
           </div>
-          {overduePools.length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 border-2 border-white rounded-full text-[8px] text-white font-bold flex items-center justify-center">
-              {overduePools.length}
+
+          {client.email && <p className="text-xs text-gray-500 truncate">{client.email}</p>}
+          {client.phone && <p className="text-xs text-gray-500 truncate">{client.phone}</p>}
+
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <div className={cn('w-1.5 h-1.5 rounded-full', st.dot)} />
+            <span className="text-[11px] text-gray-400">
+              {poolCount} pool{poolCount !== 1 ? 's' : ''}
             </span>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900 truncate">{client.name}</h3>
-            {poolCount > 0 && (
-              <span className="text-[10px] font-semibold text-gray-400 shrink-0">
-                {poolCount} pool{poolCount !== 1 ? 's' : ''}
-              </span>
-            )}
           </div>
-          {/* Service status line */}
-          {nextDuePool ? (
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <div className={cn('w-1.5 h-1.5 rounded-full shrink-0',
-                overduePools.length > 0 ? 'bg-red-500' : isDueToday ? 'bg-amber-500' : 'bg-green-500')} />
-              <p className={cn('text-xs truncate',
-                overduePools.length > 0 ? 'text-red-600 font-medium'
-                  : isDueToday ? 'text-amber-600 font-medium'
-                  : 'text-gray-400')}>
-                {overduePools.length > 0
-                  ? `${overduePools.length} overdue`
-                  : isDueToday
-                  ? 'Due today'
-                  : `Next: ${formatDate(nextDuePool.next_due_at)}`}
-                {nextDuePool.schedule_frequency && (
-                  <span className="text-gray-400 font-normal"> · {FREQUENCY_LABELS[nextDuePool.schedule_frequency] || nextDuePool.schedule_frequency}</span>
-                )}
-              </p>
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 mt-0.5">
-              {poolCount === 0 ? 'No pools' : 'No schedule set'}
-            </p>
-          )}
         </div>
 
-        <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-4 h-4 text-gray-300 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       </div>
@@ -91,110 +82,58 @@ function ClientCard({ client, clientPools, onClick }) {
   )
 }
 
-// ─── CRM STATUS LOGIC ──────────────────────────────
-const STATUS_STYLES = {
-  active: { color: 'text-green-600', bg: 'bg-green-50', label: 'Active', badge: 'success' },
-  follow_up: { color: 'text-amber-600', bg: 'bg-amber-50', label: 'Follow Up', badge: 'warning' },
-  new: { color: 'text-blue-600', bg: 'bg-blue-50', label: 'New', badge: 'primary' },
-  inactive: { color: 'text-gray-500', bg: 'bg-gray-100', label: 'Inactive', badge: 'default' },
-}
-
-function useCRMData(businessId) {
-  const [clients, setClients] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!businessId) return
-    async function fetch() {
-      setLoading(true)
-      const { data } = await supabase
-        .from('clients')
-        .select('*, pools(id, address, next_due_at, last_serviced_at, service_records(id, serviced_at, status))')
-        .eq('business_id', businessId)
-        .order('name')
-
-      const enriched = (data || []).map(client => {
-        const allPools = client.pools || []
-        const allServices = allPools.flatMap(p => (p.service_records || []))
-        const completedServices = allServices.filter(s => s.status === 'completed')
-        const lastService = completedServices.sort((a, b) => new Date(b.serviced_at) - new Date(a.serviced_at))[0]
-        const daysSinceService = lastService
-          ? Math.floor((Date.now() - new Date(lastService.serviced_at)) / (1000 * 60 * 60 * 24))
-          : null
-        const overduePools = allPools.filter(p => p.next_due_at && new Date(p.next_due_at) < new Date())
-
-        return {
-          ...client,
-          totalServices: completedServices.length,
-          lastServiceDate: lastService?.serviced_at,
-          daysSinceService,
-          poolCount: allPools.length,
-          overduePools: overduePools.length,
-          crmStatus: daysSinceService === null ? 'new'
-            : daysSinceService > 60 ? 'inactive'
-            : overduePools.length > 0 ? 'follow_up'
-            : 'active',
-        }
-      })
-
-      setClients(enriched)
-      setLoading(false)
-    }
-    fetch()
-  }, [businessId])
-
-  const counts = {
-    all: clients.length,
-    active: clients.filter(c => c.crmStatus === 'active').length,
-    follow_up: clients.filter(c => c.crmStatus === 'follow_up').length,
-    new: clients.filter(c => c.crmStatus === 'new').length,
-    inactive: clients.filter(c => c.crmStatus === 'inactive').length,
-  }
-
-  return { clients, loading, counts }
-}
-
 // ─── MAIN COMPONENT ────────────────────────────────
 const emptyClient = { name: '', email: '', phone: '', address: '', notes: '' }
 
 export default function Clients() {
   const navigate = useNavigate()
-  const { clients: rawClients, loading: clientsLoading, createClient } = useClients()
-  const { pools } = usePools()
-  const { business } = useBusiness()
-  const [view, setView] = useState('list') // 'list' | 'crm'
+  const { clients, loading: clientsLoading, createClient } = useClients()
+  const { pools, loading: poolsLoading } = usePools()
   const [search, setSearch] = useState('')
-  const [crmFilter, setCrmFilter] = useState('all')
+  const [filter, setFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyClient)
   const [saving, setSaving] = useState(false)
 
+  const loading = clientsLoading || poolsLoading
 
-  // CRM data (only fetched when in CRM view)
-  const { clients: crmClients, loading: crmLoading, counts } = useCRMData(
-    view === 'crm' ? business?.id : null
-  )
+  const poolsByClient = useMemo(() => {
+    const map = {}
+    for (const p of pools) {
+      if (!map[p.client_id]) map[p.client_id] = []
+      map[p.client_id].push(p)
+    }
+    return map
+  }, [pools])
 
-  const poolsByClient = pools.reduce((acc, pool) => {
-    if (!acc[pool.client_id]) acc[pool.client_id] = []
-    acc[pool.client_id].push(pool)
-    return acc
-  }, {})
+  const enriched = useMemo(() => {
+    return clients.map(c => {
+      const cp = poolsByClient[c.id] || []
+      return { ...c, _pools: cp, _status: computeStatus(cp) }
+    })
+  }, [clients, poolsByClient])
 
-  // Active clients = those with at least one pool
-  const activeClients = rawClients.filter(c => (poolsByClient[c.id] || []).length > 0)
-  const filtered = activeClients.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
-  const filteredCRM = crmClients.filter(c => {
-    if (crmFilter !== 'all' && c.crmStatus !== crmFilter) return false
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return (
-      (c.name || '').toLowerCase().includes(q) ||
-      (c.email || '').toLowerCase().includes(q) ||
-      (c.phone || '').toLowerCase().includes(q) ||
-      (c.address || '').toLowerCase().includes(q)
-    )
-  })
+  const counts = useMemo(() => ({
+    all: enriched.length,
+    overdue: enriched.filter(c => c._status === 'overdue').length,
+    due_soon: enriched.filter(c => c._status === 'due_soon').length,
+    up_to_date: enriched.filter(c => c._status === 'up_to_date').length,
+    no_schedule: enriched.filter(c => c._status === 'no_schedule').length,
+  }), [enriched])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return enriched.filter(c => {
+      if (filter !== 'all' && c._status !== filter) return false
+      if (!q) return true
+      return (
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
+        (c.phone || '').toLowerCase().includes(q) ||
+        (c.address || '').toLowerCase().includes(q)
+      )
+    })
+  }, [enriched, filter, search])
 
   const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
@@ -203,18 +142,16 @@ export default function Clients() {
     if (!form.name.trim()) return
     setSaving(true)
     try {
-      const clientData = {
+      const created = await createClient({
         name: form.name.trim(),
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
         address: form.address.trim() || null,
         notes: form.notes.trim() || null,
-      }
-      const created = await createClient(clientData)
+      })
       if (!created?.id) throw new Error('No client ID returned')
       setModalOpen(false)
       setForm(emptyClient)
-      // Navigate to client detail with flag to auto-open pool modal
       navigate(`/clients/${created.id}?addPool=1`)
     } catch (err) {
       console.error('Error creating client:', err)
@@ -223,60 +160,35 @@ export default function Clients() {
     }
   }
 
-  // Header actions
+  const filters = [
+    { key: 'all',         label: 'All' },
+    { key: 'overdue',     label: 'Overdue' },
+    { key: 'due_soon',    label: 'Due Soon' },
+    { key: 'up_to_date',  label: 'Up to Date' },
+    { key: 'no_schedule', label: 'No Schedule' },
+  ]
+
   const headerAction = (
-    <div className="flex items-center gap-1">
-      {view === 'list' ? (
-        <button
-          onClick={() => setView('crm')}
-          className="min-h-tap px-3 flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
-        >
-          <span className="text-xs font-semibold text-pool-600">View All</span>
-        </button>
-      ) : (
-        <button
-          onClick={() => setView('list')}
-          className="min-h-tap px-3 flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
-        >
-          <span className="text-xs font-semibold text-pool-600">Active</span>
-        </button>
-      )}
-      <button
-        onClick={() => setModalOpen(true)}
-        className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
-      >
-        <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-      </button>
-    </div>
+    <button
+      onClick={() => setModalOpen(true)}
+      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
+      aria-label="Add client"
+    >
+      <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+      </svg>
+    </button>
   )
 
   return (
     <>
-      <Header title={view === 'list' ? 'Active Clients' : 'All Clients'} right={headerAction} />
+      <Header title="Clients" right={headerAction} />
       <PageWrapper width="wide">
-        {/* Desktop view switcher — proper buttons */}
+        {/* Desktop title row */}
         <div className="hidden md:flex items-center justify-between mb-5">
-          <div className="inline-flex rounded-xl bg-gray-100 p-1">
-            <button
-              onClick={() => setView('list')}
-              className={cn(
-                'px-5 py-2 rounded-lg text-sm font-semibold transition-all',
-                view === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              Active Clients
-            </button>
-            <button
-              onClick={() => setView('crm')}
-              className={cn(
-                'px-5 py-2 rounded-lg text-sm font-semibold transition-all',
-                view === 'crm' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              All Clients
-            </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{counts.all} customer{counts.all !== 1 ? 's' : ''}</p>
           </div>
           <button
             onClick={() => setModalOpen(true)}
@@ -289,164 +201,85 @@ export default function Clients() {
           </button>
         </div>
 
-        {view === 'list' ? (
-          /* ─── LIST VIEW ─── */
-          <>
-            <div className="mb-5">
-              <Input placeholder="Search clients..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+        {/* Search */}
+        <div className="mb-3">
+          <Input
+            placeholder="Search by name, email, phone, or address..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
 
-            {clientsLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : filtered.length === 0 ? (
-              search ? (
-                <EmptyState
-                  icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
-                  title="No results"
-                  description={`No clients matching "${search}"`}
-                />
-              ) : (
-                <EmptyState
-                  icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                  title="No clients yet"
-                  description="Add your first client to get started"
-                  action="Add Client"
-                  onAction={() => setModalOpen(true)}
-                />
-              )
-            ) : (
-              <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
-                {filtered.map(client => (
-                  <ClientCard key={client.id} client={client} clientPools={poolsByClient[client.id] || []}
-                    onClick={() => navigate(`/clients/${client.id}`)} />
-                ))}
-              </div>
-            )}
-          </>
+        {/* Status filter pills */}
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {filters.map(f => {
+            const active = filter === f.key
+            const count = counts[f.key]
+            const st = f.key === 'all' ? null : STATUS[f.key]
+            const activeClass = f.key === 'all'
+              ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
+              : st.pillActive
+            const idleClass = f.key === 'all'
+              ? 'bg-white text-gray-600 border border-gray-200'
+              : st.pillIdle
+            return (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  'px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all flex items-center gap-1.5',
+                  active ? activeClass : idleClass
+                )}
+              >
+                <span>{f.label}</span>
+                <span className={cn('text-[10px] font-bold opacity-80')}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* List */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          search || filter !== 'all' ? (
+            <EmptyState
+              icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
+              title="No results"
+              description={search ? `No clients matching "${search}"` : 'No clients in this filter'}
+            />
+          ) : (
+            <EmptyState
+              icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+              title="No clients yet"
+              description="Add your first client to get started"
+              action="Add Client"
+              onAction={() => setModalOpen(true)}
+            />
+          )
         ) : (
-          /* ─── CRM VIEW ─── */
-          <>
-            {/* Search */}
-            <div className="mb-4">
-              <Input placeholder="Search by name, email, phone, or address..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-
-            {/* Summary cards */}
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              {[
-                { key: 'active', count: counts.active, color: 'text-green-600', bg: 'from-green-50' },
-                { key: 'follow_up', count: counts.follow_up, color: 'text-amber-600', bg: 'from-amber-50', label: 'Follow Up' },
-                { key: 'new', count: counts.new, color: 'text-blue-600', bg: 'from-blue-50' },
-                { key: 'inactive', count: counts.inactive, color: 'text-gray-500', bg: 'from-gray-50' },
-              ].map(s => (
-                <button key={s.key} onClick={() => setCrmFilter(crmFilter === s.key ? 'all' : s.key)}
-                  className={cn('rounded-xl py-3 text-center transition-all bg-gradient-to-br to-white',
-                    s.bg, crmFilter === s.key && 'ring-2 ring-pool-400 ring-offset-1')}>
-                  <p className={cn('text-lg font-bold', s.color)}>{s.count}</p>
-                  <p className="text-[9px] text-gray-500 uppercase font-semibold">{s.label || s.key}</p>
-                </button>
-              ))}
-            </div>
-
-            {/* Filter — wraps on mobile, no horizontal scroll */}
-            <div className="flex flex-wrap gap-2 pb-3">
-              {[
-                { key: 'all', label: `All (${counts.all})` },
-                { key: 'active', label: `Active (${counts.active})` },
-                { key: 'follow_up', label: `Follow Up (${counts.follow_up})` },
-                { key: 'new', label: `New (${counts.new})` },
-                { key: 'inactive', label: `Inactive (${counts.inactive})` },
-              ].map(f => (
-                <button key={f.key} onClick={() => setCrmFilter(f.key)}
-                  className={cn('px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all',
-                    crmFilter === f.key ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
-                      : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {/* CRM client list */}
-            {crmLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : filteredCRM.length === 0 ? (
-              <EmptyState
-                icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                title="No clients in this filter"
-                description="Try a different filter"
+          <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
+            {filtered.map(client => (
+              <ClientCard
+                key={client.id}
+                client={client}
+                clientPools={client._pools}
+                status={client._status}
+                onClick={() => navigate(`/clients/${client.id}`)}
               />
-            ) : (
-              <div className="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
-                {filteredCRM.map(client => {
-                  const st = STATUS_STYLES[client.crmStatus] || STATUS_STYLES.active
-                  return (
-                    <Card key={client.id} onClick={() => navigate(`/clients/${client.id}`)}>
-                      <div className="flex items-start gap-3">
-                        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold', st.bg, st.color)}>
-                          {(client.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{client.name}</p>
-                            <Badge variant={st.badge} className="text-[10px] shrink-0">{st.label}</Badge>
-                          </div>
-                          {(client.email || client.phone) && (
-                            <div className="space-y-0.5 mt-1">
-                              {client.email && (
-                                <p className="text-xs text-gray-500 truncate">{client.email}</p>
-                              )}
-                              {client.phone && (
-                                <p className="text-xs text-gray-500 truncate">{client.phone}</p>
-                              )}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-[11px] text-gray-400">{client.poolCount} pool{client.poolCount !== 1 ? 's' : ''}</span>
-                            <span className="text-[11px] text-gray-400">{client.totalServices} services</span>
-                            {client.lastServiceDate && (
-                              <span className="text-[11px] text-gray-400">Last: {formatDate(client.lastServiceDate)}</span>
-                            )}
-                          </div>
-                          {client.overduePools > 0 && (
-                            <p className="text-xs text-amber-600 font-medium mt-1">{client.overduePools} overdue pool{client.overduePools > 1 ? 's' : ''}</p>
-                          )}
-                        </div>
-                        {/* Quick actions */}
-                        <div className="flex gap-1 shrink-0">
-                          {client.phone && (
-                            <a href={`tel:${client.phone}`} onClick={e => e.stopPropagation()}
-                              className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-green-50 transition-colors">
-                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                              </svg>
-                            </a>
-                          )}
-                          {client.email && (
-                            <a href={`mailto:${client.email}`} onClick={e => e.stopPropagation()}
-                              className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-blue-50 transition-colors">
-                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </Card>
-                  )
-                })}
-              </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
 
         {/* FAB */}
-        {!clientsLoading && rawClients.length > 0 && (
-          <button onClick={() => setModalOpen(true)}
-            className="fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20">
+        {!loading && clients.length > 0 && (
+          <button
+            onClick={() => setModalOpen(true)}
+            className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20"
+            aria-label="Add client"
+          >
             <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>

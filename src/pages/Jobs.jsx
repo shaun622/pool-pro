@@ -15,26 +15,6 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
 
-const RECURRENCE_OPTIONS = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'fortnightly', label: 'Fortnightly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: '6_weekly', label: 'Every 6 Weeks' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'custom', label: 'Custom Interval' },
-]
-
-const DAY_OPTIONS = [
-  { value: '', label: 'Any day' },
-  { value: '1', label: 'Monday' },
-  { value: '2', label: 'Tuesday' },
-  { value: '3', label: 'Wednesday' },
-  { value: '4', label: 'Thursday' },
-  { value: '5', label: 'Friday' },
-  { value: '6', label: 'Saturday' },
-  { value: '0', label: 'Sunday' },
-]
-
 const JOB_STATUS_BADGE = {
   scheduled: 'primary',
   in_progress: 'warning',
@@ -143,7 +123,6 @@ export default function Jobs() {
   const [jobForm, setJobForm] = useState({
     client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
     scheduled_time: '09:00', notes: '', price: '',
-    is_recurring: false, recurrence_rule: 'weekly', custom_interval_days: '', preferred_day_of_week: '',
   })
   const [jobSaving, setJobSaving] = useState(false)
   const jobSubmittingRef = useRef(false)
@@ -198,6 +177,7 @@ export default function Jobs() {
     const [jobsRes, quotesRes] = await Promise.all([
       supabase.from('jobs').select('*, clients(name, email, phone), pools(address, latitude, longitude)')
         .eq('business_id', business.id)
+        .is('recurring_profile_id', null)
         .order('created_at', { ascending: false }),
       supabase.from('quotes').select('*, clients(name)')
         .eq('business_id', business.id)
@@ -239,7 +219,6 @@ export default function Jobs() {
     setJobForm({
       client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
       scheduled_time: '09:00', notes: '', price: '',
-      is_recurring: false, recurrence_rule: 'weekly', custom_interval_days: '', preferred_day_of_week: '',
     })
     setShowNewPool(false)
     setNewPoolForm(emptyPool)
@@ -287,26 +266,6 @@ export default function Jobs() {
         notes: jobForm.notes.trim() || null,
       }).select('*, clients(name), pools(address)').single()
       if (error) throw error
-
-      if (jobForm.is_recurring) {
-        const intervals = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90, custom: Number(jobForm.custom_interval_days) || 7 }
-        const days = intervals[jobForm.recurrence_rule] || 7
-        const nextGen = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-        await supabase.from('recurring_job_profiles').insert({
-          business_id: business.id,
-          client_id: jobForm.client_id,
-          pool_id: jobForm.pool_id || null,
-          title: jobForm.title.trim(),
-          recurrence_rule: jobForm.recurrence_rule,
-          custom_interval_days: jobForm.recurrence_rule === 'custom' ? Number(jobForm.custom_interval_days) || 7 : null,
-          preferred_day_of_week: jobForm.preferred_day_of_week !== '' ? Number(jobForm.preferred_day_of_week) : null,
-          preferred_time: jobForm.scheduled_time || null,
-          price: jobForm.price ? Number(jobForm.price) : null,
-          notes: jobForm.notes.trim() || null,
-          next_generation_at: nextGen.toISOString(),
-          last_generated_at: new Date().toISOString(),
-        })
-      }
 
       // Log activity
       await supabase.from('activity_feed').insert({
@@ -741,60 +700,14 @@ export default function Jobs() {
             required
           />
 
-          {/* Recurring toggle */}
-          <label className="flex items-center justify-between min-h-tap cursor-pointer">
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+            <p className="text-xs text-gray-500">
+              <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-sm font-medium text-gray-700">Make this recurring</span>
-            </div>
-            <div className={cn('relative w-11 h-6 rounded-full transition-colors',
-              jobForm.is_recurring ? 'bg-pool-500' : 'bg-gray-200')}>
-              <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                jobForm.is_recurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
-              <input type="checkbox" className="sr-only"
-                checked={jobForm.is_recurring}
-                onChange={e => setJobForm(prev => ({ ...prev, is_recurring: e.target.checked }))} />
-            </div>
-          </label>
-
-          {jobForm.is_recurring && (
-            <div className="space-y-3 animate-fade-in">
-              <div className="grid grid-cols-2 gap-3">
-                <Select
-                  label="Frequency"
-                  value={jobForm.recurrence_rule}
-                  onChange={e => setJobForm(prev => ({ ...prev, recurrence_rule: e.target.value }))}
-                  options={RECURRENCE_OPTIONS}
-                />
-                {jobForm.recurrence_rule === 'custom' ? (
-                  <Input
-                    label="Interval (days)"
-                    type="number"
-                    value={jobForm.custom_interval_days}
-                    onChange={e => setJobForm(prev => ({ ...prev, custom_interval_days: e.target.value }))}
-                    placeholder="10"
-                  />
-                ) : (
-                  <Select
-                    label="Preferred Day"
-                    value={jobForm.preferred_day_of_week}
-                    onChange={e => setJobForm(prev => ({ ...prev, preferred_day_of_week: e.target.value }))}
-                    options={DAY_OPTIONS}
-                  />
-                )}
-              </div>
-              <div className="bg-pool-50 border border-pool-200 rounded-lg p-2.5">
-                <p className="text-xs text-pool-600">
-                  <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Creates the first job now and auto-generates future jobs on this frequency.
-                </p>
-              </div>
-            </div>
-          )}
+              One-off job. For recurring services, use <strong>Schedule → Recurring</strong>.
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Input
