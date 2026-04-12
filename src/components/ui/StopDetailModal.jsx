@@ -50,6 +50,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [assigning, setAssigning] = useState(false)
+  const [pendingStaffId, setPendingStaffId] = useState(null)
   const [form, setForm] = useState({})
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         })
       }
       setEditing(false)
+      setPendingStaffId(null)
     }
   }, [stop])
 
@@ -406,24 +408,56 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               <DetailRow icon={<NoteIcon />} label="Notes" value={stop.notes} />
             )}
             {staffList.length > 0 && (
-              <div className="flex items-center gap-3 px-4 py-3">
-                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600">
-                  <UserIcon />
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600">
+                    <UserIcon />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Assigned Tech</p>
+                    <CustomSelect
+                      inline
+                      value={pendingStaffId !== null ? pendingStaffId : (stop.assigned_staff_id || '')}
+                      onChange={e => {
+                        const newVal = e.target.value
+                        if (newVal === (stop.assigned_staff_id || '')) {
+                          setPendingStaffId(null)
+                        } else {
+                          setPendingStaffId(newVal)
+                        }
+                      }}
+                      disabled={assigning}
+                      placeholder="Unassigned"
+                      options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
+                      className="mt-1"
+                    />
+                  </div>
+                  {assigning && (
+                    <div className="w-4 h-4 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+                  )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Assigned Tech</p>
-                  <CustomSelect
-                    inline
-                    value={stop.assigned_staff_id || ''}
-                    onChange={e => handleAssign(e.target.value)}
-                    disabled={assigning}
-                    placeholder="Unassigned"
-                    options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
-                    className="mt-1"
-                  />
-                </div>
-                {assigning && (
-                  <div className="w-4 h-4 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+                {pendingStaffId !== null && (
+                  <div className="flex items-center gap-2 mt-2 ml-12 animate-scale-in">
+                    <button
+                      onClick={() => setPendingStaffId(null)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors min-h-[32px]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await handleAssign(pendingStaffId)
+                        setPendingStaffId(null)
+                      }}
+                      disabled={assigning}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-pool-600 hover:bg-pool-700 transition-colors min-h-[32px] flex items-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Confirm
+                    </button>
+                  </div>
                 )}
               </div>
             )}
