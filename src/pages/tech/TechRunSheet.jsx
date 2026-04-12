@@ -559,8 +559,10 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 truncate">{stop.title || 'Pool Service'}</p>
-              {stop.client_name && <p className="text-xs text-gray-500 mt-0.5">{stop.client_name}</p>}
+              <p className="font-semibold text-gray-900 truncate">{stop.client_name || stop.title || 'Pool Service'}</p>
+              {stop.client_name && stop.title && stop.title !== 'Pool Service' && (
+                <p className="text-xs text-gray-500 mt-0.5">{stop.title}</p>
+              )}
               {stop.address && <p className="text-xs text-pool-600 mt-0.5 truncate">{stop.address}</p>}
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
