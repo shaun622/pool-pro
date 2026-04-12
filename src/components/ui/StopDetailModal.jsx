@@ -48,6 +48,7 @@ const STATUS_VARIANTS = {
 export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated, staffList = [] }) {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
+  const [quickEdit, setQuickEdit] = useState(false)
   const [saving, setSaving] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [pendingStaffId, setPendingStaffId] = useState(null)
@@ -104,6 +105,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         })
       }
       setEditing(false)
+      setQuickEdit(false)
       setPendingStaffId(null)
     }
   }, [stop])
@@ -315,6 +317,76 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
+  async function handleQuickSave() {
+    setSaving(true)
+    try {
+      // Save pool/job address
+      if (stop.type === 'pool') {
+        const newAddr = (form.pool_address || '').trim()
+        const oldAddr = (stop.address || '').trim()
+        if (newAddr !== oldAddr) {
+          let lat = form.pool_address_lat
+          let lng = form.pool_address_lng
+          if ((lat == null || lng == null) && newAddr) {
+            try {
+              const geo = await geocodeAddress(newAddr)
+              if (geo) { lat = geo.lat; lng = geo.lng }
+            } catch { /* non-fatal */ }
+          }
+          await supabase.from('pools').update({
+            address: newAddr,
+            latitude: lat ?? null,
+            longitude: lng ?? null,
+            geocoded_at: lat != null ? new Date().toISOString() : null,
+          }).eq('id', stop.id)
+        }
+        // Save notes
+        if ((form.access_notes || '') !== (stop.access_notes || '')) {
+          await supabase.from('pools').update({ access_notes: form.access_notes || null }).eq('id', stop.id)
+        }
+      } else if (stop.type === 'job') {
+        const newAddr = (form.address || '').trim()
+        const oldAddr = (stop.address || '').trim()
+        if (newAddr !== oldAddr && stop.pool_id) {
+          let lat = form.address_lat
+          let lng = form.address_lng
+          if ((lat == null || lng == null) && newAddr) {
+            try {
+              const geo = await geocodeAddress(newAddr)
+              if (geo) { lat = geo.lat; lng = geo.lng }
+            } catch { /* non-fatal */ }
+          }
+          await supabase.from('pools').update({
+            address: newAddr,
+            latitude: lat ?? null,
+            longitude: lng ?? null,
+          }).eq('id', stop.pool_id)
+        }
+        // Save notes
+        const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
+        if (!isProjected && (form.notes || '') !== (stop.notes || '')) {
+          await supabase.from('jobs').update({ notes: form.notes || null }).eq('id', stop.id)
+        }
+      }
+      // Save client contact info
+      if (stop.client_id) {
+        const clientUpdates = {}
+        if ((form.client_phone || '').trim() !== (stop.phone || '')) clientUpdates.phone = form.client_phone.trim() || null
+        if ((form.client_email || '').trim() !== (stop.email || '')) clientUpdates.email = form.client_email.trim() || null
+        if (Object.keys(clientUpdates).length > 0) {
+          await supabase.from('clients').update(clientUpdates).eq('id', stop.client_id)
+        }
+      }
+      setQuickEdit(false)
+      onUpdated?.()
+    } catch (err) {
+      console.error('Quick save error:', err)
+      alert(err.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleStartJob() {
     if (stop.type === 'job') {
       await supabase.from('jobs').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', stop.id)
@@ -398,15 +470,47 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           </Badge>
         </div>
 
-        {/* Details — view mode */}
+        {/* Details — view / quick-edit mode */}
         {!editing && (
-          <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-100">
-            <DetailRow
-              icon={<PinIcon />}
-              label="Site Address"
-              value={stop.address}
-              action={
-                stop.address && (
+          <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-100 relative">
+            {/* Quick edit pencil button */}
+            {!quickEdit && (
+              <button
+                onClick={() => setQuickEdit(true)}
+                className="absolute top-2 right-2 p-2 rounded-xl text-gray-400 hover:text-pool-600 hover:bg-pool-50 transition-colors z-10"
+                title="Quick edit"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            )}
+
+            {/* Address */}
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><PinIcon /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Site Address</p>
+                  {quickEdit ? (
+                    <AddressAutocomplete
+                      value={stop.type === 'pool' ? form.pool_address : form.address}
+                      onChange={(v) => stop.type === 'pool'
+                        ? setForm(f => ({ ...f, pool_address: v, pool_address_lat: null, pool_address_lng: null }))
+                        : setForm(f => ({ ...f, address: v, address_lat: null, address_lng: null }))
+                      }
+                      onSelect={({ address, lat, lng }) => stop.type === 'pool'
+                        ? setForm(f => ({ ...f, pool_address: address, pool_address_lat: lat, pool_address_lng: lng }))
+                        : setForm(f => ({ ...f, address, address_lat: lat, address_lng: lng }))
+                      }
+                      placeholder="Start typing an address..."
+                      className="mt-1"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium text-gray-900 truncate">{stop.address || '—'}</div>
+                  )}
+                </div>
+                {!quickEdit && stop.address && (
                   <a
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.address)}`}
                     target="_blank"
@@ -415,9 +519,11 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   >
                     Open
                   </a>
-                )
-              }
-            />
+                )}
+              </div>
+            </div>
+
+            {/* Scheduled */}
             <DetailRow
               icon={<CalIcon />}
               label="Scheduled"
@@ -437,23 +543,82 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 value={FREQUENCY_LABELS[stop.frequency] || stop.frequency}
               />
             )}
-            {stop.phone && (
-              <DetailRow
-                icon={<PhoneIcon />}
-                label="Client Phone"
-                value={<a href={`tel:${stop.phone}`} className="text-pool-600 font-semibold">{stop.phone}</a>}
-              />
-            )}
-            {stop.email && (
-              <DetailRow
-                icon={<MailIcon />}
-                label="Client Email"
-                value={<a href={`mailto:${stop.email}`} className="text-pool-600 font-semibold break-all">{stop.email}</a>}
-              />
-            )}
-            {stop.notes && (
-              <DetailRow icon={<NoteIcon />} label="Notes" value={stop.notes} />
-            )}
+
+            {/* Phone */}
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><PhoneIcon /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Client Phone</p>
+                  {quickEdit ? (
+                    <input
+                      type="tel"
+                      value={form.client_phone}
+                      onChange={e => setForm(f => ({ ...f, client_phone: e.target.value }))}
+                      placeholder="e.g. 0412 345 678"
+                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium text-gray-900">
+                      {stop.phone ? (
+                        <a href={`tel:${stop.phone}`} className="text-pool-600 font-semibold">{stop.phone}</a>
+                      ) : '—'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Email */}
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><MailIcon /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Client Email</p>
+                  {quickEdit ? (
+                    <input
+                      type="email"
+                      value={form.client_email}
+                      onChange={e => setForm(f => ({ ...f, client_email: e.target.value }))}
+                      placeholder="e.g. client@email.com"
+                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium text-gray-900">
+                      {stop.email ? (
+                        <a href={`mailto:${stop.email}`} className="text-pool-600 font-semibold break-all">{stop.email}</a>
+                      ) : '—'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><NoteIcon /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Notes</p>
+                  {quickEdit ? (
+                    <textarea
+                      value={stop.type === 'pool' ? form.access_notes : form.notes}
+                      onChange={e => stop.type === 'pool'
+                        ? setForm(f => ({ ...f, access_notes: e.target.value }))
+                        : setForm(f => ({ ...f, notes: e.target.value }))
+                      }
+                      placeholder="Gate code, dog, key location..."
+                      rows={2}
+                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500 resize-none"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium text-gray-900">{(stop.type === 'pool' ? stop.access_notes : stop.notes) || '—'}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Tech assign */}
             {staffList.length > 0 && (
               <div className="px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -506,6 +671,42 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Quick edit save/cancel bar */}
+            {quickEdit && (
+              <div className="px-4 py-3 flex gap-2">
+                <button
+                  onClick={() => {
+                    setQuickEdit(false)
+                    // Reset form to original stop values
+                    if (stop.type === 'pool') {
+                      setForm(f => ({ ...f, pool_address: stop.address || '', pool_address_lat: stop.lat ?? null, pool_address_lng: stop.lng ?? null, client_phone: stop.phone || '', client_email: stop.email || '', access_notes: stop.access_notes || '' }))
+                    } else {
+                      setForm(f => ({ ...f, address: stop.address || '', address_lat: stop.lat ?? null, address_lng: stop.lng ?? null, client_phone: stop.phone || '', client_email: stop.email || '', notes: stop.notes || '' }))
+                    }
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleQuickSave}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-pool-600 hover:bg-pool-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  {saving ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Save
+                    </>
+                  )}
+                </button>
               </div>
             )}
           </div>
