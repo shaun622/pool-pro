@@ -111,6 +111,9 @@ export default function App() {
                 <Route element={<TechGuard />}>
                   <Route path="/tech" element={<TechRunSheet />} />
                   <Route path="/tech/profile" element={<TechProfile />} />
+                  <Route path="/pools/:id/service" element={<NewService />} />
+                  <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
+                  <Route path="/services/:id" element={<ServiceDetail />} />
                 </Route>
 
                 {/* Admin/Owner routes */}

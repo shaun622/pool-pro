@@ -403,7 +403,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                     value={stop.assigned_staff_id || ''}
                     onChange={e => handleAssign(e.target.value)}
                     disabled={assigning}
-                    className="mt-0.5 text-sm font-medium text-gray-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-full"
+                    className="select-inline mt-1 w-full"
                   >
                     <option value="">Unassigned</option>
                     {staffList.map(s => (

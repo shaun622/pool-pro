@@ -549,7 +549,7 @@ export default function ClientDetail() {
                         const val = e.target.value || null
                         await updatePool(pool.id, { assigned_staff_id: val })
                       }}
-                      className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 min-h-[36px]"
+                      className="select-inline flex-1 min-h-[36px]"
                     >
                       <option value="">Assign technician...</option>
                       {staffList.filter(s => s.is_active).map(s => (

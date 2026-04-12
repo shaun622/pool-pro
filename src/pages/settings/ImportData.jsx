@@ -175,7 +175,7 @@ export default function ImportData() {
                       {col}{typeDef.required.includes(col) ? ' *' : ''}
                     </span>
                     <select
-                      className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5"
+                      className="select-inline flex-1 text-xs"
                       value={columnMap[col] ?? ''}
                       onChange={e => setColumnMap(prev => ({ ...prev, [col]: e.target.value === '' ? undefined : Number(e.target.value) }))}
                     >

@@ -474,7 +474,7 @@ export default function QuoteBuilder() {
                       <select
                         value={item.recurring}
                         onChange={e => updateLineItem(index, 'recurring', e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 min-h-[32px]"
+                        className="select-inline text-xs min-h-[32px]"
                       >
                         {FREQUENCY_OPTIONS.map(f => (
                           <option key={f.value} value={f.value}>{f.label}</option>
