@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -208,12 +208,11 @@ function ScheduleView({ business, view, setView }) {
         .lte('scheduled_date', ymd(to))
         .order('scheduled_date')
         .order('scheduled_time'),
-      // Load ALL pools with next_due_at — we project recurrences forward for Upcoming
+      // Load ALL pools (map needs all, stop builders check next_due_at themselves)
       supabase
         .from('pools')
         .select('*, clients(name, email, phone), staff:staff_members!assigned_staff_id(id, name, photo_url)')
-        .eq('business_id', business.id)
-        .not('next_due_at', 'is', null),
+        .eq('business_id', business.id),
       // Load active recurring job profiles so we can project future occurrences
       supabase
         .from('recurring_job_profiles')
@@ -699,7 +698,7 @@ function ScheduleView({ business, view, setView }) {
           onNext={() => setUpcomingPage(p => p + 1)}
         />
       ) : (
-        <MapView stops={stopsForDate} routeInfo={routeInfo} onSelect={setSelectedStop} />
+        <MapView pools={allPools} onSelect={setSelectedStop} staffList={allStaff} />
       )}
 
       <StopDetailModal
@@ -990,8 +989,8 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
 }
 
 // ─── Map view ─────────────────────────────────
-function MapView({ stops, routeInfo, onSelect }) {
-  const withCoords = stops.filter(s => s.lat != null && s.lng != null)
+function MapView({ pools, onSelect, staffList }) {
+  const withCoords = pools.filter(p => p.latitude != null && p.longitude != null)
 
   if (!MAPBOX_TILE_URL) {
     return (
@@ -1007,34 +1006,70 @@ function MapView({ stops, routeInfo, onSelect }) {
     return (
       <EmptyState
         icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>}
-        title="No locations for this day"
-        description="Stops need a geocoded address to appear on the map"
+        title="No pool locations"
+        description="Pools need a geocoded address to appear on the map"
       />
     )
   }
 
-  const center = [withCoords[0].lat, withCoords[0].lng]
-  const polyline = routeInfo?.coordinates
-    ? routeInfo.coordinates.map(([lng, lat]) => [lat, lng])
-    : withCoords.map(s => [s.lat, s.lng])
+  // Determine pin colour: overdue = red, due today = green, scheduled = blue, no schedule = grey
+  function pinColor(pool) {
+    if (!pool.next_due_at) return '#9ca3af' // grey — no schedule
+    const due = new Date(pool.next_due_at)
+    const today = new Date(); today.setHours(0,0,0,0)
+    if (due < today) return '#ef4444' // red — overdue
+    if (due.toDateString() === today.toDateString()) return '#10b981' // green — due today
+    return '#0CA5EB' // blue — upcoming
+  }
+
+  function poolToMapStop(p) {
+    const due = p.next_due_at ? new Date(p.next_due_at) : null
+    const today = new Date(); today.setHours(0,0,0,0)
+    const isOverdue = due && due < today
+    const daysOverdue = isOverdue ? Math.floor((today - due) / (1000 * 60 * 60 * 24)) : 0
+    return {
+      type: 'pool', id: p.id, pool_id: p.id, client_id: p.client_id,
+      title: 'Pool Service', client_name: p.clients?.name,
+      address: p.address, status: isOverdue ? 'overdue' : due ? 'due' : 'scheduled',
+      next_due_at: p.next_due_at, schedule_frequency: p.schedule_frequency,
+      access_notes: p.access_notes, frequency: p.schedule_frequency,
+      phone: p.clients?.phone, email: p.clients?.email,
+      lat: Number(p.latitude), lng: Number(p.longitude),
+      isOverdue, daysOverdue,
+      tech_name: p.staff?.name || null, tech_photo: p.staff?.photo_url || null,
+      assigned_staff_id: p.assigned_staff_id || null,
+    }
+  }
+
+  const center = [Number(withCoords[0].latitude), Number(withCoords[0].longitude)]
 
   return (
-    <div className="h-[520px] rounded-2xl overflow-hidden border border-gray-100 shadow-card">
-      <MapContainer center={center} zoom={12} style={{ height: '100%', width: '100%' }}>
-        <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
-        <FitBounds stops={withCoords} />
-        {polyline.length > 1 && (
-          <Polyline positions={polyline} pathOptions={{ color: '#0CA5EB', weight: 4, opacity: 0.8 }} />
-        )}
-        {withCoords.map((stop, idx) => (
-          <Marker
-            key={`${stop.type}-${stop.id}`}
-            position={[stop.lat, stop.lng]}
-            icon={numberedIcon(stops.findIndex(s => s.id === stop.id && s.type === stop.type) + 1)}
-            eventHandlers={{ click: () => onSelect(stop) }}
-          />
-        ))}
-      </MapContainer>
+    <div className="space-y-3">
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Overdue</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Due Today</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pool-500" />Upcoming</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400" />No Schedule</span>
+      </div>
+
+      <div className="h-[520px] rounded-2xl overflow-hidden border border-gray-100 shadow-card">
+        <MapContainer center={center} zoom={11} style={{ height: '100%', width: '100%' }}>
+          <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
+          <FitBounds stops={withCoords.map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }))} />
+          {withCoords.map((pool, idx) => (
+            <Marker
+              key={pool.id}
+              position={[Number(pool.latitude), Number(pool.longitude)]}
+              icon={numberedIcon(idx + 1, pinColor(pool))}
+              eventHandlers={{ click: () => onSelect(poolToMapStop(pool)) }}
+            />
+          ))}
+        </MapContainer>
+      </div>
+
+      {/* Pool count */}
+      <p className="text-xs text-gray-400 text-center">{withCoords.length} pools on map</p>
     </div>
   )
 }
