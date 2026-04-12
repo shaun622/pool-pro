@@ -211,7 +211,7 @@ function ScheduleView({ business, view, setView }) {
       // Load ALL pools with next_due_at — we project recurrences forward for Upcoming
       supabase
         .from('pools')
-        .select('*, clients(name, email, phone)')
+        .select('*, clients(name, email, phone), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
         .not('next_due_at', 'is', null),
       // Load active recurring job profiles so we can project future occurrences
@@ -1368,6 +1368,8 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
     lng: p.longitude ? Number(p.longitude) : null,
     isOverdue,
     daysOverdue,
+    tech_name: p.staff?.name || null,
+    tech_photo: p.staff?.photo_url || null,
     assigned_staff_id: p.assigned_staff_id || null,
   }
 }

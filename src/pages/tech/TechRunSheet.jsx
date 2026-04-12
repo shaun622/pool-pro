@@ -93,7 +93,7 @@ export default function TechRunSheet() {
     const [jobsRes, poolsRes, profilesRes] = await Promise.all([
       supabase
         .from('jobs')
-        .select('*, clients(name), pools(address, latitude, longitude, type, access_notes)')
+        .select('*, clients(name, phone, email), pools(address, latitude, longitude, type, access_notes)')
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .gte('scheduled_date', ymd(from))
@@ -102,13 +102,13 @@ export default function TechRunSheet() {
         .order('scheduled_time'),
       supabase
         .from('pools')
-        .select('*, clients(name)')
+        .select('*, clients(name, phone, email)')
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .not('next_due_at', 'is', null),
       supabase
         .from('recurring_job_profiles')
-        .select('*, clients(name), pools(address, latitude, longitude, type, access_notes)')
+        .select('*, clients(name, phone, email), pools(address, latitude, longitude, type, access_notes)')
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .eq('is_active', true),
@@ -559,21 +559,34 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 truncate">{stop.client_name || 'Pool Service'}</p>
+              <p className="font-semibold text-gray-900 truncate">{stop.title || 'Pool Service'}</p>
+              {stop.client_name && <p className="text-xs text-gray-500 mt-0.5">{stop.client_name}</p>}
               {stop.address && <p className="text-xs text-pool-600 mt-0.5 truncate">{stop.address}</p>}
             </div>
-            {stop.isOverdue && (
-              <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-lg shrink-0">{stop.daysOverdue}d overdue</span>
-            )}
-            {stop.pool_type && !stop.isOverdue && (
-              <Badge variant="default" className="text-[10px] shrink-0 capitalize">{stop.pool_type}</Badge>
-            )}
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              {stop.isOverdue && (
+                <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-lg">{stop.daysOverdue}d overdue</span>
+              )}
+              {stop.pool_type && !stop.isOverdue && (
+                <Badge variant="default" className="text-[10px] capitalize">{stop.pool_type}</Badge>
+              )}
+            </div>
           </div>
 
-          {stop.time_display && !compact && (
-            <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span>{stop.time_display}</span>
+          {!compact && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+              {stop.time_display && (
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <span>{stop.time_display}</span>
+                </div>
+              )}
+              {stop.phone && (
+                <a href={`tel:${stop.phone}`} className="flex items-center gap-1 text-xs text-pool-600 font-medium" onClick={e => e.stopPropagation()}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                  {stop.phone}
+                </a>
+              )}
             </div>
           )}
 
@@ -624,18 +637,28 @@ function jobToStop(j) {
     status: j.status, scheduled_date: j.scheduled_date,
     scheduled_time: j.scheduled_time, sortTime: j.scheduled_time,
     time_display: timeDisp, duration, price: j.price, notes: j.notes,
+    phone: j.clients?.phone, email: j.clients?.email,
     lat: j.pools?.latitude ? Number(j.pools.latitude) : null,
     lng: j.pools?.longitude ? Number(j.pools.longitude) : null,
   }
 }
 
 function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
+  const due = p.next_due_at ? new Date(p.next_due_at) : null
+  const hh = due ? String(due.getHours()).padStart(2, '0') : null
+  const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
+  const sortTime = hh && mm ? `${hh}:${mm}` : '09:00'
   return {
     type: 'pool', id: p.id, pool_id: p.id, client_id: p.client_id,
     title: 'Pool Service', client_name: p.clients?.name,
     address: p.address, pool_type: p.type || null, access_notes: p.access_notes || null,
-    status: isOverdue ? 'overdue' : 'due', sortTime: '09:00',
-    time_display: null, isOverdue, daysOverdue,
+    status: isOverdue ? 'overdue' : 'due', sortTime,
+    time_display: due ? formatTimeRange(sortTime, 45) : null,
+    duration: 45,
+    phone: p.clients?.phone,
+    email: p.clients?.email,
+    frequency: p.schedule_frequency,
+    isOverdue, daysOverdue,
     lat: p.latitude ? Number(p.latitude) : null,
     lng: p.longitude ? Number(p.longitude) : null,
   }
