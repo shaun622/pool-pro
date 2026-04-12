@@ -263,7 +263,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     if (stop.type === 'job') {
       await supabase.from('jobs').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', stop.id)
       onUpdated?.()
-      navigate(`/jobs/${stop.id}`)
+      navigate(`/work-orders/${stop.id}`)
     } else {
       navigate(`/pools/${stop.id}/service`)
     }

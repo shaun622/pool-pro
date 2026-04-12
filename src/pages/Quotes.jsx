@@ -115,7 +115,7 @@ export default function Quotes() {
   if (bizLoading || loading) {
     return (
       <>
-        <Header title="Quotes" backTo="/jobs" right={headerAction} />
+        <Header title="Quotes" backTo={-1} right={headerAction} />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -127,7 +127,7 @@ export default function Quotes() {
 
   return (
     <>
-      <Header title="Quotes" backTo="/jobs" right={headerAction} />
+      <Header title="Quotes" backTo={-1} right={headerAction} />
       <PageWrapper>
         {/* Pipeline summary bar */}
         {quotes.length > 0 && (

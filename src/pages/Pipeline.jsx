@@ -120,7 +120,7 @@ export default function Pipeline() {
   }
 
   function handleCardClick(quote) {
-    navigate(`/jobs/quotes/${quote.id}`)
+    navigate(`/quotes/${quote.id}`)
   }
 
   // Group quotes by stage
@@ -146,7 +146,7 @@ export default function Pipeline() {
   if (loading || bizLoading) {
     return (
       <>
-        <Header title="Sales Pipeline" backTo="/jobs" />
+        <Header title="Sales Pipeline" backTo="/work-orders" />
         <main className="max-w-full mx-auto pb-24 px-4 pt-4">
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -158,7 +158,7 @@ export default function Pipeline() {
 
   return (
     <>
-      <Header title="Sales Pipeline" backTo="/jobs" />
+      <Header title="Sales Pipeline" backTo="/work-orders" />
       <main className="pb-24">
         {/* Pipeline Summary */}
         <div className="px-4 pt-4 pb-2 max-w-lg mx-auto">

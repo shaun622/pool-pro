@@ -291,7 +291,7 @@ export default function ClientDetail() {
       if (error) throw error
       setJobModalOpen(false)
       setJobForm({ pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0], scheduled_time: '09:00', notes: '', price: '' })
-      navigate('/jobs')
+      navigate('/work-orders')
     } catch (err) {
       console.error('Error creating job:', err)
     } finally {
@@ -414,7 +414,7 @@ export default function ClientDetail() {
             <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.193 23.193 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            Create Job
+            Work Order
           </Button>
           <Button
             variant="secondary"
@@ -578,6 +578,9 @@ export default function ClientDetail() {
             })}
           </div>
         )}
+
+        {/* Quotes Section */}
+        <QuotesSection clientId={id} navigate={navigate} />
       </PageWrapper>
 
       {/* Edit Client Modal */}
@@ -830,8 +833,8 @@ export default function ClientDetail() {
         </div>
       </Modal>
 
-      {/* Create Job Modal */}
-      <Modal open={jobModalOpen} onClose={() => setJobModalOpen(false)} title="Create Job">
+      {/* Create Work Order Modal */}
+      <Modal open={jobModalOpen} onClose={() => setJobModalOpen(false)} title="New Work Order">
         <form onSubmit={handleJobSubmit} className="space-y-4">
           <div className="bg-gray-50 rounded-xl p-3 mb-1">
             <p className="text-sm font-medium text-gray-900">{client?.name}</p>
@@ -975,5 +978,83 @@ export default function ClientDetail() {
         </form>
       </Modal>
     </>
+  )
+}
+
+// ─── Quotes Section (fetches its own data) ────────
+const QUOTE_STATUS_BADGE = { draft: 'default', sent: 'primary', accepted: 'success', declined: 'danger', expired: 'default' }
+const QUOTE_STATUS_LABEL = { draft: 'Draft', sent: 'Sent', accepted: 'Accepted', declined: 'Declined', expired: 'Expired' }
+
+function QuotesSection({ clientId, navigate }) {
+  const [quotes, setQuotes] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!clientId) return
+    supabase
+      .from('quotes')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setQuotes(data || [])
+        setLoading(false)
+      })
+  }, [clientId])
+
+  const quoteTotal = (q) => (q.line_items || []).reduce((s, i) => s + (i.amount || (i.quantity || 0) * (i.unit_price || 0) || 0), 0)
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-semibold text-gray-900">Quotes</h2>
+        <button
+          onClick={() => navigate(`/quotes/new?client=${clientId}`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Create Quote
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <div className="w-6 h-6 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : quotes.length === 0 ? (
+        <p className="text-sm text-gray-400 py-4 text-center">No quotes for this client</p>
+      ) : (
+        <div className="space-y-2">
+          {quotes.map(q => {
+            const st = QUOTE_STATUS_BADGE[q.status] || 'default'
+            const label = QUOTE_STATUS_LABEL[q.status] || q.status
+            const total = quoteTotal(q)
+            return (
+              <Card key={q.id} onClick={() => navigate(`/quotes/${q.id}`)}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {q.title || `Quote #${q.id.slice(0, 6)}`}
+                      </p>
+                      <Badge variant={st} className="text-[10px] shrink-0">{label}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span>{formatDate(q.created_at)}</span>
+                      {total > 0 && <span className="font-semibold text-gray-700">${total.toFixed(2)}</span>}
+                    </div>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }

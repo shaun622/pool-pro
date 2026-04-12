@@ -131,7 +131,7 @@ export default function JobDetail() {
           ? `Job completed: ${job.title}`
           : `Job status changed to ${JOB_STATUS_LABEL[newStatus]}`,
         description: job.clients?.name || '',
-        link_to: `/jobs/${id}`,
+        link_to: `/work-orders/${id}`,
       })
     } catch (err) {
       console.error('Error updating status:', err)
@@ -183,7 +183,7 @@ export default function JobDetail() {
     try {
       const { error } = await supabase.from('jobs').delete().eq('id', id)
       if (error) throw error
-      navigate('/jobs', { replace: true })
+      navigate('/work-orders', { replace: true })
     } catch (err) {
       console.error('Error deleting job:', err)
     }
@@ -201,7 +201,7 @@ export default function JobDetail() {
   if (loading) {
     return (
       <>
-        <Header title="Job" back="/jobs" />
+        <Header title="Work Order" back="/work-orders" />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -214,11 +214,11 @@ export default function JobDetail() {
   if (!job) {
     return (
       <>
-        <Header title="Job" back="/jobs" />
+        <Header title="Work Order" back="/work-orders" />
         <PageWrapper>
           <div className="text-center py-20">
             <p className="text-gray-500">Job not found</p>
-            <Button className="mt-4" onClick={() => navigate('/jobs')}>Back to Jobs</Button>
+            <Button className="mt-4" onClick={() => navigate('/work-orders')}>Back to Work Orders</Button>
           </div>
         </PageWrapper>
       </>
@@ -240,7 +240,7 @@ export default function JobDetail() {
 
   return (
     <>
-      <Header title="Job Details" back="/jobs" right={headerAction} />
+      <Header title="Work Order" back="/work-orders" right={headerAction} />
       <PageWrapper>
         {/* Mini map hero */}
         {hasCoords && MAPBOX_TILE_URL && (

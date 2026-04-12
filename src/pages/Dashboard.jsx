@@ -190,10 +190,10 @@ export default function Dashboard() {
                 View Schedule
               </button>
               <button
-                onClick={() => navigate('/jobs')}
+                onClick={() => navigate('/work-orders')}
                 className="px-5 py-2.5 rounded-xl text-sm font-semibold text-pool-700 bg-white hover:bg-pool-50 shadow-md transition-colors"
               >
-                Open Jobs
+                Work Orders
               </button>
             </div>
           </div>
@@ -260,8 +260,8 @@ export default function Dashboard() {
           {[
             { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900', to: '/route' },
             { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900', to: '/route' },
-            { label: 'Active Jobs', value: stats.activeJobs, sub: 'in progress', color: 'text-gray-900', to: '/jobs' },
-            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-gray-900', to: '/jobs' },
+            { label: 'Work Orders', value: stats.activeJobs, sub: 'in progress', color: 'text-gray-900', to: '/work-orders' },
+            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-gray-900', to: '/quotes' },
           ].map((stat, i) => (
             <Card key={i} onClick={() => navigate(stat.to)}>
               <p className="section-title mb-1">{stat.label}</p>

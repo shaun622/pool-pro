@@ -24,8 +24,8 @@ const tabs = [
     ),
   },
   {
-    path: '/jobs',
-    label: 'Jobs',
+    path: '/work-orders',
+    label: 'Work Orders',
     icon: (active) => (
       <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5} d={active

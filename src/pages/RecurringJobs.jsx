@@ -249,7 +249,7 @@ export default function RecurringJobs() {
   if (loading) {
     return (
       <>
-        <Header title="Recurring Jobs" backTo="/jobs" />
+        <Header title="Recurring Jobs" backTo="/work-orders" />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -263,7 +263,7 @@ export default function RecurringJobs() {
     <>
       <Header
         title="Recurring Jobs"
-        backTo="/jobs"
+        backTo="/work-orders"
         right={
           <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors">
             <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

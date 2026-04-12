@@ -1144,7 +1144,7 @@ function CalendarView({ business, onClose }) {
         ) : (
           <div className="space-y-1.5">
             {selectedEvents.map((event, i) => (
-              <Card key={i} onClick={() => event.type === 'job' ? navigate(`/jobs/${event.id}`) : navigate(`/pools/${event.id}`)} className="py-2.5">
+              <Card key={i} onClick={() => event.type === 'job' ? navigate(`/work-orders/${event.id}`) : navigate(`/pools/${event.id}`)} className="py-2.5">
                 <div className="flex items-center gap-3">
                   <div className="w-2.5 h-2.5 rounded-full bg-pool-500 shrink-0" />
                   <div className="flex-1 min-w-0">

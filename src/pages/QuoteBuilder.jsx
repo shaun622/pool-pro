@@ -70,7 +70,7 @@ export default function QuoteBuilder() {
 
       if (error || !data) {
         console.error('Error fetching quote:', error)
-        navigate('/jobs')
+        navigate('/quotes')
         return
       }
 
@@ -256,7 +256,7 @@ export default function QuoteBuilder() {
         }
       }
 
-      navigate('/jobs')
+      navigate('/quotes')
     } catch (err) {
       console.error('Error saving quote:', err)
     } finally {
@@ -310,7 +310,7 @@ export default function QuoteBuilder() {
         })
       }
 
-      navigate('/jobs')
+      navigate('/quotes')
     } catch (err) {
       console.error('Error converting quote:', err)
     } finally {
@@ -324,13 +324,13 @@ export default function QuoteBuilder() {
       status: 'declined',
       responded_at: new Date().toISOString(),
     }).eq('id', id)
-    navigate('/jobs')
+    navigate('/quotes')
   }
 
   if (loading) {
     return (
       <>
-        <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/jobs" />
+        <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/quotes" />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -342,7 +342,7 @@ export default function QuoteBuilder() {
 
   return (
     <>
-      <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/jobs" />
+      <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/quotes" />
       <PageWrapper>
         <div className="space-y-5">
           {/* Client & Pool selection */}
