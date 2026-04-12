@@ -333,6 +333,40 @@ export default function NewService() {
         {/* Step 1: Chemical Readings */}
         {step === 0 && !completed && (
           <div className="space-y-3">
+            {/* Client & Pool info */}
+            <Card className="bg-pool-50 border-pool-200">
+              <div className="flex items-start justify-between">
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-gray-900">{client?.name || 'Client'}</p>
+                  <p className="text-sm text-gray-600 mt-0.5">{pool?.address}</p>
+                </div>
+                <Badge variant={pool?.type || 'default'} className="shrink-0 capitalize">{pool?.type || 'pool'}</Badge>
+              </div>
+              <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-pool-200/50">
+                {client?.phone && (
+                  <a href={`tel:${client.phone}`} className="flex items-center gap-2 text-sm text-pool-600 font-medium">
+                    <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    {client.phone}
+                  </a>
+                )}
+                {client?.email && (
+                  <a href={`mailto:${client.email}`} className="flex items-center gap-2 text-sm text-pool-600 font-medium">
+                    <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    {client.email}
+                  </a>
+                )}
+                <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                  {pool?.schedule_frequency && <span>{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}</span>}
+                  {pool?.volume_litres && <span>· {Number(pool.volume_litres).toLocaleString()}L</span>}
+                  {pool?.shape && <span>· {pool.shape}</span>}
+                </div>
+              </div>
+            </Card>
+
             {/* Staff selector */}
             {staffList.length > 0 && (
               <Select

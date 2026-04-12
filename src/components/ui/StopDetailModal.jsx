@@ -330,7 +330,19 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         <div className="flex items-start justify-between gap-3 p-4 bg-white rounded-2xl border border-gray-100">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-bold text-gray-900">{stop.title}</h3>
-            {stop.client_name && <p className="text-sm text-gray-500 mt-0.5">{stop.client_name}</p>}
+            {stop.client_name && stop.client_id ? (
+              <button
+                onClick={() => { onClose(); navigate(`/clients/${stop.client_id}`) }}
+                className="text-sm text-pool-600 font-medium mt-0.5 hover:underline flex items-center gap-1"
+              >
+                {stop.client_name}
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ) : stop.client_name ? (
+              <p className="text-sm text-gray-500 mt-0.5">{stop.client_name}</p>
+            ) : null}
           </div>
           <Badge variant={STATUS_VARIANTS[statusLabel] || 'primary'} className="shrink-0 capitalize">
             {String(statusLabel).replace('_', ' ')}
