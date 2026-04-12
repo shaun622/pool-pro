@@ -77,7 +77,7 @@ export default function RecurringJobs() {
     setLoading(true)
     const [profilesRes, clientsRes, staffRes, jobTypesRes] = await Promise.all([
       supabase.from('recurring_job_profiles').select('*, clients(name), pools(address), staff_members:assigned_staff_id(name), job_type_templates:job_type_template_id(name, color)')
-        .eq('business_id', business.id).eq('is_active', true).order('created_at', { ascending: false }),
+        .eq('business_id', business.id).order('created_at', { ascending: false }),
       supabase.from('clients').select('id, name, pools(id, address)').eq('business_id', business.id).order('name'),
       supabase.from('staff_members').select('id, name').eq('business_id', business.id).eq('is_active', true).order('name'),
       supabase.from('job_type_templates').select('id, name, color, default_tasks, estimated_duration_minutes, default_price')
@@ -246,6 +246,60 @@ export default function RecurringJobs() {
     }
   }
 
+  async function handleStatusChange(profileId, newStatus) {
+    try {
+      await supabase.from('recurring_job_profiles').update({ status: newStatus }).eq('id', profileId)
+      fetchAll()
+    } catch (err) {
+      alert(err.message || 'Failed to update status')
+    }
+  }
+
+  async function handleExtend(profileId) {
+    if (!editing) return
+    const profile = editing
+    if (profile.duration_type === 'until_date') {
+      const newEnd = prompt('Enter new end date (YYYY-MM-DD):', profile.end_date || '')
+      if (!newEnd) return
+      await supabase.from('recurring_job_profiles').update({ end_date: newEnd, status: 'active' }).eq('id', profileId)
+    } else if (profile.duration_type === 'num_visits') {
+      const extra = prompt('Add how many visits?', '6')
+      if (!extra || isNaN(Number(extra))) return
+      await supabase.from('recurring_job_profiles').update({ total_visits: (profile.total_visits || 0) + Number(extra), status: 'active' }).eq('id', profileId)
+    }
+    fetchAll()
+    setModalOpen(false)
+  }
+
+  const activeProfiles = profiles.filter(p => p.is_active && (!p.status || p.status === 'active'))
+  const pausedProfiles = profiles.filter(p => p.status === 'paused')
+  const completedProfiles = profiles.filter(p => p.status === 'completed' || p.status === 'cancelled' || !p.is_active)
+
+  const STATUS_BADGE = {
+    active: { variant: 'success', label: 'Active' },
+    paused: { variant: 'warning', label: 'Paused' },
+    completed: { variant: 'default', label: 'Completed' },
+    cancelled: { variant: 'default', label: 'Cancelled' },
+  }
+
+  function durationLabel(p) {
+    if (!p.duration_type || p.duration_type === 'ongoing') return 'Ongoing'
+    if (p.duration_type === 'until_date') {
+      if (!p.end_date) return 'Until date'
+      const end = new Date(p.end_date)
+      const now = new Date()
+      const daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+      if (daysLeft <= 0) return 'Ended'
+      if (daysLeft <= 30) return `${daysLeft}d remaining`
+      const months = Math.round(daysLeft / 30)
+      return `${months}mo remaining`
+    }
+    if (p.duration_type === 'num_visits') {
+      return `${p.completed_visits || 0} of ${p.total_visits} visits`
+    }
+    return 'Ongoing'
+  }
+
   if (loading) {
     return (
       <>
@@ -273,7 +327,7 @@ export default function RecurringJobs() {
         }
       />
       <PageWrapper>
-        {profiles.length === 0 ? (
+        {activeProfiles.length === 0 && pausedProfiles.length === 0 && completedProfiles.length === 0 ? (
           <EmptyState
             icon={
               <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -287,43 +341,75 @@ export default function RecurringJobs() {
           />
         ) : (
           <div className="space-y-2.5">
-            {profiles.map(p => (
-              <Card key={p.id} onClick={() => openEdit(p)}>
-                <div className="flex items-start gap-3">
-                  {p.job_type_templates?.color && (
-                    <div className="w-3 h-3 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: p.job_type_templates.color }} />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{p.title}</p>
-                      <Badge variant="primary" className="shrink-0">
-                        {RECURRENCE_LABEL[p.recurrence_rule] || p.recurrence_rule}
-                      </Badge>
+            {[...activeProfiles, ...pausedProfiles].map(p => {
+              const st = STATUS_BADGE[p.status || 'active'] || STATUS_BADGE.active
+              return (
+                <Card key={p.id} onClick={() => openEdit(p)}>
+                  <div className="flex items-start gap-3">
+                    {p.job_type_templates?.color && (
+                      <div className="w-3 h-3 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: p.job_type_templates.color }} />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{p.title}</p>
+                        <Badge variant="primary" className="shrink-0">
+                          {RECURRENCE_LABEL[p.recurrence_rule] || p.recurrence_rule}
+                        </Badge>
+                        <Badge variant={st.variant} className="shrink-0 text-[10px]">{st.label}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500">{p.clients?.name}</p>
+                      {p.pools?.address && <p className="text-xs text-gray-400 truncate">{p.pools.address}</p>}
+                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                        <span className="text-[11px] text-gray-500 font-medium">{durationLabel(p)}</span>
+                        {p.duration_type === 'num_visits' && p.total_visits && (
+                          <div className="flex-1 max-w-[80px] h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-pool-500 rounded-full" style={{ width: `${Math.min(100, ((p.completed_visits || 0) / p.total_visits) * 100)}%` }} />
+                          </div>
+                        )}
+                        {p.staff_members?.name && (
+                          <span className="text-[11px] text-gray-400">{p.staff_members.name}</span>
+                        )}
+                        {p.price && <span className="text-[11px] text-pool-600 font-medium">${Number(p.price).toFixed(0)}</span>}
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-500">{p.clients?.name}</p>
-                    {p.pools?.address && <p className="text-xs text-gray-400 truncate">{p.pools.address}</p>}
-                    <div className="flex items-center gap-3 mt-1.5">
-                      {p.staff_members?.name && (
-                        <span className="text-[11px] text-gray-400">{p.staff_members.name}</span>
-                      )}
-                      {p.price && <span className="text-[11px] text-pool-600 font-medium">${Number(p.price).toFixed(0)}</span>}
-                      {p.next_generation_at && (
-                        <span className="text-[11px] text-gray-400">Next: {formatDate(p.next_generation_at)}</span>
-                      )}
-                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); generateNow(p) }}
+                      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 transition-colors shrink-0"
+                      title="Generate job now"
+                    >
+                      <svg className="w-5 h-5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
                   </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); generateNow(p) }}
-                    className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 transition-colors shrink-0"
-                    title="Generate job now"
-                  >
-                    <svg className="w-5 h-5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                  </button>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              )
+            })}
+
+            {completedProfiles.length > 0 && (
+              <>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-6 mb-2">
+                  Completed / Inactive
+                </h3>
+                {completedProfiles.map(p => {
+                  const st = STATUS_BADGE[p.status || 'completed'] || STATUS_BADGE.completed
+                  return (
+                    <Card key={p.id} onClick={() => openEdit(p)} className="opacity-60">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{p.title}</p>
+                            <Badge variant={st.variant} className="shrink-0 text-[10px]">{st.label}</Badge>
+                          </div>
+                          <p className="text-xs text-gray-500">{p.clients?.name}</p>
+                          <span className="text-[11px] text-gray-500">{durationLabel(p)}</span>
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </>
+            )}
           </div>
         )}
       </PageWrapper>
@@ -437,12 +523,42 @@ export default function RecurringJobs() {
             rows={2}
           />
           <div className="flex gap-3 pt-2">
-            {editing && (
-              <Button type="button" variant="danger" onClick={handleDeactivate} className="px-4">Deactivate</Button>
-            )}
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)} className="flex-1">Cancel</Button>
             <Button type="submit" className="flex-1" loading={saving}>{editing ? 'Save' : 'Create'}</Button>
           </div>
+
+          {editing && (
+            <div className="border-t border-gray-100 pt-3 mt-2 space-y-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</p>
+              <div className="flex gap-2 flex-wrap">
+                {(!editing.status || editing.status === 'active') && (
+                  <Button type="button" variant="secondary" onClick={() => { handleStatusChange(editing.id, 'paused'); setModalOpen(false) }} className="text-xs px-3">
+                    Pause
+                  </Button>
+                )}
+                {editing.status === 'paused' && (
+                  <Button type="button" variant="secondary" onClick={() => { handleStatusChange(editing.id, 'active'); setModalOpen(false) }} className="text-xs px-3">
+                    Resume
+                  </Button>
+                )}
+                {(editing.duration_type === 'until_date' || editing.duration_type === 'num_visits') && (
+                  <Button type="button" variant="secondary" onClick={() => handleExtend(editing.id)} className="text-xs px-3">
+                    Extend
+                  </Button>
+                )}
+                {editing.status !== 'cancelled' && (
+                  <Button type="button" variant="danger" onClick={() => {
+                    if (confirm('Cancel this recurring service permanently?')) {
+                      handleStatusChange(editing.id, 'cancelled')
+                      setModalOpen(false)
+                    }
+                  }} className="text-xs px-3">
+                    Cancel Service
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </form>
       </Modal>
     </>

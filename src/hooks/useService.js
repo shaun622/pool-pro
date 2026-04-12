@@ -81,6 +81,30 @@ export function useService() {
         .update({ last_serviced_at: now.toISOString(), next_due_at: nextDue.toISOString() })
         .eq('id', poolId)
 
+      // Increment completed_visits on any active recurring profile for this pool
+      try {
+        const { data: profiles } = await supabase
+          .from('recurring_job_profiles')
+          .select('id, duration_type, total_visits, completed_visits, status')
+          .eq('pool_id', poolId)
+          .eq('is_active', true)
+          .in('status', ['active'])
+          .limit(1)
+
+        if (profiles?.length) {
+          const profile = profiles[0]
+          const newCount = (profile.completed_visits || 0) + 1
+          const updates = { completed_visits: newCount }
+          // Auto-complete if we've hit the visit target
+          if (profile.duration_type === 'num_visits' && profile.total_visits && newCount >= profile.total_visits) {
+            updates.status = 'completed'
+          }
+          await supabase.from('recurring_job_profiles').update(updates).eq('id', profile.id)
+        }
+      } catch (e) {
+        console.warn('Recurring profile update failed (non-critical):', e)
+      }
+
       // Fire-and-forget email notifications (don't block completion)
       supabase.functions.invoke('complete-service', {
         body: { service_record_id: serviceRecordId }

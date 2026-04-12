@@ -37,6 +37,7 @@ export default function ClientDetail() {
 
   const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [recurringProfiles, setRecurringProfiles] = useState([])
 
   // Edit client modal
   const [editOpen, setEditOpen] = useState(false)
@@ -107,6 +108,23 @@ export default function ClientDetail() {
         setLoading(false)
       })
   }, [id, navigate])
+
+  // Fetch recurring profiles for this client
+  useEffect(() => {
+    if (!id) return
+    supabase
+      .from('recurring_job_profiles')
+      .select('id, pool_id, duration_type, end_date, total_visits, completed_visits, status, recurrence_rule')
+      .eq('client_id', id)
+      .eq('is_active', true)
+      .then(({ data }) => setRecurringProfiles(data || []))
+  }, [id])
+
+  // Build a lookup: pool_id -> recurring profile
+  const profileByPool = {}
+  for (const rp of recurringProfiles) {
+    if (rp.pool_id) profileByPool[rp.pool_id] = rp
+  }
 
   // Edit handlers
   const handleEditChange = (e) => {
@@ -480,7 +498,16 @@ export default function ClientDetail() {
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <Badge variant={pool.type}>{pool.type}</Badge>
                           {pool.schedule_frequency && (
-                            <span className="text-xs text-gray-400">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}</span>
+                            <span className="text-xs text-gray-400">
+                              {FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}
+                              {profileByPool[pool.id] && (() => {
+                                const rp = profileByPool[pool.id]
+                                if (!rp.duration_type || rp.duration_type === 'ongoing') return ' · Ongoing'
+                                if (rp.duration_type === 'until_date' && rp.end_date) return ` · Until ${new Date(rp.end_date).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })}`
+                                if (rp.duration_type === 'num_visits' && rp.total_visits) return ` · ${rp.completed_visits || 0}/${rp.total_visits} visits`
+                                return ''
+                              })()}
+                            </span>
                           )}
                         </div>
                       </div>

@@ -93,6 +93,26 @@ function profileIntervalDays(profile) {
   return frequencyToDays(profile.recurrence_rule)
 }
 
+// Check if a recurring profile is still active (respects duration limits)
+function isProfileActive(profile) {
+  if (profile.status === 'completed' || profile.status === 'cancelled' || profile.status === 'paused') return false
+  if (profile.duration_type === 'num_visits' && profile.total_visits && (profile.completed_visits || 0) >= profile.total_visits) return false
+  if (profile.duration_type === 'until_date' && profile.end_date && new Date(profile.end_date) < new Date()) return false
+  return true
+}
+
+// Check if a projected occurrence date is within the profile's duration
+function isOccurrenceInRange(profile, occurrenceDate, occurrenceIndex) {
+  if (profile.duration_type === 'until_date' && profile.end_date) {
+    return occurrenceDate <= new Date(profile.end_date + 'T23:59:59')
+  }
+  if (profile.duration_type === 'num_visits' && profile.total_visits) {
+    const remaining = profile.total_visits - (profile.completed_visits || 0)
+    return occurrenceIndex < remaining
+  }
+  return true // ongoing
+}
+
 function formatTimeRange(start, durationMin) {
   if (!start) return null
   const [h, m] = start.split(':').map(Number)
@@ -257,6 +277,7 @@ function ScheduleView({ business, view, setView }) {
     const dateKey = ymd(selectedDate)
     const selStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
     for (const profile of allProfiles) {
+      if (!isProfileActive(profile)) continue
       const intervalDays = profileIntervalDays(profile)
       if (!intervalDays) continue
       const anchorStr = profile.next_generation_at || profile.last_generated_at
@@ -267,6 +288,7 @@ function ScheduleView({ business, view, setView }) {
       while (cursor > selStart) cursor.setDate(cursor.getDate() - intervalDays)
       while (cursor < selStart) cursor.setDate(cursor.getDate() + intervalDays)
       if (sameYMD(cursor, selectedDate)) {
+        if (!isOccurrenceInRange(profile, cursor, 0)) continue
         const taken = takenByProfile.get(profile.id)
         if (taken && taken.has(dateKey)) continue
         if (profile.pool_id && poolIdsCovered.has(profile.pool_id)) continue
@@ -387,9 +409,9 @@ function ScheduleView({ business, view, setView }) {
       }
     }
     for (const profile of allProfiles) {
+      if (!isProfileActive(profile)) continue
       const intervalDays = profileIntervalDays(profile)
       if (!intervalDays) continue
-      // Anchor: next_generation_at, falling back to last_generated_at, then today
       const anchorStr = profile.next_generation_at || profile.last_generated_at
       const anchor = anchorStr ? new Date(anchorStr) : new Date()
       if (isNaN(anchor.getTime())) continue
@@ -397,13 +419,16 @@ function ScheduleView({ business, view, setView }) {
       cursor.setHours(0, 0, 0, 0)
       while (cursor > weekEnd) cursor.setDate(cursor.getDate() - intervalDays)
       while (cursor < weekStart) cursor.setDate(cursor.getDate() + intervalDays)
+      let occurrenceIdx = 0
       while (cursor <= weekEnd) {
+        if (!isOccurrenceInRange(profile, cursor, occurrenceIdx)) break
         const key = ymd(cursor)
         const taken = takenByProfile.get(profile.id)
         if (!taken || !taken.has(key)) {
           ensure(cursor).stops.push(profileToStop(profile, cursor))
         }
         cursor.setDate(cursor.getDate() + intervalDays)
+        occurrenceIdx++
       }
     }
 
@@ -498,6 +523,7 @@ function ScheduleView({ business, view, setView }) {
       }
     }
     for (const profile of allProfiles) {
+      if (!isProfileActive(profile)) continue
       const intervalDays = profileIntervalDays(profile)
       if (!intervalDays) continue
       const anchorStr = profile.next_generation_at || profile.last_generated_at
@@ -507,7 +533,9 @@ function ScheduleView({ business, view, setView }) {
       cursor.setHours(0, 0, 0, 0)
       while (cursor > today) cursor.setDate(cursor.getDate() - intervalDays)
       while (cursor < today) cursor.setDate(cursor.getDate() + intervalDays)
+      let occurrenceIdx = 0
       while (cursor <= horizonEnd) {
+        if (!isOccurrenceInRange(profile, cursor, occurrenceIdx)) break
         const key = ymd(cursor)
         const taken = takenByProfile.get(profile.id)
         if (!taken || !taken.has(key)) {
@@ -515,6 +543,7 @@ function ScheduleView({ business, view, setView }) {
           allStops.push({ date: new Date(cursor), stop, sortTime: stop.sortTime || '99:99' })
         }
         cursor.setDate(cursor.getDate() + intervalDays)
+        occurrenceIdx++
       }
     }
 
@@ -1370,6 +1399,11 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   const [assignedStaffId, setAssignedStaffId] = useState('')
   const [notes, setNotes] = useState('')
 
+  // Duration
+  const [durationType, setDurationType] = useState('ongoing')
+  const [endDate, setEndDate] = useState('')
+  const [totalVisits, setTotalVisits] = useState('')
+
   // Fetch clients on open
   useEffect(() => {
     if (!open || !business?.id) return
@@ -1394,6 +1428,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
     setAssignedStaffId(''); setNotes(''); setShowNewClient(false); setShowNewPool(false)
     setNewClientForm({ name: '', email: '', phone: '', address: '' })
     setNewPoolForm(emptyPool)
+    setDurationType('ongoing'); setEndDate(''); setTotalVisits('')
   }
 
   function handleClose() { reset(); onClose() }
@@ -1456,6 +1491,11 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
         notes: notes.trim() || null,
         is_active: true,
         next_generation_at: firstDate,
+        duration_type: durationType,
+        end_date: durationType === 'until_date' ? endDate : null,
+        total_visits: durationType === 'num_visits' ? Number(totalVisits) : null,
+        completed_visits: 0,
+        status: 'active',
       })
       if (error) throw error
 
@@ -1477,6 +1517,13 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   const selectedPool = clientPools.find(p => p.id === poolId)
   const selectedTech = staff.find(s => s.id === assignedStaffId)
   const freqLabel = recurrenceRule === 'custom' ? `Every ${customDays} days` : RECURRENCE_OPTIONS.find(o => o.value === recurrenceRule)?.label
+  const durationLabel = durationType === 'ongoing' ? 'Ongoing' : durationType === 'until_date' ? `Until ${endDate}` : `${totalVisits} visits`
+
+  // Calculate estimated end date for num_visits
+  const intervalDaysValue = recurrenceRule === 'custom' ? Number(customDays) : ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[recurrenceRule] || 7)
+  const estimatedEndDate = durationType === 'num_visits' && totalVisits && firstDate
+    ? (() => { const d = new Date(firstDate); d.setDate(d.getDate() + intervalDaysValue * (Number(totalVisits) - 1)); return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) })()
+    : null
 
   const stepTitles = ['Select Client', 'Select Pool', 'Schedule Details', 'Confirm']
 
@@ -1588,6 +1635,62 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
             options={DAY_OPTIONS} />
           <Input label="First Service Date" type="date" value={firstDate}
             onChange={e => setFirstDate(e.target.value)} />
+
+          {/* Duration */}
+          <div className="border-t border-gray-100 pt-3">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Duration</label>
+            <div className="space-y-2">
+              {[
+                { value: 'ongoing', label: 'Ongoing', desc: 'Continues until you cancel it' },
+                { value: 'until_date', label: 'Until a date', desc: 'Ends on a specific date' },
+                { value: 'num_visits', label: 'Fixed visits', desc: 'Set number of services' },
+              ].map(opt => (
+                <button key={opt.value} type="button" onClick={() => setDurationType(opt.value)}
+                  className={cn('w-full text-left p-3 rounded-xl border-2 transition-all',
+                    durationType === opt.value ? 'border-pool-500 bg-pool-50' : 'border-gray-200 bg-white hover:border-gray-300')}>
+                  <p className="text-sm font-semibold text-gray-900">{opt.label}</p>
+                  <p className="text-xs text-gray-500">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            {durationType === 'until_date' && (
+              <div className="mt-3 space-y-2">
+                <Input label="End Date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                <div className="flex gap-2">
+                  {[
+                    { label: '3 months', months: 3 },
+                    { label: '6 months', months: 6 },
+                    { label: '12 months', months: 12 },
+                  ].map(preset => (
+                    <button key={preset.months} type="button"
+                      onClick={() => {
+                        const d = new Date(firstDate || new Date())
+                        d.setMonth(d.getMonth() + preset.months)
+                        setEndDate(d.toISOString().split('T')[0])
+                      }}
+                      className="flex-1 py-2 px-2 rounded-lg bg-gray-100 text-xs font-semibold text-gray-700 hover:bg-gray-200 active:scale-95 transition-all min-h-[36px]"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {durationType === 'num_visits' && (
+              <div className="mt-3 space-y-2">
+                <Input label="Number of Visits" type="number" min="1" value={totalVisits}
+                  onChange={e => setTotalVisits(e.target.value)} placeholder="e.g. 12" />
+                {estimatedEndDate && (
+                  <p className="text-xs text-gray-500">
+                    Approx. finishes <span className="font-semibold text-gray-700">{estimatedEndDate}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {staff.length > 0 && (
             <Select label="Assign Technician" value={assignedStaffId} onChange={e => setAssignedStaffId(e.target.value)}
               options={[{ value: '', label: 'Unassigned' }, ...staff.map(s => ({ value: s.id, label: s.name }))]} />
@@ -1623,6 +1726,10 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">First Service</span>
               <span className="font-semibold text-gray-900">{firstDate}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Duration</span>
+              <span className="font-semibold text-gray-900">{durationLabel}</span>
             </div>
             {selectedTech && (
               <div className="flex justify-between text-sm">

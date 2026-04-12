@@ -40,6 +40,13 @@ function profileIntervalDays(profile) {
   return map[rule] || 7
 }
 
+function isProfileActive(profile) {
+  if (profile.status === 'completed' || profile.status === 'cancelled' || profile.status === 'paused') return false
+  if (profile.duration_type === 'num_visits' && profile.total_visits && (profile.completed_visits || 0) >= profile.total_visits) return false
+  if (profile.duration_type === 'until_date' && profile.end_date && new Date(profile.end_date) < new Date()) return false
+  return true
+}
+
 // Numbered pin
 function numberedIcon(n, color = '#0CA5EB') {
   return L.divIcon({
@@ -149,6 +156,7 @@ export default function TechRunSheet() {
       }
     }
     for (const profile of profiles) {
+      if (!isProfileActive(profile)) continue
       const interval = profileIntervalDays(profile)
       if (!interval) continue
       const anchorStr = profile.next_generation_at || profile.last_generated_at
