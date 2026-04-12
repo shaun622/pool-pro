@@ -1113,6 +1113,14 @@ function MapView({ pools, onSelect, staffList }) {
                       </a>
                     )}
 
+                    {/* Access notes */}
+                    {pool.access_notes && (
+                      <div style={{ fontSize: '11px', color: '#d97706', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                        {pool.access_notes}
+                      </div>
+                    )}
+
                     {/* Tech assigned */}
                     {techName && (
                       <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>
