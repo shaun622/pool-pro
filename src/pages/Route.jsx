@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -1012,14 +1012,25 @@ function MapView({ pools, onSelect, staffList }) {
     )
   }
 
-  // Determine pin colour: overdue = red, due today = green, scheduled = blue, no schedule = grey
   function pinColor(pool) {
-    if (!pool.next_due_at) return '#9ca3af' // grey — no schedule
+    if (!pool.next_due_at) return '#9ca3af'
     const due = new Date(pool.next_due_at)
     const today = new Date(); today.setHours(0,0,0,0)
-    if (due < today) return '#ef4444' // red — overdue
-    if (due.toDateString() === today.toDateString()) return '#10b981' // green — due today
-    return '#0CA5EB' // blue — upcoming
+    if (due < today) return '#ef4444'
+    if (due.toDateString() === today.toDateString()) return '#10b981'
+    return '#0CA5EB'
+  }
+
+  function statusLabel(pool) {
+    if (!pool.next_due_at) return { text: 'No schedule', color: 'text-gray-400' }
+    const due = new Date(pool.next_due_at)
+    const today = new Date(); today.setHours(0,0,0,0)
+    if (due < today) {
+      const days = Math.floor((today - due) / (1000 * 60 * 60 * 24))
+      return { text: `${days}d overdue`, color: 'text-red-600' }
+    }
+    if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600' }
+    return { text: `Next: ${due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`, color: 'text-pool-600' }
   }
 
   function poolToMapStop(p) {
@@ -1050,25 +1061,87 @@ function MapView({ pools, onSelect, staffList }) {
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Overdue</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Due Today</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pool-500" />Upcoming</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400" />No Schedule</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400" />Unscheduled</span>
       </div>
 
       <div className="h-[520px] rounded-2xl overflow-hidden border border-gray-100 shadow-card">
         <MapContainer center={center} zoom={11} style={{ height: '100%', width: '100%' }}>
           <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
           <FitBounds stops={withCoords.map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }))} />
-          {withCoords.map((pool, idx) => (
-            <Marker
-              key={pool.id}
-              position={[Number(pool.latitude), Number(pool.longitude)]}
-              icon={numberedIcon(idx + 1, pinColor(pool))}
-              eventHandlers={{ click: () => onSelect(poolToMapStop(pool)) }}
-            />
-          ))}
+          {withCoords.map((pool, idx) => {
+            const status = statusLabel(pool)
+            const techName = pool.staff?.name || null
+            const freq = pool.schedule_frequency
+            return (
+              <Marker
+                key={pool.id}
+                position={[Number(pool.latitude), Number(pool.longitude)]}
+                icon={numberedIcon(idx + 1, pinColor(pool))}
+              >
+                <Popup className="pool-map-popup" closeButton={false} maxWidth={280} minWidth={240}>
+                  <div style={{ fontFamily: 'inherit', padding: '2px 0' }}>
+                    {/* Client name */}
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '2px', lineHeight: 1.3 }}>
+                      {pool.clients?.name || 'Unknown Client'}
+                    </div>
+
+                    {/* Address */}
+                    <div style={{ fontSize: '12px', color: '#0CA5EB', marginBottom: '8px', lineHeight: 1.3 }}>
+                      {pool.address}
+                    </div>
+
+                    {/* Status + frequency */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600 }} className={status.color}>{status.text}</span>
+                      {freq && (
+                        <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                          {freq === 'weekly' ? 'Weekly' : freq === 'fortnightly' ? 'Fortnightly' : freq === 'monthly' ? 'Monthly' : freq}
+                        </span>
+                      )}
+                      {pool.type && (
+                        <span style={{ fontSize: '10px', color: '#6b7280', background: '#f3f4f6', borderRadius: '6px', padding: '1px 6px', fontWeight: 500, textTransform: 'capitalize' }}>
+                          {pool.type}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Phone */}
+                    {pool.clients?.phone && (
+                      <a href={`tel:${pool.clients.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#0CA5EB', fontWeight: 600, textDecoration: 'none', marginBottom: '4px' }}>
+                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        {pool.clients.phone}
+                      </a>
+                    )}
+
+                    {/* Tech assigned */}
+                    {techName && (
+                      <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>
+                        Tech: <span style={{ fontWeight: 600, color: '#374151' }}>{techName}</span>
+                      </div>
+                    )}
+
+                    {/* View Details button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSelect(poolToMapStop(pool)) }}
+                      style={{
+                        width: '100%', marginTop: '6px', padding: '8px 0',
+                        background: 'linear-gradient(135deg, #0CA5EB, #0B8EC9)',
+                        color: 'white', border: 'none', borderRadius: '10px',
+                        fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                      }}
+                    >
+                      View Details
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            )
+          })}
         </MapContainer>
       </div>
 
-      {/* Pool count */}
       <p className="text-xs text-gray-400 text-center">{withCoords.length} pools on map</p>
     </div>
   )
