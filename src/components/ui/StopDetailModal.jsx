@@ -44,10 +44,11 @@ const STATUS_VARIANTS = {
   overdue: 'danger',
 }
 
-export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated }) {
+export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated, staffList = [] }) {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [assigning, setAssigning] = useState(false)
   const [form, setForm] = useState({})
 
   useEffect(() => {
@@ -269,8 +270,36 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
+  async function handleAssign(staffId) {
+    setAssigning(true)
+    try {
+      const value = staffId || null
+      if (stop.type === 'job') {
+        const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
+        if (!isProjected) {
+          await supabase.from('jobs').update({ assigned_staff_id: value }).eq('id', stop.id)
+        }
+        // Also update the recurring profile if there is one
+        if (stop.recurring_profile_id || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))) {
+          const profileId = stop.recurring_profile_id || stop.id.replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+          if (profileId) {
+            await supabase.from('recurring_job_profiles').update({ assigned_staff_id: value }).eq('id', profileId)
+          }
+        }
+      } else {
+        await supabase.from('pools').update({ assigned_staff_id: value }).eq('id', stop.id)
+      }
+      onUpdated?.()
+    } catch (err) {
+      console.error('Assign error:', err)
+    } finally {
+      setAssigning(false)
+    }
+  }
+
   const hasCoords = stop.lat != null && stop.lng != null
   const statusLabel = stop.status || (stop.type === 'pool' ? 'due' : 'scheduled')
+  const assignedStaff = staffList.find(s => s.id === stop.assigned_staff_id)
 
   return (
     <Modal open={open} onClose={onClose} title={stop.type === 'job' ? 'Job Details' : 'Service Details'}>
@@ -357,6 +386,30 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             )}
             {stop.notes && (
               <DetailRow icon={<NoteIcon />} label="Notes" value={stop.notes} />
+            )}
+            {staffList.length > 0 && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600">
+                  <UserIcon />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Assigned Tech</p>
+                  <select
+                    value={stop.assigned_staff_id || ''}
+                    onChange={e => handleAssign(e.target.value)}
+                    disabled={assigning}
+                    className="mt-0.5 text-sm font-medium text-gray-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer w-full"
+                  >
+                    <option value="">Unassigned</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {assigning && (
+                  <div className="w-4 h-4 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
             )}
           </div>
         )}
@@ -515,5 +568,10 @@ const MailIcon = () => (
 const NoteIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+)
+const UserIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
   </svg>
 )

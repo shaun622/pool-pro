@@ -679,6 +679,7 @@ function ScheduleView({ business, view, setView }) {
         stop={selectedStop}
         stopNumber={selectedStop ? stopsForDate.findIndex(s => s.id === selectedStop.id && s.type === selectedStop.type) + 1 : 1}
         onUpdated={() => { fetchData(); setSelectedStop(null) }}
+        staffList={allStaff}
       />
 
       <AddRecurringModal
@@ -1274,6 +1275,7 @@ function jobToStop(j) {
     lng: j.pools?.longitude ? Number(j.pools.longitude) : null,
     tech_name: j.staff?.name || null,
     tech_photo: j.staff?.photo_url || null,
+    assigned_staff_id: j.assigned_staff_id || null,
   }
 }
 
@@ -1306,6 +1308,7 @@ function profileToStop(profile, occurrenceDate) {
     projected: true,
     tech_name: profile.staff?.name || null,
     tech_photo: profile.staff?.photo_url || null,
+    assigned_staff_id: profile.assigned_staff_id || null,
   }
 }
 
@@ -1336,6 +1339,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
     lng: p.longitude ? Number(p.longitude) : null,
     isOverdue,
     daysOverdue,
+    assigned_staff_id: p.assigned_staff_id || null,
   }
 }
 

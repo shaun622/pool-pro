@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { BusinessProvider, useBusiness } from './hooks/useBusiness'
 import AppShell from './components/layout/AppShell'
+import TechShell from './components/layout/TechShell'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
@@ -38,6 +39,9 @@ const PortalLogin = lazy(() => import('./pages/portal/PortalLogin'))
 const PortalSetup = lazy(() => import('./pages/portal/PortalSetup'))
 const PortalTokenLanding = lazy(() => import('./pages/portal/PortalTokenLanding'))
 const PortalDashboard = lazy(() => import('./pages/portal/PortalDashboard'))
+const InviteAccept = lazy(() => import('./pages/InviteAccept'))
+const TechRunSheet = lazy(() => import('./pages/tech/TechRunSheet'))
+const TechProfile = lazy(() => import('./pages/tech/TechProfile'))
 
 function Loading() {
   return (
@@ -54,16 +58,29 @@ function ProtectedRoute() {
   return <Outlet />
 }
 
+// Admin guard: requires business ownership or admin staff role
 function BusinessGuard() {
   const { user } = useAuth()
-  const { business, loading } = useBusiness()
+  const { business, loading, userRole } = useBusiness()
   if (loading) return <Loading />
-  // Redirect customers to their portal instead of onboarding
+  // Redirect customers to their portal
   if (!business) {
     if (user?.user_metadata?.role === 'customer') return <Navigate to="/portal" replace />
     return <Navigate to="/onboarding" replace />
   }
+  // Tech users get redirected to their view
+  if (userRole === 'tech') return <Navigate to="/tech" replace />
   return <AppShell />
+}
+
+// Tech guard: requires tech role staff member
+function TechGuard() {
+  const { business, loading, userRole } = useBusiness()
+  if (loading) return <Loading />
+  if (!business) return <Navigate to="/login" replace />
+  // Admin/owner should use the full app
+  if (userRole === 'owner' || userRole === 'admin') return <Navigate to="/" replace />
+  return <TechShell />
 }
 
 export default function App() {
@@ -80,6 +97,7 @@ export default function App() {
               <Route path="/portal/:token" element={<PortalTokenLanding />} />
               <Route path="/quote/:token" element={<PublicQuote />} />
               <Route path="/survey/:token" element={<PublicSurvey />} />
+              <Route path="/invite/:token" element={<InviteAccept />} />
 
               {/* Auth routes */}
               <Route path="/login" element={<Login />} />
@@ -88,6 +106,14 @@ export default function App() {
               {/* Protected routes */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/onboarding" element={<Onboarding />} />
+
+                {/* Tech routes */}
+                <Route element={<TechGuard />}>
+                  <Route path="/tech" element={<TechRunSheet />} />
+                  <Route path="/tech/profile" element={<TechProfile />} />
+                </Route>
+
+                {/* Admin/Owner routes */}
                 <Route element={<BusinessGuard />}>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/route" element={<RoutePage />} />

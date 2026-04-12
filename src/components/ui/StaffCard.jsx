@@ -1,7 +1,9 @@
 import { cn } from '../../lib/utils'
 
 const ROLE_LABELS = {
-  technician: 'Pool Technician',
+  tech: 'Technician',
+  technician: 'Technician',
+  admin: 'Admin',
   senior_tech: 'Senior Technician',
   manager: 'Manager',
   owner: 'Owner',

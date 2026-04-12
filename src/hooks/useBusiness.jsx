@@ -7,6 +7,8 @@ const BusinessContext = createContext(null)
 export function BusinessProvider({ children }) {
   const { user, loading: authLoading } = useAuth()
   const [business, setBusiness] = useState(null)
+  const [staffRecord, setStaffRecord] = useState(null) // staff_members row for tech/admin staff
+  const [userRole, setUserRole] = useState(null) // 'owner' | 'admin' | 'tech'
   const [businessLoading, setBusinessLoading] = useState(true)
   const lastUserId = useRef(null)
 
@@ -22,31 +24,72 @@ export function BusinessProvider({ children }) {
 
     if (!userId) {
       setBusiness(null)
+      setStaffRecord(null)
+      setUserRole(null)
       setBusinessLoading(false)
       return
     }
 
-    // User changed — fetch their business
+    // User changed — fetch their business (as owner or staff)
     let cancelled = false
     setBusinessLoading(true)
 
-    supabase
-      .from('businesses')
-      .select('*')
-      .eq('owner_id', userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (cancelled) return
-        if (error) console.error('Error fetching business:', error)
-        setBusiness(data || null)
+    async function resolve() {
+      // 1. Check if they own a business
+      const { data: ownedBiz, error: bizErr } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('owner_id', userId)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (ownedBiz) {
+        setBusiness(ownedBiz)
+        setStaffRecord(null)
+        setUserRole('owner')
         setBusinessLoading(false)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        console.error('Network error fetching business:', err)
-        setBusiness(null)
+        return
+      }
+
+      // 2. Check if they're a staff member linked via user_id
+      const { data: staffRow, error: staffErr } = await supabase
+        .from('staff_members')
+        .select('*, businesses(*)')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (staffRow && staffRow.businesses) {
+        setBusiness(staffRow.businesses)
+        setStaffRecord(staffRow)
+        // Map role: 'admin'|'manager'|'owner' → admin, everything else → tech
+        const r = staffRow.role?.toLowerCase()
+        const isAdmin = r === 'admin' || r === 'manager' || r === 'owner'
+        setUserRole(isAdmin ? 'admin' : 'tech')
         setBusinessLoading(false)
-      })
+        return
+      }
+
+      // 3. No business found
+      if (bizErr) console.error('Error fetching business:', bizErr)
+      if (staffErr) console.error('Error fetching staff record:', staffErr)
+      setBusiness(null)
+      setStaffRecord(null)
+      setUserRole(null)
+      setBusinessLoading(false)
+    }
+
+    resolve().catch((err) => {
+      if (cancelled) return
+      console.error('Network error fetching business:', err)
+      setBusiness(null)
+      setStaffRecord(null)
+      setUserRole(null)
+      setBusinessLoading(false)
+    })
 
     return () => { cancelled = true }
   }, [authLoading, user?.id])
@@ -61,6 +104,7 @@ export function BusinessProvider({ children }) {
       .single()
     if (error) throw error
     setBusiness(data)
+    setUserRole('owner')
     return data
   }, [user])
 
@@ -78,24 +122,48 @@ export function BusinessProvider({ children }) {
 
   const refetch = useCallback(async () => {
     if (!user) return
+    lastUserId.current = null // force re-resolve
     setBusinessLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('owner_id', user.id)
-        .maybeSingle()
-      if (error) console.error('Error fetching business:', error)
-      setBusiness(data || null)
-    } catch (err) {
-      console.error('Network error fetching business:', err)
+    // Trigger the effect by resetting the ref — the effect depends on user?.id
+    // But since user hasn't changed, we need to manually re-run
+    const userId = user.id
+
+    const { data: ownedBiz } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('owner_id', userId)
+      .maybeSingle()
+
+    if (ownedBiz) {
+      setBusiness(ownedBiz)
+      setStaffRecord(null)
+      setUserRole('owner')
+      setBusinessLoading(false)
+      return
+    }
+
+    const { data: staffRow } = await supabase
+      .from('staff_members')
+      .select('*, businesses(*)')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (staffRow && staffRow.businesses) {
+      setBusiness(staffRow.businesses)
+      setStaffRecord(staffRow)
+      const r = staffRow.role?.toLowerCase()
+      setUserRole(r === 'admin' || r === 'manager' || r === 'owner' ? 'admin' : 'tech')
+    } else {
       setBusiness(null)
+      setStaffRecord(null)
+      setUserRole(null)
     }
     setBusinessLoading(false)
   }, [user])
 
   return (
-    <BusinessContext.Provider value={{ business, loading, createBusiness, updateBusiness, refetch }}>
+    <BusinessContext.Provider value={{ business, loading, staffRecord, userRole, createBusiness, updateBusiness, refetch }}>
       {children}
     </BusinessContext.Provider>
   )

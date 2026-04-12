@@ -12,11 +12,14 @@ import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
 import { cn } from '../lib/utils'
 
-const ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
+const ROLE_OPTIONS = [
+  { value: 'tech', label: 'Technician' },
+  { value: 'admin', label: 'Admin' },
+]
 
 const emptyForm = {
   name: '',
-  role: 'technician',
+  role: 'tech',
   phone: '',
   email: '',
   bio: '',
@@ -173,7 +176,16 @@ export default function Staff() {
           <div className="space-y-3">
             {activeStaff.map(member => (
               <Card key={member.id} onClick={() => openEdit(member)} className="p-4">
-                <StaffCard staff={member} variant="compact" />
+                <div className="flex items-center justify-between gap-2">
+                  <StaffCard staff={member} variant="compact" />
+                  <div className="shrink-0">
+                    {member.invite_status === 'accepted' ? (
+                      <Badge variant="success" className="text-[10px]">Active</Badge>
+                    ) : member.email ? (
+                      <Badge variant="warning" className="text-[10px]">Pending Invite</Badge>
+                    ) : null}
+                  </div>
+                </div>
               </Card>
             ))}
 
@@ -278,6 +290,23 @@ export default function Staff() {
             <Button onClick={handleSave} loading={saving} className="w-full min-h-tap">
               {editing ? 'Save Changes' : 'Add Staff Member'}
             </Button>
+
+            {/* Invite link — show for staff with email */}
+            {editing && editing.email && editing.invite_status !== 'accepted' && editing.invite_token && (
+              <button
+                type="button"
+                onClick={() => {
+                  const link = `${window.location.origin}/invite/${editing.invite_token}`
+                  navigator.clipboard.writeText(link).then(() => alert('Invite link copied to clipboard!'))
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all min-h-tap"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+                Copy Invite Link
+              </button>
+            )}
 
             {editing && (
               <div className="flex gap-3">

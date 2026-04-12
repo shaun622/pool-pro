@@ -40,7 +40,7 @@ export default function NewService() {
   const { id: poolId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { business } = useBusiness()
+  const { business, staffRecord, userRole } = useBusiness()
   const {
     loading: serviceLoading,
     createServiceRecord,
@@ -59,6 +59,8 @@ export default function NewService() {
   const [submitting, setSubmitting] = useState(false)
   const [completed, setCompleted] = useState(searchParams.get('done') === '1')
   const [lastReadings, setLastReadings] = useState(null)
+  const [nextStop, setNextStop] = useState(null)
+  const isTech = userRole === 'tech'
 
   // Step 1: Chemical readings
   const [readings, setReadings] = useState({
@@ -133,6 +135,42 @@ export default function NewService() {
       console.error('Error loading pool:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function findNextStop() {
+    if (!isTech || !staffRecord?.id) return
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      // Find other pools assigned to this tech that are due today or overdue
+      const { data: pools } = await supabase
+        .from('pools')
+        .select('id, address, clients(name)')
+        .eq('business_id', business.id)
+        .eq('assigned_staff_id', staffRecord.id)
+        .neq('id', poolId)
+        .lte('next_due_at', new Date(today + 'T23:59:59').toISOString())
+        .order('next_due_at')
+        .limit(1)
+      if (pools?.length) {
+        setNextStop({ type: 'pool', id: pools[0].id, address: pools[0].address, client_name: pools[0].clients?.name })
+        return
+      }
+      // Also check jobs assigned to this tech for today
+      const { data: jobs } = await supabase
+        .from('jobs')
+        .select('id, title, pool_id, clients(name)')
+        .eq('business_id', business.id)
+        .eq('assigned_staff_id', staffRecord.id)
+        .eq('scheduled_date', today)
+        .in('status', ['scheduled', 'in_progress'])
+        .order('scheduled_time')
+        .limit(1)
+      if (jobs?.length && jobs[0].pool_id) {
+        setNextStop({ type: 'pool', id: jobs[0].pool_id, address: jobs[0].title, client_name: jobs[0].clients?.name })
+      }
+    } catch (err) {
+      console.error('Error finding next stop:', err)
     }
   }
 
@@ -219,6 +257,7 @@ export default function NewService() {
       // Navigate to completion URL so it survives page reloads
       navigate(`/pools/${poolId}/service?done=1`, { replace: true })
       setCompleted(true)
+      findNextStop()
     } catch (err) {
       console.error('Error completing service:', err)
       alert('Failed to complete service: ' + (err?.message || JSON.stringify(err)))
@@ -703,20 +742,42 @@ export default function NewService() {
               </div>
             </Card>
             <div className="flex gap-3 w-full">
-              <Button
-                variant="secondary"
-                className="flex-1 min-h-[48px]"
-                onClick={() => navigate(`/pools/${poolId}`)}
-              >
-                View Pool
-              </Button>
-              <Button
-                className="flex-1 min-h-[48px]"
-                onClick={() => navigate('/route')}
-              >
-                Next Pool
-              </Button>
+              {isTech && nextStop ? (
+                <Button
+                  className="flex-1 min-h-[48px] bg-green-600 hover:bg-green-700"
+                  onClick={() => navigate(`/pools/${nextStop.id}/service?staff=${staffRecord?.id}`)}
+                >
+                  Next Stop →
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="secondary"
+                    className="flex-1 min-h-[48px]"
+                    onClick={() => navigate(`/pools/${poolId}`)}
+                  >
+                    View Pool
+                  </Button>
+                  <Button
+                    className="flex-1 min-h-[48px]"
+                    onClick={() => navigate(isTech ? '/tech' : '/route')}
+                  >
+                    {isTech ? 'Run Sheet' : 'Next Pool'}
+                  </Button>
+                </>
+              )}
             </div>
+            {isTech && nextStop && (
+              <button
+                onClick={() => navigate('/tech')}
+                className="text-sm text-pool-600 font-semibold mt-2"
+              >
+                Back to Run Sheet
+              </button>
+            )}
+            {isTech && !nextStop && (
+              <p className="text-sm text-green-600 font-medium mt-2">All stops completed for today!</p>
+            )}
           </div>
         )}
       </PageWrapper>

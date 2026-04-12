@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useBusiness } from '../hooks/useBusiness';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
@@ -10,18 +11,21 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user, loading: authLoading, signIn } = useAuth();
+  const { userRole, loading: bizLoading } = useBusiness();
   const navigate = useNavigate();
 
-  // If already authenticated, redirect away
+  // If already authenticated, redirect based on role
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && !bizLoading && user) {
       if (user.user_metadata?.role === 'customer') {
         navigate('/portal', { replace: true });
+      } else if (userRole === 'tech') {
+        navigate('/tech', { replace: true });
       } else {
         navigate('/', { replace: true });
       }
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, bizLoading, userRole, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
