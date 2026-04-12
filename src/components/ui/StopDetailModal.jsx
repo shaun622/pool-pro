@@ -65,6 +65,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           price: stop.price || '',
           status: stop.status || 'scheduled',
           notes: stop.notes || '',
+          assigned_staff_id: stop.assigned_staff_id || '',
           is_recurring: false,
           recurrence_rule: 'weekly',
           recurring_profile_id: null,
@@ -90,6 +91,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           next_due_time: stop.next_due_at ? new Date(stop.next_due_at).toTimeString().slice(0, 5) : '',
           schedule_frequency: stop.schedule_frequency || 'weekly',
           access_notes: stop.access_notes || '',
+          assigned_staff_id: stop.assigned_staff_id || '',
         })
       }
       setEditing(false)
@@ -132,6 +134,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
             price: form.price ? Number(form.price) : null,
             notes: form.notes || null,
+            assigned_staff_id: form.assigned_staff_id || null,
           }).select('id').single()
           if (insErr) throw insErr
           jobId = inserted.id
@@ -144,6 +147,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             price: form.price ? Number(form.price) : null,
             status: form.status,
             notes: form.notes || null,
+            assigned_staff_id: form.assigned_staff_id || null,
           }
           const { error } = await supabase.from('jobs').update(updates).eq('id', jobId)
           if (error) throw error
@@ -246,6 +250,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           next_due_at: nextDue,
           schedule_frequency: form.schedule_frequency || null,
           access_notes: form.access_notes || null,
+          assigned_staff_id: form.assigned_staff_id || null,
         }
         const { error } = await supabase.from('pools').update(updates).eq('id', stop.id)
         if (error) throw error
@@ -471,6 +476,14 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               ]}
             />
             <TextArea label="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
+            {staffList.length > 0 && (
+              <Select
+                label="Assigned Tech"
+                value={form.assigned_staff_id}
+                onChange={e => setForm(f => ({ ...f, assigned_staff_id: e.target.value }))}
+                options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
+              />
+            )}
           </div>
         )}
 
@@ -487,6 +500,14 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               options={SCHEDULE_FREQUENCIES.map(v => ({ value: v, label: FREQUENCY_LABELS[v] || v }))}
             />
             <TextArea label="Access Notes" value={form.access_notes} onChange={e => setForm(f => ({ ...f, access_notes: e.target.value }))} rows={3} />
+            {staffList.length > 0 && (
+              <Select
+                label="Assigned Tech"
+                value={form.assigned_staff_id}
+                onChange={e => setForm(f => ({ ...f, assigned_staff_id: e.target.value }))}
+                options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
+              />
+            )}
           </div>
         )}
 
