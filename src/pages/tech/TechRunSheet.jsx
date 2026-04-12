@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { cn, formatDate } from '../../lib/utils'
-import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, getRoute, haversineKm } from '../../lib/mapbox'
+import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
 
 // ─── Helpers ───────────────────────────────────
 function ymd(d) {
@@ -78,7 +78,6 @@ export default function TechRunSheet() {
   const [pools, setPools] = useState([])
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [routeInfo, setRouteInfo] = useState(null)
 
   const staffId = staffRecord?.id
 
@@ -274,18 +273,6 @@ export default function TechRunSheet() {
     return [...byKey.values()]
   }, [jobs, pools])
 
-  // Route for map
-  useEffect(() => {
-    const withCoords = todayStops.filter(s => s.lat != null && s.lng != null)
-    if (withCoords.length < 2) { setRouteInfo(null); return }
-    let cancelled = false
-    getRoute(withCoords.map(s => ({ lat: s.lat, lng: s.lng }))).then(r => {
-      if (cancelled) return
-      setRouteInfo(r || null)
-    })
-    return () => { cancelled = true }
-  }, [todayStops])
-
   const completedCount = todayStops.filter(s => s.status === 'completed').length
   const totalCount = todayStops.length
 
@@ -346,7 +333,7 @@ export default function TechRunSheet() {
         <UpcomingView groups={upcomingGroups} navigate={navigate} />
       )}
       {view === 'map' && (
-        <MapView stops={todayStops} routeInfo={routeInfo} navigate={navigate} />
+        <MapView pools={pools} navigate={navigate} />
       )}
     </div>
   )
@@ -472,57 +459,128 @@ function UpcomingView({ groups, navigate }) {
 }
 
 // ─── Map view ────────────────────────────────
-function MapView({ stops, routeInfo, navigate }) {
-  const withCoords = stops.filter(s => s.lat != null && s.lng != null && !s.isOverdue)
-  const nextUnserviced = withCoords.find(s => s.status !== 'completed')
+function MapView({ pools, navigate }) {
+  const withCoords = pools.filter(p => p.latitude != null && p.longitude != null)
 
   if (!MAPBOX_TILE_URL) {
     return <EmptyState title="Map not configured" description="Add VITE_MAPBOX_TOKEN to your environment" />
   }
 
   if (!withCoords.length) {
-    return <EmptyState title="No locations for today" description="Stops need a geocoded address to appear on the map" />
+    return <EmptyState title="No pool locations" description="Your assigned pools need a geocoded address to appear on the map" />
   }
 
-  const center = [withCoords[0].lat, withCoords[0].lng]
-  const polyline = routeInfo?.coordinates
-    ? routeInfo.coordinates.map(([lng, lat]) => [lat, lng])
-    : withCoords.map(s => [s.lat, s.lng])
+  function pinColor(pool) {
+    if (!pool.next_due_at) return '#9ca3af'
+    const due = new Date(pool.next_due_at)
+    const today = new Date(); today.setHours(0,0,0,0)
+    if (due < today) return '#ef4444'
+    if (due.toDateString() === today.toDateString()) return '#10b981'
+    return '#0CA5EB'
+  }
+
+  function statusLabel(pool) {
+    if (!pool.next_due_at) return { text: 'No schedule', color: 'text-gray-400' }
+    const due = new Date(pool.next_due_at)
+    const today = new Date(); today.setHours(0,0,0,0)
+    if (due < today) {
+      const days = Math.floor((today - due) / (1000 * 60 * 60 * 24))
+      return { text: `${days}d overdue`, color: 'text-red-600' }
+    }
+    if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600' }
+    return { text: `Next: ${due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`, color: 'text-pool-600' }
+  }
+
+  // Find next due pool for navigate button
+  const today = new Date(); today.setHours(0,0,0,0)
+  const nextDue = withCoords.find(p => {
+    if (!p.next_due_at) return false
+    const due = new Date(p.next_due_at)
+    return due <= new Date(today.getTime() + 86400000) // today or overdue
+  })
+
+  const center = [Number(withCoords[0].latitude), Number(withCoords[0].longitude)]
 
   return (
     <div className="space-y-3">
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Overdue</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Due Today</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pool-500" />Upcoming</span>
+      </div>
+
       <div className="h-[420px] rounded-2xl overflow-hidden border border-gray-100 shadow-card">
         <MapContainer center={center} zoom={12} style={{ height: '100%', width: '100%' }}>
           <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
-          <FitBounds stops={withCoords} />
-          {polyline.length > 1 && (
-            <Polyline positions={polyline} pathOptions={{ color: '#0CA5EB', weight: 4, opacity: 0.8 }} />
-          )}
-          {withCoords.map((stop, idx) => (
-            <Marker
-              key={`${stop.id}`}
-              position={[stop.lat, stop.lng]}
-              icon={numberedIcon(idx + 1, stop.status === 'completed' ? '#10b981' : '#0CA5EB')}
-            />
-          ))}
+          <FitBounds stops={withCoords.map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }))} />
+          {withCoords.map((pool, idx) => {
+            const status = statusLabel(pool)
+            const freq = pool.schedule_frequency
+            return (
+              <Marker
+                key={pool.id}
+                position={[Number(pool.latitude), Number(pool.longitude)]}
+                icon={numberedIcon(idx + 1, pinColor(pool))}
+              >
+                <Popup className="pool-map-popup" closeButton={false} maxWidth={260} minWidth={220}>
+                  <div style={{ fontFamily: 'inherit', padding: '2px 0' }}>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '2px', lineHeight: 1.3 }}>
+                      {pool.clients?.name || 'Client'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#0CA5EB', marginBottom: '8px', lineHeight: 1.3 }}>
+                      {pool.address}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600 }} className={status.color}>{status.text}</span>
+                      {freq && (
+                        <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                          {freq === 'weekly' ? 'Weekly' : freq === 'fortnightly' ? 'Fortnightly' : freq === 'monthly' ? 'Monthly' : freq}
+                        </span>
+                      )}
+                    </div>
+                    {pool.clients?.phone && (
+                      <a href={`tel:${pool.clients.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#0CA5EB', fontWeight: 600, textDecoration: 'none', marginBottom: '6px' }}>
+                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        {pool.clients.phone}
+                      </a>
+                    )}
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                      <button
+                        onClick={() => navigate(`/pools/${pool.id}/service`)}
+                        style={{
+                          flex: 1, padding: '8px 0',
+                          background: 'linear-gradient(135deg, #0CA5EB, #0B8EC9)',
+                          color: 'white', border: 'none', borderRadius: '10px',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        Start Service
+                      </button>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pool.address || '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: '8px 12px',
+                          background: 'white', color: '#374151', border: '1px solid #e5e7eb', borderRadius: '10px',
+                          fontSize: '12px', fontWeight: 600, cursor: 'pointer', textDecoration: 'none',
+                          display: 'flex', alignItems: 'center', gap: '3px',
+                        }}
+                      >
+                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        Nav
+                      </a>
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            )
+          })}
         </MapContainer>
       </div>
 
-      {/* Navigate to next stop */}
-      {nextUnserviced && (
-        <a
-          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(nextUnserviced.address || '')}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          Navigate to Next Stop
-        </a>
-      )}
+      <p className="text-xs text-gray-400 text-center">{withCoords.length} assigned pools</p>
     </div>
   )
 }
