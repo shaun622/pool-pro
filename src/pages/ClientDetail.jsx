@@ -560,7 +560,6 @@ export default function ClientDetail() {
                   {/* Action buttons */}
                   <div className="flex gap-2 mt-3">
                     <Button
-                      variant="secondary"
                       className="flex-1 text-sm min-h-[44px]"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -573,6 +572,7 @@ export default function ClientDetail() {
                       Schedule
                     </Button>
                     <Button
+                      variant="secondary"
                       className="flex-1 text-sm min-h-[44px]"
                       onClick={(e) => {
                         e.stopPropagation()
