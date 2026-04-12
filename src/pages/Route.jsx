@@ -608,39 +608,41 @@ function ScheduleView({ business, view, setView }) {
         ))}
       </div>
 
-      {/* Add Recurring Service + Manage link */}
-      <div className="flex items-center justify-between mb-4">
+      {/* Add Recurring Service (prominent) + Manage link */}
+      <div className="mb-4">
         <button
           onClick={() => setRecurModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-pool-200 text-pool-700 text-xs font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap"
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-brand text-white shadow-md shadow-pool-500/20 text-xs font-semibold hover:shadow-lg active:scale-[0.98] transition-all min-h-tap"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
-          Add Recurring Service
+          + Add Recurring Service
         </button>
-        <button
-          onClick={() => navigate('/recurring-jobs')}
-          className="text-xs font-medium text-gray-400 hover:text-pool-600 transition-colors"
-        >
-          Manage Recurring
-        </button>
+        <div className="flex justify-end mt-1.5">
+          <button
+            onClick={() => navigate('/recurring-jobs')}
+            className="text-xs font-medium text-gray-400 hover:text-pool-600 transition-colors"
+          >
+            Manage Recurring
+          </button>
+        </div>
       </div>
 
       {/* Total route card */}
       {routeInfo && stopsForDate.length > 1 && (
-        <div className="bg-gradient-brand rounded-2xl p-4 mb-4 shadow-card text-white flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <div className="bg-white rounded-2xl p-4 mb-4 shadow-card border border-gray-100 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-pool-50 flex items-center justify-center shrink-0">
+            <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Total Route</p>
-            <p className="text-base font-bold">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Total Route</p>
+            <p className="text-base font-bold text-gray-900">
               {routeInfo.distance_km.toFixed(1)} km · ~{Math.round(routeInfo.duration_min)} min travel
             </p>
-            {routeInfo.coordinates && <p className="text-[11px] opacity-75">via road network</p>}
+            {routeInfo.coordinates && <p className="text-[11px] text-gray-400">via road network</p>}
           </div>
         </div>
       )}
