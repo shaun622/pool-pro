@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import StaffCard, { ROLE_LABELS } from '../components/ui/StaffCard'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
+import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 
 const ROLE_OPTIONS = [
@@ -36,6 +37,10 @@ export default function Staff() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showSetup, setShowSetup] = useState(false)
+  const [setupPassword, setSetupPassword] = useState('')
+  const [settingUp, setSettingUp] = useState(false)
+  const [setupDone, setSetupDone] = useState(false)
   const fileRef = useRef()
 
   function openAdd() {
@@ -54,13 +59,16 @@ export default function Staff() {
     setEditing(member)
     setForm({
       name: member.name || '',
-      role: member.role || 'technician',
+      role: member.role || 'tech',
       phone: member.phone || '',
       email: member.email || '',
       bio: member.bio || '',
     })
     setPhotoFile(null)
     setPhotoPreview(member.photo_url || null)
+    setShowSetup(false)
+    setSetupPassword('')
+    setSetupDone(false)
     setShowModal(true)
   }
 
@@ -121,6 +129,44 @@ export default function Staff() {
       await updateStaff(member.id, { is_active: !member.is_active })
     } catch (err) {
       console.error('Error toggling staff status:', err)
+    }
+  }
+
+  async function handleManualSetup() {
+    if (!editing?.email || !setupPassword) return
+    if (setupPassword.length < 6) {
+      alert('Password must be at least 6 characters.')
+      return
+    }
+    setSettingUp(true)
+    try {
+      // 1. Create auth user with the staff member's email
+      const { data: authData, error: signupErr } = await supabase.auth.signUp({
+        email: editing.email,
+        password: setupPassword,
+        options: {
+          data: { role: 'staff' },
+        },
+      })
+      if (signupErr) throw signupErr
+
+      // 2. Link the staff member to the new auth user
+      const userId = authData.user?.id
+      if (userId) {
+        await updateStaff(editing.id, {
+          user_id: userId,
+          invite_status: 'accepted',
+          invite_token: null,
+        })
+      }
+
+      setSetupDone(true)
+      setSetupPassword('')
+    } catch (err) {
+      console.error('Manual setup error:', err)
+      alert(err.message || 'Failed to create account.')
+    } finally {
+      setSettingUp(false)
     }
   }
 
@@ -291,21 +337,94 @@ export default function Staff() {
               {editing ? 'Save Changes' : 'Add Staff Member'}
             </Button>
 
-            {/* Invite link — show for staff with email */}
-            {editing && editing.email && editing.invite_status !== 'accepted' && editing.invite_token && (
-              <button
-                type="button"
-                onClick={() => {
-                  const link = `${window.location.origin}/invite/${editing.invite_token}`
-                  navigator.clipboard.writeText(link).then(() => alert('Invite link copied to clipboard!'))
-                }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all min-h-tap"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            {/* Account setup — show for staff with email who haven't been activated yet */}
+            {editing && editing.email && editing.invite_status !== 'accepted' && !setupDone && (
+              <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Account Setup</p>
+
+                {/* Option 1: Copy invite link */}
+                {editing.invite_token && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link = `${window.location.origin}/invite/${editing.invite_token}`
+                      navigator.clipboard.writeText(link).then(() => alert('Invite link copied! Send it to them via text, email, etc.'))
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all min-h-tap"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    Copy Invite Link
+                  </button>
+                )}
+
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <div className="flex-1 border-t border-gray-200" />
+                  <span>or set up manually</span>
+                  <div className="flex-1 border-t border-gray-200" />
+                </div>
+
+                {/* Option 2: Manual setup */}
+                {!showSetup ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowSetup(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-100 active:scale-[0.98] transition-all min-h-tap"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                    Create Login for Them
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-500">
+                      Set a password for <strong>{editing.email}</strong>. Tell them their email and this password to log in.
+                    </p>
+                    <Input
+                      label="Password"
+                      type="password"
+                      value={setupPassword}
+                      onChange={e => setSetupPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      autoComplete="new-password"
+                    />
+                    <Button
+                      onClick={handleManualSetup}
+                      loading={settingUp}
+                      className="w-full min-h-tap bg-green-600 hover:bg-green-700"
+                    >
+                      Activate Account
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Success state after manual setup */}
+            {setupDone && (
+              <div className="rounded-xl bg-green-50 border border-green-200 p-4 text-center">
+                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
+                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-green-800">Account activated!</p>
+                <p className="text-xs text-green-600 mt-1">
+                  They can now log in with <strong>{editing?.email}</strong> and the password you set.
+                </p>
+              </div>
+            )}
+
+            {/* Already active indicator */}
+            {editing && editing.invite_status === 'accepted' && (
+              <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                Copy Invite Link
-              </button>
+                <span className="text-sm text-green-700 font-medium">Account active — can log in</span>
+              </div>
             )}
 
             {editing && (
