@@ -6,6 +6,7 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
+import CustomSelect from '../components/ui/CustomSelect'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useClients } from '../hooks/useClients'
@@ -543,19 +544,17 @@ export default function ClientDetail() {
                         {poolStaff.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
                       </div>
                     ) : null}
-                    <select
+                    <CustomSelect
+                      inline
                       value={pool.assigned_staff_id || ''}
                       onChange={async (e) => {
                         const val = e.target.value || null
                         await updatePool(pool.id, { assigned_staff_id: val })
                       }}
-                      className="select-inline flex-1 min-h-[36px]"
-                    >
-                      <option value="">Assign technician...</option>
-                      {staffList.filter(s => s.is_active).map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
+                      placeholder="Assign technician..."
+                      options={[{ value: '', label: 'Assign technician...' }, ...staffList.filter(s => s.is_active).map(s => ({ value: s.id, label: s.name }))]}
+                      className="flex-1"
+                    />
                   </div>
 
                   {/* Action buttons */}

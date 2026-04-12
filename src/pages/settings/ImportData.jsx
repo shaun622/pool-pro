@@ -7,6 +7,7 @@ import Badge from '../../components/ui/Badge'
 import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { cn } from '../../lib/utils'
+import CustomSelect from '../../components/ui/CustomSelect'
 
 const IMPORT_TYPES = [
   { value: 'clients', label: 'Clients', columns: ['name', 'email', 'phone', 'address'], required: ['name'] },
@@ -174,16 +175,14 @@ export default function ImportData() {
                     <span className={cn('text-xs w-28 shrink-0', typeDef.required.includes(col) ? 'font-bold text-gray-700' : 'text-gray-500')}>
                       {col}{typeDef.required.includes(col) ? ' *' : ''}
                     </span>
-                    <select
-                      className="select-inline flex-1 text-xs"
+                    <CustomSelect
+                      inline
                       value={columnMap[col] ?? ''}
                       onChange={e => setColumnMap(prev => ({ ...prev, [col]: e.target.value === '' ? undefined : Number(e.target.value) }))}
-                    >
-                      <option value="">— skip —</option>
-                      {parsed.headers.map((h, i) => (
-                        <option key={i} value={i}>{h}</option>
-                      ))}
-                    </select>
+                      placeholder="— skip —"
+                      options={[{ value: '', label: '— skip —' }, ...parsed.headers.map((h, i) => ({ value: i, label: h }))]}
+                      className="flex-1"
+                    />
                   </div>
                 ))}
               </div>

@@ -5,6 +5,7 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
+import CustomSelect from '../components/ui/CustomSelect'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
 import { useBusiness } from '../hooks/useBusiness'
@@ -471,15 +472,12 @@ export default function QuoteBuilder() {
                       </button>
                     </div>
                     {item.recurring && (
-                      <select
+                      <CustomSelect
+                        inline
                         value={item.recurring}
                         onChange={e => updateLineItem(index, 'recurring', e.target.value)}
-                        className="select-inline text-xs min-h-[32px]"
-                      >
-                        {FREQUENCY_OPTIONS.map(f => (
-                          <option key={f.value} value={f.value}>{f.label}</option>
-                        ))}
-                      </select>
+                        options={FREQUENCY_OPTIONS}
+                      />
                     )}
                   </div>
                   {lineItems.length > 1 && (

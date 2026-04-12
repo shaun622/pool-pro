@@ -6,6 +6,7 @@ import Modal from './Modal'
 import Button from './Button'
 import Badge from './Badge'
 import Input, { TextArea, Select } from './Input'
+import CustomSelect from './CustomSelect'
 import AddressAutocomplete from './AddressAutocomplete'
 import { supabase } from '../../lib/supabase'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, geocodeAddress } from '../../lib/mapbox'
@@ -399,17 +400,15 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Assigned Tech</p>
-                  <select
+                  <CustomSelect
+                    inline
                     value={stop.assigned_staff_id || ''}
                     onChange={e => handleAssign(e.target.value)}
                     disabled={assigning}
-                    className="select-inline mt-1 w-full"
-                  >
-                    <option value="">Unassigned</option>
-                    {staffList.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                    placeholder="Unassigned"
+                    options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
+                    className="mt-1"
+                  />
                 </div>
                 {assigning && (
                   <div className="w-4 h-4 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
