@@ -586,7 +586,14 @@ function MapView({ pools, navigate }) {
         </MapContainer>
       </div>
 
-      <p className="text-xs text-gray-400 text-center">{withCoords.length} assigned pools</p>
+      <p className="text-xs text-gray-400 text-center">
+        {withCoords.length} pool{withCoords.length !== 1 ? 's' : ''} on map
+        {pools.length > withCoords.length && (
+          <span className="text-amber-500 ml-1">
+            · {pools.length - withCoords.length} missing location (update address with suburb)
+          </span>
+        )}
+      </p>
     </div>
   )
 }
@@ -657,7 +664,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
           )}
 
           {stop.access_notes && !compact && (
-            <p className="text-xs text-amber-600 mt-1 truncate">Access: {stop.access_notes}</p>
+            <p className="text-xs text-amber-600 mt-1 truncate">Notes: {stop.access_notes}</p>
           )}
         </div>
       </div>

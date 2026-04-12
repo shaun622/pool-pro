@@ -544,7 +544,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               onChange={e => setForm(f => ({ ...f, schedule_frequency: e.target.value }))}
               options={SCHEDULE_FREQUENCIES.map(v => ({ value: v, label: FREQUENCY_LABELS[v] || v }))}
             />
-            <TextArea label="Access Notes" value={form.access_notes} onChange={e => setForm(f => ({ ...f, access_notes: e.target.value }))} rows={3} />
+            <TextArea label="Notes" value={form.access_notes} onChange={e => setForm(f => ({ ...f, access_notes: e.target.value }))} rows={3} />
             {staffList.length > 0 && (
               <Select
                 label="Assigned Tech"

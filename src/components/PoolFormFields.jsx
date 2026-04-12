@@ -141,7 +141,7 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress })
             />
           </div>
           <TextArea
-            label="Access Notes"
+            label="Notes"
             name="access_notes"
             value={poolForm.access_notes}
             onChange={handlePoolChange}

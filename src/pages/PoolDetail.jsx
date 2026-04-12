@@ -206,10 +206,10 @@ export default function PoolDetail() {
             </div>
           </Card>
 
-          {/* Access Notes */}
+          {/* Notes */}
           {pool.access_notes && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Access Notes</h2>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes</h2>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{pool.access_notes}</p>
             </Card>
           )}
