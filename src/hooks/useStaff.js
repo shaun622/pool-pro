@@ -56,6 +56,14 @@ export function useStaff() {
   }
 
   async function deleteStaff(id) {
+    // Clear foreign key references before deleting
+    await Promise.all([
+      supabase.from('service_records').update({ staff_id: null }).eq('staff_id', id),
+      supabase.from('clients').update({ assigned_staff_id: null }).eq('assigned_staff_id', id),
+      supabase.from('pools').update({ assigned_staff_id: null }).eq('assigned_staff_id', id),
+      supabase.from('jobs').update({ assigned_staff_id: null }).eq('assigned_staff_id', id),
+      supabase.from('recurring_job_profiles').update({ assigned_staff_id: null }).eq('assigned_staff_id', id),
+    ])
     const { error } = await supabase
       .from('staff_members')
       .delete()
