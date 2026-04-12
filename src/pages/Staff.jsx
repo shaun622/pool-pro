@@ -140,7 +140,7 @@ export default function Staff() {
     }
     setSettingUp(true)
     try {
-      // 1. Create auth user with the staff member's email
+      // 1. Try to create auth user
       const { data: authData, error: signupErr } = await supabase.auth.signUp({
         email: editing.email,
         password: setupPassword,
@@ -150,15 +150,21 @@ export default function Staff() {
       })
       if (signupErr) throw signupErr
 
-      // 2. Link the staff member to the new auth user
+      // Supabase returns a fake user with no session when email already exists
+      // Check for this case: user object exists but no session and no confirmed email
       const userId = authData.user?.id
-      if (userId) {
-        await updateStaff(editing.id, {
-          user_id: userId,
-          invite_status: 'accepted',
-          invite_token: null,
-        })
+      const hasIdentities = authData.user?.identities?.length > 0
+
+      if (!userId || !hasIdentities) {
+        throw new Error('An account with this email already exists. Try a different email, or delete the existing account from the Supabase dashboard first.')
       }
+
+      // 2. Link the staff member to the new auth user
+      await updateStaff(editing.id, {
+        user_id: userId,
+        invite_status: 'accepted',
+        invite_token: null,
+      })
 
       setSetupDone(true)
       setSetupPassword('')
