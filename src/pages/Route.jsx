@@ -6,12 +6,36 @@ import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import Input, { Select, TextArea } from '../components/ui/Input'
+import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
+import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, getRoute, haversineKm } from '../lib/mapbox'
+
+const RECURRENCE_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: '6_weekly', label: 'Every 6 Weeks' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'custom', label: 'Custom' },
+]
+
+const DAY_OPTIONS = [
+  { value: '', label: 'No preference' },
+  { value: '1', label: 'Monday' },
+  { value: '2', label: 'Tuesday' },
+  { value: '3', label: 'Wednesday' },
+  { value: '4', label: 'Thursday' },
+  { value: '5', label: 'Friday' },
+  { value: '6', label: 'Saturday' },
+  { value: '0', label: 'Sunday' },
+]
 
 // ─── Numbered pin icon ──────────────────────────
 function numberedIcon(n, color = '#0CA5EB') {
@@ -137,10 +161,12 @@ function ScheduleView({ business, view, setView }) {
   const [allJobs, setAllJobs] = useState([])
   const [allPools, setAllPools] = useState([])
   const [allProfiles, setAllProfiles] = useState([])
+  const [allStaff, setAllStaff] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
   const [routeInfo, setRouteInfo] = useState(null) // { distance_km, duration_min, coordinates }
   const [upcomingPage, setUpcomingPage] = useState(0) // 0 = next 5 jobs, 1 = following 5, etc.
+  const [recurModalOpen, setRecurModalOpen] = useState(false)
   const UPCOMING_PAGE_SIZE = 5
   const UPCOMING_HORIZON_DAYS = 180
 
@@ -153,10 +179,10 @@ function ScheduleView({ business, view, setView }) {
     const to = new Date()
     to.setDate(to.getDate() + 60)
 
-    const [jobsRes, poolsRes, profilesRes] = await Promise.all([
+    const [jobsRes, poolsRes, profilesRes, staffRes] = await Promise.all([
       supabase
         .from('jobs')
-        .select('*, clients(name, email, phone), pools(address, latitude, longitude)')
+        .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
         .gte('scheduled_date', ymd(from))
         .lte('scheduled_date', ymd(to))
@@ -171,13 +197,20 @@ function ScheduleView({ business, view, setView }) {
       // Load active recurring job profiles so we can project future occurrences
       supabase
         .from('recurring_job_profiles')
-        .select('*, clients(name, email, phone), pools(address, latitude, longitude)')
+        .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
+        .eq('business_id', business.id)
+        .eq('is_active', true),
+      // Load staff for tech display on cards
+      supabase
+        .from('staff_members')
+        .select('id, name, photo_url')
         .eq('business_id', business.id)
         .eq('is_active', true),
     ])
     setAllJobs(jobsRes.data || [])
     setAllPools(poolsRes.data || [])
     setAllProfiles(profilesRes.data || [])
+    setAllStaff(staffRes.data || [])
     setLoading(false)
   }
 
@@ -575,6 +608,25 @@ function ScheduleView({ business, view, setView }) {
         ))}
       </div>
 
+      {/* Add Recurring Service + Manage link */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => setRecurModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-pool-200 text-pool-700 text-xs font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Add Recurring Service
+        </button>
+        <button
+          onClick={() => navigate('/recurring-jobs')}
+          className="text-xs font-medium text-gray-400 hover:text-pool-600 transition-colors"
+        >
+          Manage Recurring
+        </button>
+      </div>
+
       {/* Total route card */}
       {routeInfo && stopsForDate.length > 1 && (
         <div className="bg-gradient-brand rounded-2xl p-4 mb-4 shadow-card text-white flex items-center gap-3">
@@ -627,6 +679,14 @@ function ScheduleView({ business, view, setView }) {
         stop={selectedStop}
         stopNumber={selectedStop ? stopsForDate.findIndex(s => s.id === selectedStop.id && s.type === selectedStop.type) + 1 : 1}
         onUpdated={() => { fetchData(); setSelectedStop(null) }}
+      />
+
+      <AddRecurringModal
+        open={recurModalOpen}
+        onClose={() => setRecurModalOpen(false)}
+        business={business}
+        staff={allStaff}
+        onCreated={() => { fetchData(); setRecurModalOpen(false) }}
       />
     </>
   )
@@ -941,6 +1001,25 @@ function MapView({ stops, routeInfo, onSelect }) {
   )
 }
 
+// ─── Tech avatar ─────────────────────────────
+function TechBadge({ name, photo }) {
+  if (!name) return null
+  const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const firstName = name.split(' ')[0]
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {photo ? (
+        <img src={photo} alt={name} className="w-6 h-6 rounded-full object-cover border border-gray-200" />
+      ) : (
+        <div className="w-6 h-6 rounded-full bg-pool-100 text-pool-700 flex items-center justify-center text-[10px] font-bold border border-pool-200">
+          {initials}
+        </div>
+      )}
+      <span className="text-[11px] text-gray-500 font-medium">{firstName}</span>
+    </div>
+  )
+}
+
 // ─── Stop card ────────────────────────────────
 function StopCard({ stop, number, onClick, compact = false }) {
   const color = stop.isOverdue ? '#ef4444' : stop.status === 'completed' ? '#10b981' : stop.status === 'in_progress' ? '#f59e0b' : '#0CA5EB'
@@ -962,9 +1041,12 @@ function StopCard({ stop, number, onClick, compact = false }) {
                 {stop.title}
                 {stop.client_name && <span className="text-gray-400 font-normal"> · {stop.client_name}</span>}
               </p>
-              {stop.time_display && (
-                <span className="text-xs text-gray-500 shrink-0">{stop.time_display.split(' – ')[0]}</span>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                <TechBadge name={stop.tech_name} photo={stop.tech_photo} />
+                {stop.time_display && (
+                  <span className="text-xs text-gray-500">{stop.time_display.split(' – ')[0]}</span>
+                )}
+              </div>
             </div>
             {stop.address && (
               <p className="text-xs text-pool-600 truncate mt-0.5">{stop.address}</p>
@@ -991,21 +1073,26 @@ function StopCard({ stop, number, onClick, compact = false }) {
               <p className="font-semibold text-gray-900 truncate">{stop.title}</p>
               {stop.client_name && <p className="text-xs text-gray-500 mt-0.5">{stop.client_name}</p>}
             </div>
-            <Badge variant={stop.status === 'completed' ? 'success' : stop.status === 'in_progress' ? 'warning' : 'primary'} className="shrink-0 capitalize">
-              {String(stop.status || 'scheduled').replace('_', ' ')}
-            </Badge>
+            <div className="flex items-center gap-2 shrink-0">
+              <TechBadge name={stop.tech_name} photo={stop.tech_photo} />
+              <Badge variant={stop.status === 'completed' ? 'success' : stop.status === 'in_progress' ? 'warning' : 'primary'} className="shrink-0 capitalize">
+                {String(stop.status || 'scheduled').replace('_', ' ')}
+              </Badge>
+            </div>
           </div>
           {stop.address && (
             <p className="text-xs text-pool-600 mt-1 truncate">{stop.address}</p>
           )}
-          {stop.time_display && (
-            <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>{stop.time_display}</span>
-            </div>
-          )}
+          <div className="flex items-center justify-between mt-1.5">
+            {stop.time_display && (
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{stop.time_display}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </button>
@@ -1185,6 +1272,8 @@ function jobToStop(j) {
     email: j.clients?.email,
     lat: j.pools?.latitude ? Number(j.pools.latitude) : null,
     lng: j.pools?.longitude ? Number(j.pools.longitude) : null,
+    tech_name: j.staff?.name || null,
+    tech_photo: j.staff?.photo_url || null,
   }
 }
 
@@ -1215,6 +1304,8 @@ function profileToStop(profile, occurrenceDate) {
     lat: profile.pools?.latitude ? Number(profile.pools.latitude) : null,
     lng: profile.pools?.longitude ? Number(profile.pools.longitude) : null,
     projected: true,
+    tech_name: profile.staff?.name || null,
+    tech_photo: profile.staff?.photo_url || null,
   }
 }
 
@@ -1246,6 +1337,313 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
     isOverdue,
     daysOverdue,
   }
+}
+
+// ─── Add Recurring Service Modal ─────────────
+function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
+  const [step, setStep] = useState(1) // 1=client, 2=pool, 3=details, 4=confirm
+  const [clients, setClients] = useState([])
+  const [clientId, setClientId] = useState('')
+  const [clientPools, setClientPools] = useState([])
+  const [poolId, setPoolId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // New client inline
+  const [showNewClient, setShowNewClient] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '', address: '' })
+  const [newClientSaving, setNewClientSaving] = useState(false)
+
+  // New pool inline
+  const [showNewPool, setShowNewPool] = useState(false)
+  const [newPoolForm, setNewPoolForm] = useState(emptyPool)
+  const [newPoolSaving, setNewPoolSaving] = useState(false)
+
+  // Schedule details
+  const [recurrenceRule, setRecurrenceRule] = useState('weekly')
+  const [customDays, setCustomDays] = useState(7)
+  const [preferredDay, setPreferredDay] = useState('')
+  const [firstDate, setFirstDate] = useState(new Date().toISOString().split('T')[0])
+  const [assignedStaffId, setAssignedStaffId] = useState('')
+  const [notes, setNotes] = useState('')
+
+  // Fetch clients on open
+  useEffect(() => {
+    if (!open || !business?.id) return
+    supabase.from('clients').select('id, name, address').eq('business_id', business.id).order('name')
+      .then(({ data }) => setClients(data || []))
+  }, [open, business?.id])
+
+  // Fetch pools when client changes
+  useEffect(() => {
+    if (!clientId) { setClientPools([]); return }
+    supabase.from('pools').select('id, address').eq('client_id', clientId)
+      .then(({ data }) => {
+        setClientPools(data || [])
+        // Auto-select if single pool
+        if (data?.length === 1) setPoolId(data[0].id)
+      })
+  }, [clientId])
+
+  function reset() {
+    setStep(1); setClientId(''); setPoolId(''); setRecurrenceRule('weekly')
+    setCustomDays(7); setPreferredDay(''); setFirstDate(new Date().toISOString().split('T')[0])
+    setAssignedStaffId(''); setNotes(''); setShowNewClient(false); setShowNewPool(false)
+    setNewClientForm({ name: '', email: '', phone: '', address: '' })
+    setNewPoolForm(emptyPool)
+  }
+
+  function handleClose() { reset(); onClose() }
+
+  async function handleCreateClient() {
+    if (!newClientForm.name.trim()) return
+    setNewClientSaving(true)
+    try {
+      const { data, error } = await supabase.from('clients').insert({
+        business_id: business.id,
+        name: newClientForm.name.trim(),
+        email: newClientForm.email.trim() || null,
+        phone: newClientForm.phone.trim() || null,
+        address: newClientForm.address.trim() || null,
+      }).select('id, name, address').single()
+      if (error) throw error
+      setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setClientId(data.id)
+      setShowNewClient(false)
+      setNewClientForm({ name: '', email: '', phone: '', address: '' })
+    } catch (err) {
+      alert(err?.message || 'Failed to create client')
+    } finally { setNewClientSaving(false) }
+  }
+
+  async function handleCreatePool() {
+    if (!newPoolForm.address.trim()) return
+    setNewPoolSaving(true)
+    try {
+      const payload = await buildPoolPayload(newPoolForm)
+      const { data, error } = await supabase.from('pools').insert({
+        ...payload,
+        client_id: clientId,
+        business_id: business.id,
+      }).select('id, address').single()
+      if (error) throw error
+      setClientPools(prev => [...prev, data])
+      setPoolId(data.id)
+      setShowNewPool(false)
+      setNewPoolForm(emptyPool)
+    } catch (err) {
+      alert(err?.message || 'Failed to create pool')
+    } finally { setNewPoolSaving(false) }
+  }
+
+  async function handleSubmit() {
+    if (!clientId || !poolId) return
+    setSaving(true)
+    try {
+      const freqLabel = recurrenceRule === 'custom' ? `Every ${customDays} days` : RECURRENCE_OPTIONS.find(o => o.value === recurrenceRule)?.label || recurrenceRule
+      const { error } = await supabase.from('recurring_job_profiles').insert({
+        business_id: business.id,
+        client_id: clientId,
+        pool_id: poolId,
+        title: `Pool Service — ${freqLabel}`,
+        recurrence_rule: recurrenceRule,
+        custom_interval_days: recurrenceRule === 'custom' ? Number(customDays) : null,
+        preferred_day_of_week: preferredDay ? Number(preferredDay) : null,
+        assigned_staff_id: assignedStaffId || null,
+        notes: notes.trim() || null,
+        is_active: true,
+        next_generation_at: firstDate,
+      })
+      if (error) throw error
+
+      // Update pool frequency and next_due_at
+      await supabase.from('pools').update({
+        frequency: recurrenceRule === 'custom' ? `${customDays}` : recurrenceRule,
+        next_due_at: firstDate,
+      }).eq('id', poolId)
+
+      onCreated()
+      reset()
+    } catch (err) {
+      console.error('Error creating recurring service:', err)
+      alert(err?.message || 'Failed to create recurring service')
+    } finally { setSaving(false) }
+  }
+
+  const selectedClient = clients.find(c => c.id === clientId)
+  const selectedPool = clientPools.find(p => p.id === poolId)
+  const selectedTech = staff.find(s => s.id === assignedStaffId)
+  const freqLabel = recurrenceRule === 'custom' ? `Every ${customDays} days` : RECURRENCE_OPTIONS.find(o => o.value === recurrenceRule)?.label
+
+  const stepTitles = ['Select Client', 'Select Pool', 'Schedule Details', 'Confirm']
+
+  return (
+    <Modal open={open} onClose={handleClose} title={`Add Recurring Service — Step ${step}`}>
+      {/* Progress */}
+      <div className="flex gap-1 mb-4">
+        {[1, 2, 3, 4].map(s => (
+          <div key={s} className={cn('flex-1 h-1 rounded-full', s <= step ? 'bg-pool-500' : 'bg-gray-200')} />
+        ))}
+      </div>
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{stepTitles[step - 1]}</p>
+
+      {/* Step 1: Client */}
+      {step === 1 && (
+        <div className="space-y-3">
+          {!showNewClient ? (
+            <>
+              <Select
+                label="Client"
+                value={clientId}
+                onChange={e => { setClientId(e.target.value); setPoolId('') }}
+                options={[{ value: '', label: 'Select a client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
+              />
+              <button type="button" onClick={() => setShowNewClient(true)}
+                className="text-xs font-medium text-pool-600 hover:text-pool-700">
+                + Add new client
+              </button>
+            </>
+          ) : (
+            <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Client</span>
+                <button type="button" onClick={() => setShowNewClient(false)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <Input label="Name" value={newClientForm.name} onChange={e => setNewClientForm(p => ({ ...p, name: e.target.value }))} required />
+              <Input label="Phone" value={newClientForm.phone} onChange={e => setNewClientForm(p => ({ ...p, phone: e.target.value }))} />
+              <Input label="Address" value={newClientForm.address} onChange={e => setNewClientForm(p => ({ ...p, address: e.target.value }))} />
+              <button type="button" onClick={handleCreateClient} disabled={!newClientForm.name.trim() || newClientSaving}
+                className="w-full py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50">
+                {newClientSaving ? 'Saving...' : 'Create Client'}
+              </button>
+            </div>
+          )}
+          <div className="flex justify-end pt-2">
+            <button type="button" onClick={() => setStep(2)} disabled={!clientId}
+              className="px-5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50 min-h-tap">
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Pool */}
+      {step === 2 && (
+        <div className="space-y-3">
+          {clientPools.length > 0 && !showNewPool ? (
+            <div className="space-y-2">
+              {clientPools.map(p => (
+                <button key={p.id} type="button" onClick={() => setPoolId(p.id)}
+                  className={cn('w-full text-left p-3 rounded-xl border-2 transition-all', poolId === p.id ? 'border-pool-500 bg-pool-50' : 'border-gray-200 bg-white hover:border-gray-300')}>
+                  <p className="text-sm font-medium text-gray-900 truncate">{p.address}</p>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!showNewPool ? (
+            <button type="button" onClick={() => setShowNewPool(true)}
+              className="text-xs font-medium text-pool-600 hover:text-pool-700">
+              + Add new pool
+            </button>
+          ) : (
+            <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Pool</span>
+                <button type="button" onClick={() => { setShowNewPool(false); setNewPoolForm(emptyPool) }} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <PoolFormFields poolForm={newPoolForm} setPoolForm={setNewPoolForm} clientAddress={selectedClient?.address || ''} />
+              <button type="button" onClick={handleCreatePool} disabled={!newPoolForm.address.trim() || newPoolSaving}
+                className="w-full py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50">
+                {newPoolSaving ? 'Saving...' : 'Add Pool'}
+              </button>
+            </div>
+          )}
+          <div className="flex justify-between pt-2">
+            <button type="button" onClick={() => setStep(1)} className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold min-h-tap">Back</button>
+            <button type="button" onClick={() => setStep(3)} disabled={!poolId}
+              className="px-5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50 min-h-tap">
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Schedule Details */}
+      {step === 3 && (
+        <div className="space-y-4">
+          <Select label="Frequency" value={recurrenceRule} onChange={e => setRecurrenceRule(e.target.value)}
+            options={RECURRENCE_OPTIONS} />
+          {recurrenceRule === 'custom' && (
+            <Input label="Every ___ days" type="number" min="1" value={customDays}
+              onChange={e => setCustomDays(e.target.value)} />
+          )}
+          <Select label="Preferred Day" value={preferredDay} onChange={e => setPreferredDay(e.target.value)}
+            options={DAY_OPTIONS} />
+          <Input label="First Service Date" type="date" value={firstDate}
+            onChange={e => setFirstDate(e.target.value)} />
+          {staff.length > 0 && (
+            <Select label="Assign Technician" value={assignedStaffId} onChange={e => setAssignedStaffId(e.target.value)}
+              options={[{ value: '', label: 'Unassigned' }, ...staff.map(s => ({ value: s.id, label: s.name }))]} />
+          )}
+          <TextArea label="Notes" value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="e.g. Back gate code 1234" rows={2} />
+          <div className="flex justify-between pt-2">
+            <button type="button" onClick={() => setStep(2)} className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold min-h-tap">Back</button>
+            <button type="button" onClick={() => setStep(4)}
+              className="px-5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold min-h-tap">
+              Review
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Confirm */}
+      {step === 4 && (
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Client</span>
+              <span className="font-semibold text-gray-900">{selectedClient?.name}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Pool</span>
+              <span className="font-semibold text-gray-900 text-right truncate max-w-[60%]">{selectedPool?.address}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Frequency</span>
+              <span className="font-semibold text-gray-900">{freqLabel}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">First Service</span>
+              <span className="font-semibold text-gray-900">{firstDate}</span>
+            </div>
+            {selectedTech && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Technician</span>
+                <span className="font-semibold text-gray-900">{selectedTech.name}</span>
+              </div>
+            )}
+            {notes && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Notes</span>
+                <span className="text-gray-700 text-right max-w-[60%]">{notes}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between pt-2">
+            <button type="button" onClick={() => setStep(3)} className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold min-h-tap">Back</button>
+            <button type="button" onClick={handleSubmit} disabled={saving}
+              className="px-5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50 min-h-tap">
+              {saving ? 'Creating...' : 'Create Recurring Service'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
 }
 
 // ─── Misc ─────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -16,6 +16,7 @@ export default function InvoiceBuilder() {
   const { business } = useBusiness()
   const navigate = useNavigate()
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const isEditing = Boolean(id)
 
   const [clients, setClients] = useState([])
@@ -29,6 +30,41 @@ export default function InvoiceBuilder() {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(isEditing)
   const [confirmSendOpen, setConfirmSendOpen] = useState(false)
+  const [prefillRef, setPrefillRef] = useState('')
+
+  // Pre-fill from query params (from Work Order or Quote conversion)
+  useEffect(() => {
+    if (isEditing) return
+    const clientParam = searchParams.get('client')
+    const descParam = searchParams.get('desc')
+    const priceParam = searchParams.get('price')
+    const refParam = searchParams.get('ref')
+    const itemsParam = searchParams.get('items')
+
+    if (clientParam) setClientId(clientParam)
+    if (refParam) setPrefillRef(refParam)
+
+    if (itemsParam) {
+      // From quote: full line items JSON
+      try {
+        const items = JSON.parse(itemsParam)
+        if (Array.isArray(items) && items.length > 0) {
+          setLineItems(items.map(li => ({
+            description: li.description || '',
+            quantity: li.quantity || 1,
+            unit_price: li.unit_price || 0,
+          })))
+        }
+      } catch (e) { /* ignore parse errors */ }
+    } else if (descParam) {
+      // From work order: single line item
+      setLineItems([{
+        description: descParam,
+        quantity: 1,
+        unit_price: priceParam ? Number(priceParam) : 0,
+      }])
+    }
+  }, [isEditing, searchParams])
 
   // Fetch clients
   useEffect(() => {

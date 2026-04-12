@@ -581,6 +581,9 @@ export default function ClientDetail() {
 
         {/* Quotes Section */}
         <QuotesSection clientId={id} navigate={navigate} />
+
+        {/* Invoices Section */}
+        <InvoicesSection clientId={id} navigate={navigate} />
       </PageWrapper>
 
       {/* Edit Client Modal */}
@@ -1044,6 +1047,81 @@ function QuotesSection({ clientId, navigate }) {
                     <div className="flex items-center gap-3 text-xs text-gray-500">
                       <span>{formatDate(q.created_at)}</span>
                       {total > 0 && <span className="font-semibold text-gray-700">${total.toFixed(2)}</span>}
+                    </div>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Invoices Section (fetches its own data) ────────
+const INVOICE_STATUS_BADGE = { draft: 'default', sent: 'primary', paid: 'success', overdue: 'danger', void: 'default' }
+const INVOICE_STATUS_LABEL = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', void: 'Void' }
+
+function InvoicesSection({ clientId, navigate }) {
+  const [invoices, setInvoices] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!clientId) return
+    supabase
+      .from('invoices')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setInvoices(data || [])
+        setLoading(false)
+      })
+  }, [clientId])
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-semibold text-gray-900">Invoices</h2>
+        <button
+          onClick={() => navigate(`/invoices/new?client=${clientId}`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Create Invoice
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <div className="w-6 h-6 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : invoices.length === 0 ? (
+        <p className="text-sm text-gray-400 py-4 text-center">No invoices for this client</p>
+      ) : (
+        <div className="space-y-2">
+          {invoices.map(inv => {
+            const st = INVOICE_STATUS_BADGE[inv.status] || 'default'
+            const label = INVOICE_STATUS_LABEL[inv.status] || inv.status
+            return (
+              <Card key={inv.id} onClick={() => navigate(`/invoices/${inv.id}`)}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {inv.invoice_number || `Invoice #${inv.id.slice(0, 6)}`}
+                      </p>
+                      <Badge variant={st} className="text-[10px] shrink-0">{label}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span>{formatDate(inv.issued_date || inv.created_at)}</span>
+                      {inv.total > 0 && <span className="font-semibold text-gray-700">${Number(inv.total).toFixed(2)}</span>}
                     </div>
                   </div>
                   <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

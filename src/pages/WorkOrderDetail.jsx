@@ -356,18 +356,36 @@ export default function JobDetail() {
 
         {/* Completed banner — pool-blue theme */}
         {job.status === 'completed' && (
-          <div className="mb-4 p-3.5 bg-pool-50 border border-pool-100 rounded-2xl flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0 shadow-md shadow-pool-500/20">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          <div className="mb-4">
+            <div className="p-3.5 bg-pool-50 border border-pool-100 rounded-2xl flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0 shadow-md shadow-pool-500/20">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-pool-900">Job Completed</p>
+                {job.completed_at && (
+                  <p className="text-xs text-pool-600">{formatDate(job.completed_at)}</p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const params = new URLSearchParams()
+                if (job.client_id) params.set('client', job.client_id)
+                if (job.title) params.set('desc', job.title)
+                if (job.price) params.set('price', job.price)
+                params.set('ref', `work-order:${job.id}`)
+                navigate(`/invoices/new?${params.toString()}`)
+              }}
+              className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-pool-900">Job Completed</p>
-              {job.completed_at && (
-                <p className="text-xs text-pool-600">{formatDate(job.completed_at)}</p>
-              )}
-            </div>
+              Create Invoice
+            </button>
           </div>
         )}
 

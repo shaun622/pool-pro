@@ -273,14 +273,21 @@ export default function WorkOrders() {
         {/* Subtitle on desktop */}
         <p className="hidden md:block text-sm text-gray-500 -mt-2 mb-4">One-off repairs, call-outs & extra work</p>
 
-        {/* Action button */}
-        <div className="mb-4">
+        {/* Action buttons */}
+        <div className="mb-4 space-y-2">
           <button onClick={() => setJobModalOpen(true)}
             className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-brand text-white shadow-md shadow-pool-500/20 text-xs font-semibold hover:shadow-lg active:scale-[0.98] transition-all min-h-tap">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             + New Work Order
+          </button>
+          <button onClick={() => navigate('/quotes/new')}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-pool-200 text-pool-700 text-xs font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            + Quick Quote
           </button>
         </div>
 
