@@ -183,25 +183,84 @@ function ScheduleView({ business, view, setView }) {
 
   useEffect(() => { fetchData() }, [business?.id])
 
-  // Build stops for the selected date
+  // Build stops for the selected date — merges jobs, due pools, overdue pools, and recurring profiles.
+  // Deduplicates: if a pool has a jobs row for the day, prefer the job.
+  // If a pool is covered by a recurring profile, prefer the pool (real data).
   const stopsForDate = useMemo(() => {
-    const stops = []
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const isViewingToday = sameYMD(selectedDate, now)
+
+    // 1. Jobs for selected date (+ track which pool_ids are covered)
+    const poolIdsCoveredByJob = new Set()
+    const todayItems = []
     for (const j of allJobs) {
       if (!j.scheduled_date) continue
       const d = new Date(j.scheduled_date + 'T00:00:00')
       if (!sameYMD(d, selectedDate)) continue
-      stops.push(jobToStop(j))
+      todayItems.push(jobToStop(j))
+      if (j.pool_id) poolIdsCoveredByJob.add(j.pool_id)
     }
+
+    // 2. Pools due on selected date (skip if already covered by a job)
+    const poolIdsCovered = new Set(poolIdsCoveredByJob)
     for (const p of allPools) {
       if (!p.next_due_at) continue
       const d = new Date(p.next_due_at)
       if (!sameYMD(d, selectedDate)) continue
-      stops.push(poolToStop(p))
+      if (poolIdsCovered.has(p.id)) continue
+      todayItems.push(poolToStop(p))
+      poolIdsCovered.add(p.id)
     }
-    // Sort by time
-    stops.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
-    return stops
-  }, [allJobs, allPools, selectedDate])
+
+    // 3. Recurring profile projections for selected date
+    const takenByProfile = new Map()
+    for (const j of allJobs) {
+      if (j.recurring_profile_id && j.scheduled_date) {
+        if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
+        takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
+      }
+    }
+    const dateKey = ymd(selectedDate)
+    const selStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+    for (const profile of allProfiles) {
+      const intervalDays = profileIntervalDays(profile)
+      if (!intervalDays) continue
+      const anchorStr = profile.next_generation_at || profile.last_generated_at
+      const anchor = anchorStr ? new Date(anchorStr) : new Date()
+      if (isNaN(anchor.getTime())) continue
+      let cursor = new Date(anchor)
+      cursor.setHours(0, 0, 0, 0)
+      while (cursor > selStart) cursor.setDate(cursor.getDate() - intervalDays)
+      while (cursor < selStart) cursor.setDate(cursor.getDate() + intervalDays)
+      if (sameYMD(cursor, selectedDate)) {
+        const taken = takenByProfile.get(profile.id)
+        if (taken && taken.has(dateKey)) continue
+        if (profile.pool_id && poolIdsCovered.has(profile.pool_id)) continue
+        todayItems.push(profileToStop(profile, cursor))
+        if (profile.pool_id) poolIdsCovered.add(profile.pool_id)
+      }
+    }
+
+    todayItems.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
+
+    // 4. Overdue pools (only when viewing today)
+    const overdueItems = []
+    if (isViewingToday) {
+      for (const p of allPools) {
+        if (!p.next_due_at) continue
+        const d = new Date(p.next_due_at)
+        if (d >= startOfToday) continue
+        if (poolIdsCoveredByJob.has(p.id)) continue // has a job today already
+        const daysOver = Math.floor((startOfToday - d) / (1000 * 60 * 60 * 24))
+        overdueItems.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+      }
+      overdueItems.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0))
+    }
+
+    // Return overdue first, then today — flat array for map/routing/modal numbering
+    return [...overdueItems, ...todayItems]
+  }, [allJobs, allPools, allProfiles, selectedDate])
 
   // Fetch Mapbox route when stops change
   useEffect(() => {
@@ -315,13 +374,37 @@ function ScheduleView({ business, view, setView }) {
       }
     }
 
+    // Add overdue pools under today's group (spec: overdue appears under current day only)
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const todayKey = ymd(now)
+    const todayGroup = byDay.get(todayKey)
+    if (todayGroup) {
+      const poolIdsInToday = new Set(todayGroup.stops.filter(s => s.pool_id).map(s => s.pool_id))
+      for (const p of allPools) {
+        if (!p.next_due_at) continue
+        const d = new Date(p.next_due_at)
+        if (d >= startOfToday) continue
+        if (poolIdsInToday.has(p.id)) continue
+        const daysOver = Math.floor((startOfToday - d) / (1000 * 60 * 60 * 24))
+        todayGroup.stops.unshift(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+        poolIdsInToday.add(p.id)
+      }
+    }
+
     const groups = []
     for (let i = 0; i < 7; i++) {
       const d = new Date(weekStart)
       d.setDate(d.getDate() + i)
       const g = byDay.get(ymd(d))
       if (!g) continue
-      g.stops.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
+      // Sort: overdue first (by most overdue), then by time
+      g.stops.sort((a, b) => {
+        if (a.isOverdue && !b.isOverdue) return -1
+        if (!a.isOverdue && b.isOverdue) return 1
+        if (a.isOverdue && b.isOverdue) return (b.daysOverdue || 0) - (a.daysOverdue || 0)
+        return (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99')
+      })
       groups.push(g)
     }
     return { weekStart, weekEnd, groups }
@@ -402,10 +485,26 @@ function ScheduleView({ business, view, setView }) {
       }
     }
 
-    // Sort chronologically (date, then time)
+    // Overdue pools — show under today in upcoming
+    const poolIdsInStops = new Set(allStops.filter(s => s.stop.pool_id).map(s => s.stop.pool_id))
+    for (const p of allPools) {
+      if (!p.next_due_at) continue
+      const d = new Date(p.next_due_at)
+      if (d >= today) continue // not overdue
+      if (poolIdsInStops.has(p.id)) continue
+      const daysOver = Math.floor((today - d) / (1000 * 60 * 60 * 24))
+      const stop = poolToStop(p, { isOverdue: true, daysOverdue: daysOver })
+      allStops.push({ date: new Date(today), stop, sortTime: '00:00' }) // sort first under today
+      poolIdsInStops.add(p.id)
+    }
+
+    // Sort chronologically (date, then time — overdue items sort first via '00:00')
     allStops.sort((a, b) => {
       const dc = a.date - b.date
       if (dc !== 0) return dc
+      // overdue items first within a day
+      if (a.stop.isOverdue && !b.stop.isOverdue) return -1
+      if (!a.stop.isOverdue && b.stop.isOverdue) return 1
       return a.sortTime.localeCompare(b.sortTime)
     })
 
@@ -497,7 +596,7 @@ function ScheduleView({ business, view, setView }) {
       {loading ? (
         <LoadingSpinner />
       ) : view === 'list' ? (
-        <ListView stops={stopsForDate} onSelect={setSelectedStop} />
+        <ListView stops={stopsForDate} onSelect={setSelectedStop} navigate={navigate} />
       ) : view === 'week' ? (
         <WeekView
           weekStart={weekGroups.weekStart}
@@ -534,7 +633,10 @@ function ScheduleView({ business, view, setView }) {
 }
 
 // ─── List view ────────────────────────────────
-function ListView({ stops, onSelect }) {
+function ListView({ stops, onSelect, navigate }) {
+  const overdueStops = stops.filter(s => s.isOverdue)
+  const todayStops = stops.filter(s => !s.isOverdue)
+
   if (!stops.length) {
     return (
       <EmptyState
@@ -544,11 +646,85 @@ function ListView({ stops, onSelect }) {
       />
     )
   }
+
+  let num = 0
   return (
-    <div className="space-y-2.5">
-      {stops.map((stop, idx) => (
-        <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
-      ))}
+    <div className="space-y-4">
+      {/* Overdue section */}
+      {overdueStops.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <h3 className="text-xs font-bold uppercase tracking-wide text-red-600">
+              Overdue ({overdueStops.length})
+            </h3>
+          </div>
+          <div className="space-y-2.5">
+            {overdueStops.map(stop => {
+              num++
+              return (
+                <OverdueCard
+                  key={`overdue-${stop.id}`}
+                  stop={stop}
+                  onService={() => navigate(`/pools/${stop.pool_id || stop.id}/service`)}
+                  onClick={() => onSelect(stop)}
+                />
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Today's route */}
+      {todayStops.length > 0 && (
+        <section>
+          {overdueStops.length > 0 && (
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+              Today's Route ({todayStops.length})
+            </h3>
+          )}
+          <div className="space-y-2.5">
+            {todayStops.map((stop, idx) => {
+              num++
+              return (
+                <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={num} onClick={() => onSelect(stop)} />
+              )
+            })}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+// ─── Overdue card ─────────────────────────────
+function OverdueCard({ stop, onService, onClick }) {
+  return (
+    <div className="bg-white rounded-2xl border border-red-200 shadow-card p-3.5" style={{ borderLeft: '4px solid #ef4444' }}>
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 font-bold text-xs flex items-center justify-center shrink-0">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0" onClick={onClick} role="button" tabIndex={0}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-900 truncate">{stop.client_name || 'Pool Service'}</p>
+              {stop.address && <p className="text-xs text-gray-500 mt-0.5 truncate">{stop.address}</p>}
+            </div>
+            <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap">
+              {stop.daysOverdue}d overdue
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onService() }}
+          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-pool-600 hover:bg-pool-700 transition-colors shrink-0 min-h-tap flex items-center"
+        >
+          Service
+        </button>
+      </div>
     </div>
   )
 }
@@ -767,7 +943,7 @@ function MapView({ stops, routeInfo, onSelect }) {
 
 // ─── Stop card ────────────────────────────────
 function StopCard({ stop, number, onClick, compact = false }) {
-  const color = stop.status === 'completed' ? '#10b981' : stop.status === 'in_progress' ? '#f59e0b' : '#0CA5EB'
+  const color = stop.isOverdue ? '#ef4444' : stop.status === 'completed' ? '#10b981' : stop.status === 'in_progress' ? '#f59e0b' : '#0CA5EB'
 
   if (compact) {
     return (
@@ -1042,7 +1218,7 @@ function profileToStop(profile, occurrenceDate) {
   }
 }
 
-function poolToStop(p) {
+function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
   const due = p.next_due_at ? new Date(p.next_due_at) : null
   const hh = due ? String(due.getHours()).padStart(2, '0') : null
   const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
@@ -1050,10 +1226,12 @@ function poolToStop(p) {
   return {
     type: 'pool',
     id: p.id,
+    pool_id: p.id,
+    client_id: p.client_id,
     title: 'Pool Service',
     client_name: p.clients?.name,
     address: p.address,
-    status: 'due',
+    status: isOverdue ? 'overdue' : 'due',
     next_due_at: p.next_due_at,
     schedule_frequency: p.schedule_frequency,
     access_notes: p.access_notes,
@@ -1065,6 +1243,8 @@ function poolToStop(p) {
     email: p.clients?.email,
     lat: p.latitude ? Number(p.latitude) : null,
     lng: p.longitude ? Number(p.longitude) : null,
+    isOverdue,
+    daysOverdue,
   }
 }
 
