@@ -128,3 +128,12 @@
     @apply text-xs font-semibold text-gray-400 uppercase tracking-wider;
   }
 }
+
+/* ── Leaflet z-index fix ────────────────────────────
+   Leaflet internally uses z-indexes 200–700+ on its panes.
+   Without isolation, these can overlap fixed modals (z-50).
+   Creating a stacking context on the wrapper keeps all
+   Leaflet layers contained within it. */
+.leaflet-container {
+  isolation: isolate;
+}
