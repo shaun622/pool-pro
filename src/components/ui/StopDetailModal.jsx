@@ -71,6 +71,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           is_recurring: false,
           recurrence_rule: 'weekly',
           recurring_profile_id: null,
+          client_phone: stop.phone || '',
+          client_email: stop.email || '',
         })
         // Fetch any matching recurring profile so the toggle reflects reality.
         if (stop.client_id) {
@@ -94,6 +96,11 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           schedule_frequency: stop.schedule_frequency || 'weekly',
           access_notes: stop.access_notes || '',
           assigned_staff_id: stop.assigned_staff_id || '',
+          pool_address: stop.address || '',
+          pool_address_lat: stop.lat ?? null,
+          pool_address_lng: stop.lng ?? null,
+          client_phone: stop.phone || '',
+          client_email: stop.email || '',
         })
       }
       setEditing(false)
@@ -200,6 +207,16 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           }
         }
 
+        // Sync client contact info
+        if (stop.client_id) {
+          const clientUpdates = {}
+          if ((form.client_phone || '').trim() !== (stop.phone || '')) clientUpdates.phone = form.client_phone.trim() || null
+          if ((form.client_email || '').trim() !== (stop.email || '')) clientUpdates.email = form.client_email.trim() || null
+          if (Object.keys(clientUpdates).length > 0) {
+            await supabase.from('clients').update(clientUpdates).eq('id', stop.client_id)
+          }
+        }
+
         // Sync recurring profile
         if (form.is_recurring) {
           const days = RECURRENCE_DAYS[form.recurrence_rule] || 7
@@ -249,14 +266,44 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           const t = form.next_due_time || '09:00'
           nextDue = new Date(`${form.next_due_at}T${t}:00`).toISOString()
         }
+        // Update pool address if changed
+        const newPoolAddr = (form.pool_address || '').trim()
+        const oldPoolAddr = (stop.address || '').trim()
+        let poolLat = form.pool_address_lat
+        let poolLng = form.pool_address_lng
+        if (newPoolAddr && newPoolAddr !== oldPoolAddr) {
+          if (poolLat == null || poolLng == null) {
+            try {
+              const geo = await geocodeAddress(newPoolAddr)
+              if (geo) { poolLat = geo.lat; poolLng = geo.lng }
+            } catch { /* non-fatal */ }
+          }
+        }
+
         const updates = {
           next_due_at: nextDue,
           schedule_frequency: form.schedule_frequency || null,
           access_notes: form.access_notes || null,
           assigned_staff_id: form.assigned_staff_id || null,
+          ...(newPoolAddr !== oldPoolAddr ? {
+            address: newPoolAddr,
+            latitude: poolLat ?? null,
+            longitude: poolLng ?? null,
+            geocoded_at: poolLat != null ? new Date().toISOString() : null,
+          } : {}),
         }
         const { error } = await supabase.from('pools').update(updates).eq('id', stop.id)
         if (error) throw error
+
+        // Sync client contact info
+        if (stop.client_id) {
+          const clientUpdates = {}
+          if ((form.client_phone || '').trim() !== (stop.phone || '')) clientUpdates.phone = form.client_phone.trim() || null
+          if ((form.client_email || '').trim() !== (stop.email || '')) clientUpdates.email = form.client_email.trim() || null
+          if (Object.keys(clientUpdates).length > 0) {
+            await supabase.from('clients').update(clientUpdates).eq('id', stop.client_id)
+          }
+        }
       }
       setEditing(false)
       onUpdated?.()
@@ -529,11 +576,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
               />
             )}
+            <div className="pt-2 border-t border-gray-100">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Client Details</p>
+              <div className="space-y-3">
+                <Input label="Phone" value={form.client_phone} onChange={e => setForm(f => ({ ...f, client_phone: e.target.value }))} placeholder="e.g. 0412 345 678" />
+                <Input label="Email" type="email" value={form.client_email} onChange={e => setForm(f => ({ ...f, client_email: e.target.value }))} placeholder="e.g. client@email.com" />
+              </div>
+            </div>
           </div>
         )}
 
         {editing && stop.type === 'pool' && (
           <div className="space-y-3">
+            <AddressAutocomplete
+              label="Site Address"
+              value={form.pool_address}
+              onChange={(v) => setForm(f => ({ ...f, pool_address: v, pool_address_lat: null, pool_address_lng: null }))}
+              onSelect={({ address, lat, lng }) => setForm(f => ({ ...f, pool_address: address, pool_address_lat: lat, pool_address_lng: lng }))}
+              placeholder="Start typing a street address..."
+            />
             <div className="grid grid-cols-2 gap-3">
               <Input label="Next Service Date" type="date" value={form.next_due_at} onChange={e => setForm(f => ({ ...f, next_due_at: e.target.value }))} />
               <Input label="Time" type="time" value={form.next_due_time} onChange={e => setForm(f => ({ ...f, next_due_time: e.target.value }))} />
@@ -553,6 +614,13 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
               />
             )}
+            <div className="pt-2 border-t border-gray-100">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Client Details</p>
+              <div className="space-y-3">
+                <Input label="Phone" value={form.client_phone} onChange={e => setForm(f => ({ ...f, client_phone: e.target.value }))} placeholder="e.g. 0412 345 678" />
+                <Input label="Email" type="email" value={form.client_email} onChange={e => setForm(f => ({ ...f, client_email: e.target.value }))} placeholder="e.g. client@email.com" />
+              </div>
+            </div>
           </div>
         )}
 
