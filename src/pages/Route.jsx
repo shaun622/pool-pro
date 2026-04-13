@@ -307,7 +307,12 @@ function ScheduleView({ business, view, setView }) {
         if (d >= startOfToday) continue
         if (poolIdsCoveredByJob.has(p.id)) continue // has a job today already
         const daysOver = Math.floor((startOfToday - d) / (1000 * 60 * 60 * 24))
-        overdueItems.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+        if (daysOver === 0) {
+          // Due today (timezone edge case) — goes into today's route, not overdue
+          todayItems.push(poolToStop(p, { isOverdue: false, daysOverdue: 0 }))
+        } else {
+          overdueItems.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+        }
       }
       overdueItems.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0))
     }
@@ -676,7 +681,7 @@ function ScheduleView({ business, view, setView }) {
       {loading ? (
         <LoadingSpinner />
       ) : view === 'list' ? (
-        <ListView stops={stopsForDate} onSelect={setSelectedStop} navigate={navigate} />
+        <ListView stops={stopsForDate} onSelect={setSelectedStop} navigate={navigate} isViewingToday={sameYMD(selectedDate, new Date())} />
       ) : view === 'week' ? (
         <WeekView
           weekStart={weekGroups.weekStart}
@@ -722,10 +727,78 @@ function ScheduleView({ business, view, setView }) {
 }
 
 // ─── List view ────────────────────────────────
-function ListView({ stops, onSelect, navigate }) {
+function ListView({ stops, onSelect, navigate, isViewingToday }) {
   const overdueStops = stops.filter(s => s.isOverdue)
   const todayStops = stops.filter(s => !s.isOverdue)
 
+  // When viewing today, always show both sections
+  if (isViewingToday) {
+    let num = 0
+    return (
+      <div className="space-y-5">
+        {/* Overdue section — always visible */}
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`w-2 h-2 rounded-full ${overdueStops.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
+            <h3 className={`text-xs font-bold uppercase tracking-wide ${overdueStops.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+              Overdue {overdueStops.length > 0 ? `(${overdueStops.length})` : ''}
+            </h3>
+          </div>
+          {overdueStops.length > 0 ? (
+            <div className="space-y-2.5">
+              {overdueStops.map(stop => {
+                num++
+                return (
+                  <OverdueCard
+                    key={`overdue-${stop.id}`}
+                    stop={stop}
+                    onService={() => navigate(`/pools/${stop.pool_id || stop.id}/service`)}
+                    onClick={() => onSelect(stop)}
+                  />
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-green-50/50 rounded-xl border border-green-100 px-4 py-3 flex items-center gap-2.5">
+              <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <p className="text-sm text-green-700">No overdue pools</p>
+            </div>
+          )}
+        </section>
+
+        {/* Today's Route — always visible */}
+        <section>
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`w-2 h-2 rounded-full ${todayStops.length > 0 ? 'bg-pool-500' : 'bg-gray-300'}`} />
+            <h3 className={`text-xs font-bold uppercase tracking-wide ${todayStops.length > 0 ? 'text-gray-700' : 'text-gray-400'}`}>
+              Today's Route {todayStops.length > 0 ? `(${todayStops.length})` : ''}
+            </h3>
+          </div>
+          {todayStops.length > 0 ? (
+            <div className="space-y-2.5">
+              {todayStops.map((stop) => {
+                num++
+                return (
+                  <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={num} onClick={() => onSelect(stop)} />
+                )
+              })}
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-2.5">
+              <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm text-gray-500">No stops scheduled for today</p>
+            </div>
+          )}
+        </section>
+      </div>
+    )
+  }
+
+  // Non-today view — simple flat list
   if (!stops.length) {
     return (
       <EmptyState
@@ -738,50 +811,13 @@ function ListView({ stops, onSelect, navigate }) {
 
   let num = 0
   return (
-    <div className="space-y-4">
-      {/* Overdue section */}
-      {overdueStops.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <h3 className="text-xs font-bold uppercase tracking-wide text-red-600">
-              Overdue ({overdueStops.length})
-            </h3>
-          </div>
-          <div className="space-y-2.5">
-            {overdueStops.map(stop => {
-              num++
-              return (
-                <OverdueCard
-                  key={`overdue-${stop.id}`}
-                  stop={stop}
-                  onService={() => navigate(`/pools/${stop.pool_id || stop.id}/service`)}
-                  onClick={() => onSelect(stop)}
-                />
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Today's route */}
-      {todayStops.length > 0 && (
-        <section>
-          {overdueStops.length > 0 && (
-            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
-              Today's Route ({todayStops.length})
-            </h3>
-          )}
-          <div className="space-y-2.5">
-            {todayStops.map((stop, idx) => {
-              num++
-              return (
-                <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={num} onClick={() => onSelect(stop)} />
-              )
-            })}
-          </div>
-        </section>
-      )}
+    <div className="space-y-2.5">
+      {stops.map((stop) => {
+        num++
+        return (
+          <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={num} onClick={() => onSelect(stop)} />
+        )
+      })}
     </div>
   )
 }

@@ -183,7 +183,12 @@ export default function TechRunSheet() {
       if (d >= startOfToday) continue
       if (poolIdsCovered.has(p.id)) continue
       const daysOver = Math.floor((startOfToday - d) / (1000 * 60 * 60 * 24))
-      overdue.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+      if (daysOver === 0) {
+        // Due today (timezone edge case) — goes into today's route, not overdue
+        items.push(poolToStop(p, { isOverdue: false, daysOverdue: 0 }))
+      } else {
+        overdue.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+      }
     }
     overdue.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0))
 
@@ -345,46 +350,55 @@ function TodayView({ stops, navigate, onRefresh }) {
   const active = stops.filter(s => !s.isOverdue && s.status !== 'completed')
   const completed = stops.filter(s => s.status === 'completed')
 
-  if (!stops.length) {
-    return (
-      <EmptyState
-        icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-        title="No stops assigned for today"
-        description="Check with your manager if you're expecting work today"
-      />
-    )
-  }
-
   return (
-    <div className="space-y-4">
-      {/* Overdue */}
-      {overdue.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <h3 className="text-xs font-bold uppercase tracking-wide text-red-600">Overdue ({overdue.length})</h3>
-          </div>
+    <div className="space-y-5">
+      {/* Overdue — always visible */}
+      <section>
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`w-2 h-2 rounded-full ${overdue.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
+          <h3 className={`text-xs font-bold uppercase tracking-wide ${overdue.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+            Overdue {overdue.length > 0 ? `(${overdue.length})` : ''}
+          </h3>
+        </div>
+        {overdue.length > 0 ? (
           <div className="space-y-2.5">
             {overdue.map(stop => (
               <TechStopCard key={`o-${stop.id}`} stop={stop} navigate={navigate} />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="bg-green-50/50 rounded-xl border border-green-100 px-4 py-3 flex items-center gap-2.5">
+            <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            <p className="text-sm text-green-700">No overdue pools</p>
+          </div>
+        )}
+      </section>
 
-      {/* Active stops */}
-      {active.length > 0 && (
-        <section>
-          {overdue.length > 0 && (
-            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Today's Route ({active.length})</h3>
-          )}
+      {/* Today's Route — always visible */}
+      <section>
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`w-2 h-2 rounded-full ${active.length > 0 ? 'bg-pool-500' : 'bg-gray-300'}`} />
+          <h3 className={`text-xs font-bold uppercase tracking-wide ${active.length > 0 ? 'text-gray-700' : 'text-gray-400'}`}>
+            Today's Route {active.length > 0 ? `(${active.length})` : ''}
+          </h3>
+        </div>
+        {active.length > 0 ? (
           <div className="space-y-2.5">
             {active.map((stop, idx) => (
               <TechStopCard key={`a-${stop.id}`} stop={stop} number={idx + 1} navigate={navigate} />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-2.5">
+            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p className="text-sm text-gray-500">No stops scheduled for today</p>
+          </div>
+        )}
+      </section>
 
       {/* Completed */}
       {completed.length > 0 && (
