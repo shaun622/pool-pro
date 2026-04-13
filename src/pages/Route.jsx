@@ -802,8 +802,8 @@ function OverdueCard({ stop, onService, onClick }) {
               <p className="font-semibold text-gray-900 truncate">{stop.client_name || 'Pool Service'}</p>
               {stop.address && <p className="text-xs text-gray-500 mt-0.5 truncate">{stop.address}</p>}
             </div>
-            <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap">
-              {stop.daysOverdue}d overdue
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap ${stop.daysOverdue === 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+              {stop.daysOverdue === 0 ? 'Due today' : `${stop.daysOverdue}d overdue`}
             </span>
           </div>
           {stop.phone && (
@@ -1027,6 +1027,7 @@ function MapView({ pools, onSelect, staffList }) {
     const today = new Date(); today.setHours(0,0,0,0)
     if (due < today) {
       const days = Math.floor((today - due) / (1000 * 60 * 60 * 24))
+      if (days === 0) return { text: 'Due today', color: 'text-green-600' }
       return { text: `${days}d overdue`, color: 'text-red-600' }
     }
     if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600' }

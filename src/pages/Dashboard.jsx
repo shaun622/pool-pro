@@ -307,7 +307,7 @@ export default function Dashboard() {
                         <p className="text-sm font-semibold text-gray-900 truncate">{pool.clients?.name}</p>
                         <p className="text-xs text-gray-500 truncate">{pool.address}</p>
                         {isOverdue && (
-                          <p className="text-[11px] text-red-500 font-semibold mt-0.5">{days}d overdue</p>
+                          <p className={`text-[11px] font-semibold mt-0.5 ${days === 0 ? 'text-green-600' : 'text-red-500'}`}>{days === 0 ? 'Due today' : `${days}d overdue`}</p>
                         )}
                       </div>
                       <Button
@@ -348,8 +348,8 @@ export default function Dashboard() {
                         {pool.address}
                       </p>
                     </div>
-                    <Badge variant={badgeVariant} className="ml-3 shrink-0">
-                      {days}d overdue
+                    <Badge variant={days === 0 ? 'success' : badgeVariant} className="ml-3 shrink-0">
+                      {days === 0 ? 'Due today' : `${days}d overdue`}
                     </Badge>
                   </Card>
                 )
