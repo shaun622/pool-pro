@@ -5,7 +5,7 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
-import Input from '../components/ui/Input'
+import Input, { Select } from '../components/ui/Input'
 import { useBusiness } from '../hooks/useBusiness'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -16,6 +16,16 @@ const PLAN_BADGE = {
   starter: 'primary',
   pro: 'success',
 }
+
+const AUSTRALIAN_TIMEZONES = [
+  { value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },
+  { value: 'Australia/Melbourne', label: 'Melbourne (AEST/AEDT)' },
+  { value: 'Australia/Brisbane', label: 'Brisbane (AEST)' },
+  { value: 'Australia/Hobart', label: 'Hobart (AEST/AEDT)' },
+  { value: 'Australia/Adelaide', label: 'Adelaide (ACST/ACDT)' },
+  { value: 'Australia/Darwin', label: 'Darwin (ACST)' },
+  { value: 'Australia/Perth', label: 'Perth (AWST)' },
+]
 
 export default function Settings() {
   const { business, loading: bizLoading, updateBusiness } = useBusiness()
@@ -29,6 +39,7 @@ export default function Settings() {
     email: '',
     logo_url: '',
     brand_colour: '#0891b2',
+    timezone: 'Australia/Sydney',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -44,6 +55,7 @@ export default function Settings() {
         email: business.email || '',
         logo_url: business.logo_url || '',
         brand_colour: business.brand_colour || '#0891b2',
+        timezone: business.timezone || 'Australia/Sydney',
       })
     }
   }, [business])
@@ -227,6 +239,12 @@ export default function Settings() {
               type="email"
               value={form.email}
               onChange={(e) => updateField('email', e.target.value)}
+            />
+            <Select
+              label="Timezone"
+              value={form.timezone}
+              onChange={(e) => updateField('timezone', e.target.value)}
+              options={AUSTRALIAN_TIMEZONES}
             />
             {/* Logo upload */}
             <div className="space-y-1.5">
