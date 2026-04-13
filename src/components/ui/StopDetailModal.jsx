@@ -572,7 +572,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   ) : (
                     <>
                       <div className="text-sm font-medium text-gray-900">
-                        {stop.scheduled_display || (stop.scheduled_date ? new Date(stop.scheduled_date).toLocaleDateString('en-AU') : '—')}
+                        {stop.scheduled_display
+                          || (stop.scheduled_date ? new Date(stop.scheduled_date).toLocaleDateString('en-AU') : null)
+                          || (stop.next_due_at ? new Date(stop.next_due_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '—')}
                       </div>
                       {stop.time_display && <div className="text-xs text-gray-500 mt-0.5">{stop.time_display}</div>}
                     </>
