@@ -135,7 +135,29 @@ export function useService() {
     return data || []
   }, [])
 
-  return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, completeService, getServiceHistory }
+  const saveServicePhoto = useCallback(async (serviceRecordId, file) => {
+    const ext = file.name?.split('.').pop() || 'jpg'
+    const path = `${business.id}/${serviceRecordId}/${Date.now()}.${ext}`
+    const { error: uploadErr } = await supabase.storage
+      .from('service-photos')
+      .upload(path, file, { upsert: true })
+    if (uploadErr) throw uploadErr
+    const { data: urlData } = supabase.storage
+      .from('service-photos')
+      .getPublicUrl(path)
+    const { error: insertErr } = await supabase
+      .from('service_photos')
+      .insert({
+        service_record_id: serviceRecordId,
+        storage_path: path,
+        signed_url: urlData.publicUrl,
+        tag: 'test-kit',
+      })
+    if (insertErr) throw insertErr
+    return urlData.publicUrl
+  }, [business])
+
+  return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, saveServicePhoto, completeService, getServiceHistory }
 }
 
 function calculateNextDueDate(from, frequency) {

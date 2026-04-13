@@ -136,7 +136,7 @@ function TrendChart({ readings, chemKey, color, range }) {
   )
 }
 
-function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog, chemProductMap }) {
+function ServiceCard({ record, chemLog, tasks, chemicalsAdded, photos, ranges, prevLog, chemProductMap }) {
   const [expanded, setExpanded] = useState(false)
   const score = calcHealthScore(chemLog, ranges)
 
@@ -255,6 +255,19 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog, 
               </div>
             </div>
           )}
+          {photos?.length > 0 && (
+            <div>
+              <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pool Photo</h5>
+              {photos.map((photo, i) => (
+                <img
+                  key={i}
+                  src={photo.signed_url || supabase.storage.from('service-photos').getPublicUrl(photo.storage_path).data?.publicUrl}
+                  alt="Pool & test kit"
+                  className="w-full rounded-lg object-cover max-h-64"
+                />
+              ))}
+            </div>
+          )}
           {record.notes && (
             <div className="bg-gray-50 rounded-lg p-3">
               <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes</h5>
@@ -267,7 +280,7 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog, 
   )
 }
 
-function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAddedByRecord, brandColor, chemProductMap }) {
+function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAddedByRecord, photosByRecord, brandColor, chemProductMap }) {
   const [activeChart, setActiveChart] = useState(null)
   const ranges = pool.target_ranges || DEFAULT_TARGET_RANGES
 
@@ -369,6 +382,7 @@ function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAd
               return (
                 <ServiceCard key={record.id} record={record} chemLog={chemicalLogs[record.id]}
                   tasks={tasksByRecord[record.id]} chemicalsAdded={chemAddedByRecord[record.id]}
+                  photos={photosByRecord[record.id]}
                   ranges={ranges} prevLog={prevLog} chemProductMap={chemProductMap} />
               )
             })}
@@ -395,6 +409,7 @@ export default function PortalDashboard() {
   const [chemicalLogs, setChemicalLogs] = useState({})
   const [tasksByRecord, setTasksByRecord] = useState({})
   const [chemAddedByRecord, setChemAddedByRecord] = useState({})
+  const [photosByRecord, setPhotosByRecord] = useState({})
   const [staffMembers, setStaffMembers] = useState([])
   const [chemProductMap, setChemProductMap] = useState({})
   const [activePool, setActivePool] = useState(null)
@@ -440,22 +455,24 @@ export default function PortalDashboard() {
       if (poolIds.length > 0) {
         const { data: records } = await supabase
           .from('service_records')
-          .select('*, service_tasks(*), chemicals_added(*)')
+          .select('*, service_tasks(*), chemicals_added(*), service_photos(*)')
           .in('pool_id', poolIds)
           .eq('status', 'completed')
           .order('serviced_at', { ascending: false })
           .limit(poolIds.length * 20)
 
-        const grouped = {}, tasksMap = {}, chemsMap = {}
+        const grouped = {}, tasksMap = {}, chemsMap = {}, photosMap = {}
         for (const record of (records || [])) {
           if (!grouped[record.pool_id]) grouped[record.pool_id] = []
           if (grouped[record.pool_id].length < 20) grouped[record.pool_id].push(record)
           tasksMap[record.id] = record.service_tasks || []
           chemsMap[record.id] = record.chemicals_added || []
+          photosMap[record.id] = record.service_photos || []
         }
         setServiceRecords(grouped)
         setTasksByRecord(tasksMap)
         setChemAddedByRecord(chemsMap)
+        setPhotosByRecord(photosMap)
 
         const recordIds = (records || []).map(r => r.id)
         if (recordIds.length > 0) {
@@ -577,8 +594,8 @@ export default function PortalDashboard() {
           pools.filter(p => pools.length === 1 || p.id === activePool).map(pool => (
             <PoolSection key={pool.id} pool={pool}
               serviceRecords={serviceRecords[pool.id] || []} chemicalLogs={chemicalLogs}
-              tasksByRecord={tasksByRecord} chemAddedByRecord={chemAddedByRecord} brandColor={brandColor}
-              chemProductMap={chemProductMap} />
+              tasksByRecord={tasksByRecord} chemAddedByRecord={chemAddedByRecord} photosByRecord={photosByRecord}
+              brandColor={brandColor} chemProductMap={chemProductMap} />
           ))
         )}
       </div>

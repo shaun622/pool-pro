@@ -81,7 +81,15 @@ serve(async (req) => {
     const chemicals = record.chemical_logs?.[0] || {}
     const tasks = record.service_tasks || []
     const chemicalsAdded = record.chemicals_added || []
+    const servicePhotos = record.service_photos || []
     const targetRanges = pool.target_ranges || {}
+
+    // Build photo URL for email
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const testKitPhoto = servicePhotos.find((p: any) => p.tag === 'test-kit') || servicePhotos[0]
+    const photoUrl = testKitPhoto
+      ? (testKitPhoto.signed_url || `${supabaseUrl}/storage/v1/object/public/service-photos/${testKitPhoto.storage_path}`)
+      : null
 
     // Category styling for email
     const CATEGORY_EMAIL_COLORS: Record<string, { bg: string; text: string; label: string }> = {
@@ -210,6 +218,14 @@ serve(async (req) => {
             </table>
           </div>
         </div>
+
+        <!-- Pool Photo -->
+        ${photoUrl ? `
+        <div style="background:white;padding:0 24px 20px;">
+          <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Pool & Test Kit Photo</h3>
+          <img src="${photoUrl}" alt="Pool and test kit" style="width:100%;max-height:400px;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;" />
+        </div>
+        ` : ''}
 
         <!-- Chemical Readings -->
         ${chemicalRows ? `
@@ -406,6 +422,13 @@ serve(async (req) => {
                 ${record.notes ? `<tr><td style="padding:3px 0;color:#6B7280;">Notes</td><td style="padding:3px 0;text-align:right;font-weight:600;">${record.notes}</td></tr>` : ''}
               </table>
             </div>
+
+            ${photoUrl ? `
+            <div style="margin-bottom:16px;">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Pool Photo</p>
+              <img src="${photoUrl}" alt="Pool and test kit" style="width:100%;max-height:300px;object-fit:cover;border-radius:6px;border:1px solid #E5E7EB;" />
+            </div>
+            ` : ''}
 
             ${chemicalRows ? `
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Readings</p>

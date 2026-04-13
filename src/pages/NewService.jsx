@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -49,6 +49,7 @@ export default function NewService() {
     saveChemicalLog,
     saveTasks,
     saveChemicalsAdded,
+    saveServicePhoto,
     completeService,
   } = useService()
 
@@ -63,6 +64,11 @@ export default function NewService() {
   const [lastReadings, setLastReadings] = useState(null)
   const [nextStop, setNextStop] = useState(null)
   const isTech = userRole === 'tech'
+  const photoInputRef = useRef(null)
+
+  // Pool photo
+  const [servicePhoto, setServicePhoto] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
 
   // Step 1: Chemical readings
   const [readings, setReadings] = useState({
@@ -255,6 +261,11 @@ export default function NewService() {
         }
       } catch (e) {
         console.warn('Chemical library save failed (non-critical):', e)
+      }
+
+      // Upload pool photo
+      if (servicePhoto) {
+        await saveServicePhoto(record.id, servicePhoto)
       }
 
       // Complete the service
@@ -470,9 +481,64 @@ export default function NewService() {
                 </div>
               )
             })()}
-            <Button onClick={() => setStep(1)} className="w-full min-h-[48px] mt-4">
+            {/* Pool & Test Kit Photo */}
+            <div className="mt-6">
+              <h2 className="text-base font-semibold text-gray-900 mb-2">Pool & Test Kit Photo</h2>
+              <p className="text-xs text-gray-500 mb-3">Take a photo of the pool with your test kit results visible</p>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    setServicePhoto(file)
+                    const reader = new FileReader()
+                    reader.onload = (ev) => setPhotoPreview(ev.target.result)
+                    reader.readAsDataURL(file)
+                  }
+                }}
+              />
+              {photoPreview ? (
+                <div className="relative">
+                  <img
+                    src={photoPreview}
+                    alt="Pool & test kit"
+                    className="w-full rounded-xl border border-gray-200 object-cover max-h-64"
+                  />
+                  <button
+                    onClick={() => photoInputRef.current?.click()}
+                    className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm text-gray-700 text-xs font-medium px-3 py-1.5 rounded-lg shadow-card hover:bg-white transition-colors"
+                  >
+                    Retake
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-pool-400 hover:text-pool-500 transition-colors"
+                >
+                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                  </svg>
+                  <span className="text-sm font-medium">Tap to take photo</span>
+                </button>
+              )}
+            </div>
+
+            <Button
+              onClick={() => setStep(1)}
+              disabled={!servicePhoto}
+              className="w-full min-h-[48px] mt-4"
+            >
               Next: Tasks
             </Button>
+            {!servicePhoto && (
+              <p className="text-xs text-center text-amber-600 mt-1">Photo required to continue</p>
+            )}
           </div>
         )}
 
@@ -764,6 +830,18 @@ export default function NewService() {
                 <span>{FREQUENCY_LABELS[pool?.schedule_frequency] || pool?.schedule_frequency}</span>
               </div>
             </Card>
+
+            {/* Pool photo */}
+            {photoPreview && (
+              <Card>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Pool & Test Kit Photo</h3>
+                <img
+                  src={photoPreview}
+                  alt="Pool & test kit"
+                  className="w-full rounded-lg object-cover max-h-56"
+                />
+              </Card>
+            )}
 
             {/* Chemical readings summary */}
             <Card>
