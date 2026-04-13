@@ -71,6 +71,18 @@ export default function NewService() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [photoMeta, setPhotoMeta] = useState(null) // { lat, lng, timestamp, address }
   const [capturingPhoto, setCapturingPhoto] = useState(false)
+  const gpsRef = useRef(null) // pre-fetched GPS position
+
+  // Pre-fetch GPS as soon as the page loads so permission is granted before photo
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { gpsRef.current = pos.coords },
+        () => {}, // silent fail — will try again at capture time
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+      )
+    }
+  }, [])
 
   // Step 1: Chemical readings
   const [readings, setReadings] = useState({
@@ -498,24 +510,41 @@ export default function NewService() {
                   if (!file) return
                   setCapturingPhoto(true)
                   try {
-                    // Get GPS location
-                    let lat = null, lng = null
-                    try {
-                      const pos = await new Promise((resolve, reject) =>
-                        navigator.geolocation.getCurrentPosition(resolve, reject, {
-                          enableHighAccuracy: true, timeout: 10000, maximumAge: 0
-                        })
-                      )
-                      lat = pos.coords.latitude
-                      lng = pos.coords.longitude
-                    } catch (geoErr) {
-                      console.warn('GPS unavailable:', geoErr.message)
+                    // Get GPS — use pre-fetched position or try fresh
+                    let lat = gpsRef.current?.latitude || null
+                    let lng = gpsRef.current?.longitude || null
+                    if (!lat) {
+                      try {
+                        const pos = await new Promise((resolve, reject) =>
+                          navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true, timeout: 8000, maximumAge: 30000
+                          })
+                        )
+                        lat = pos.coords.latitude
+                        lng = pos.coords.longitude
+                        gpsRef.current = pos.coords
+                      } catch (geoErr) {
+                        console.warn('GPS unavailable:', geoErr.message)
+                      }
+                    }
+
+                    // Reverse geocode to get actual street address from GPS
+                    let gpsAddress = ''
+                    if (lat && lng) {
+                      try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`)
+                        const data = await res.json()
+                        const a = data.address || {}
+                        gpsAddress = [a.house_number, a.road, a.suburb, a.city || a.town, a.state].filter(Boolean).join(', ')
+                      } catch {
+                        gpsAddress = pool?.address || ''
+                      }
                     }
 
                     const now = new Date()
                     const meta = {
                       lat, lng, timestamp: now.toISOString(),
-                      address: pool?.address || '',
+                      address: gpsAddress || pool?.address || '',
                       clientName: client?.name || '',
                       businessName: business?.name || '',
                     }
