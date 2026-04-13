@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-export default function Modal({ open, onClose, title, children }) {
+export default function Modal({ open, onClose, title, headerAction, children }) {
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'
@@ -22,14 +22,17 @@ export default function Modal({ open, onClose, title, children }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="min-h-tap min-w-tap flex items-center justify-center -mr-2 rounded-xl hover:bg-gray-100 transition-colors"
-          >
+          <div className="flex items-center gap-1">
+            {headerAction}
+            <button
+              onClick={onClose}
+              className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
+            >
             <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+          </div>
         </div>
 
         {/* Drag indicator for mobile */}

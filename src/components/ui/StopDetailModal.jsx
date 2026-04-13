@@ -429,7 +429,22 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   const assignedStaff = staffList.find(s => s.id === stop.assigned_staff_id)
 
   return (
-    <Modal open={open} onClose={onClose} title={stop.type === 'job' ? 'Job Details' : 'Service Details'}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={stop.type === 'job' ? 'Job Details' : 'Service Details'}
+      headerAction={!editing && !quickEdit ? (
+        <button
+          onClick={() => setQuickEdit(true)}
+          className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
+          title="Quick edit"
+        >
+          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+        </button>
+      ) : null}
+    >
       <div className="space-y-4">
         {/* Mini map */}
         {hasCoords && MAPBOX_TILE_URL && (
@@ -472,19 +487,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
 
         {/* Details — view / quick-edit mode */}
         {!editing && (
-          <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-100 relative">
-            {/* Quick edit pencil button */}
-            {!quickEdit && (
-              <button
-                onClick={() => setQuickEdit(true)}
-                className="absolute top-2 right-2 p-2 rounded-xl text-gray-400 hover:text-pool-600 hover:bg-pool-50 transition-colors z-10"
-                title="Quick edit"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-              </button>
-            )}
+          <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-100">
 
             {/* Address */}
             <div className="px-4 py-3">
