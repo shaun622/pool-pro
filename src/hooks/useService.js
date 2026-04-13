@@ -135,25 +135,30 @@ export function useService() {
     return data || []
   }, [])
 
-  const saveServicePhoto = useCallback(async (serviceRecordId, file) => {
-    // Convert to WebP client-side to save storage
-    const webpBlob = await convertToWebP(file, 1200, 0.82)
+  const saveServicePhoto = useCallback(async (serviceRecordId, file, meta = {}) => {
+    // If file is already a Blob (watermarked WebP), upload directly; otherwise convert
+    const isBlob = file instanceof Blob && !(file instanceof File)
+    const uploadBlob = isBlob ? file : await convertToWebP(file, 1200, 0.82)
     const path = `${business.id}/${serviceRecordId}/${Date.now()}.webp`
     const { error: uploadErr } = await supabase.storage
       .from('service-photos')
-      .upload(path, webpBlob, { upsert: true, contentType: 'image/webp' })
+      .upload(path, uploadBlob, { upsert: true, contentType: 'image/webp' })
     if (uploadErr) throw uploadErr
     const { data: urlData } = supabase.storage
       .from('service-photos')
       .getPublicUrl(path)
+    const row = {
+      service_record_id: serviceRecordId,
+      storage_path: path,
+      signed_url: urlData.publicUrl,
+      tag: 'test-kit',
+    }
+    if (meta.lat) row.latitude = meta.lat
+    if (meta.lng) row.longitude = meta.lng
+    if (meta.timestamp) row.captured_at = meta.timestamp
     const { error: insertErr } = await supabase
       .from('service_photos')
-      .insert({
-        service_record_id: serviceRecordId,
-        storage_path: path,
-        signed_url: urlData.publicUrl,
-        tag: 'test-kit',
-      })
+      .insert(row)
     if (insertErr) throw insertErr
     return urlData.publicUrl
   }, [business])

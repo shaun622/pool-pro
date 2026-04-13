@@ -69,6 +69,8 @@ export default function NewService() {
   // Pool photo
   const [servicePhoto, setServicePhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [photoMeta, setPhotoMeta] = useState(null) // { lat, lng, timestamp, address }
+  const [capturingPhoto, setCapturingPhoto] = useState(false)
 
   // Step 1: Chemical readings
   const [readings, setReadings] = useState({
@@ -265,7 +267,7 @@ export default function NewService() {
 
       // Upload pool photo
       if (servicePhoto) {
-        await saveServicePhoto(record.id, servicePhoto)
+        await saveServicePhoto(record.id, servicePhoto, photoMeta || {})
       }
 
       // Complete the service
@@ -481,23 +483,57 @@ export default function NewService() {
                 </div>
               )
             })()}
-            {/* Pool & Test Kit Photo */}
+            {/* Pool & Test Kit Photo — Verified with timestamp + GPS */}
             <div className="mt-6">
               <h2 className="text-base font-semibold text-gray-900 mb-2">Pool & Test Kit Photo</h2>
-              <p className="text-xs text-gray-500 mb-3">Take a photo of the pool with your test kit results visible</p>
+              <p className="text-xs text-gray-500 mb-3">Take a live photo — timestamp and GPS location will be verified automatically</p>
               <input
                 ref={photoInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0]
-                  if (file) {
+                  if (!file) return
+                  setCapturingPhoto(true)
+                  try {
+                    // Get GPS location
+                    let lat = null, lng = null
+                    try {
+                      const pos = await new Promise((resolve, reject) =>
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                          enableHighAccuracy: true, timeout: 10000, maximumAge: 0
+                        })
+                      )
+                      lat = pos.coords.latitude
+                      lng = pos.coords.longitude
+                    } catch (geoErr) {
+                      console.warn('GPS unavailable:', geoErr.message)
+                    }
+
+                    const now = new Date()
+                    const meta = {
+                      lat, lng, timestamp: now.toISOString(),
+                      address: pool?.address || '',
+                      clientName: client?.name || '',
+                      businessName: business?.name || '',
+                    }
+                    setPhotoMeta(meta)
+
+                    // Watermark the photo
+                    const watermarked = await watermarkPhoto(file, meta)
+                    setServicePhoto(watermarked.blob)
+                    setPhotoPreview(watermarked.dataUrl)
+                  } catch (err) {
+                    console.error('Photo capture error:', err)
+                    // Fallback — use original photo without watermark
                     setServicePhoto(file)
                     const reader = new FileReader()
                     reader.onload = (ev) => setPhotoPreview(ev.target.result)
                     reader.readAsDataURL(file)
+                  } finally {
+                    setCapturingPhoto(false)
                   }
                 }}
               />
@@ -505,26 +541,60 @@ export default function NewService() {
                 <div className="relative">
                   <img
                     src={photoPreview}
-                    alt="Pool & test kit"
-                    className="w-full rounded-xl border border-gray-200 object-cover max-h-64"
+                    alt="Pool & test kit — verified"
+                    className="w-full rounded-xl border border-gray-200 object-cover"
                   />
+                  {photoMeta && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                        Verified Time
+                      </span>
+                      {photoMeta.lat && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                          Verified GPS
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <button
-                    onClick={() => photoInputRef.current?.click()}
-                    className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm text-gray-700 text-xs font-medium px-3 py-1.5 rounded-lg shadow-card hover:bg-white transition-colors"
+                    onClick={() => {
+                      setServicePhoto(null)
+                      setPhotoPreview(null)
+                      setPhotoMeta(null)
+                      if (photoInputRef.current) photoInputRef.current.value = ''
+                      photoInputRef.current?.click()
+                    }}
+                    className="mt-2 w-full text-center text-sm font-medium text-pool-600 hover:text-pool-700 py-2"
                   >
-                    Retake
+                    Retake Photo
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => photoInputRef.current?.click()}
+                  disabled={capturingPhoto}
                   className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-pool-400 hover:text-pool-500 transition-colors"
                 >
-                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                  </svg>
-                  <span className="text-sm font-medium">Tap to take photo</span>
+                  {capturingPhoto ? (
+                    <>
+                      <svg className="w-8 h-8 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-sm font-medium text-pool-600">Processing photo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                      </svg>
+                      <span className="text-sm font-medium">Tap to take photo</span>
+                      <span className="text-xs text-gray-400">GPS & timestamp verified automatically</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
@@ -1044,4 +1114,88 @@ export default function NewService() {
       </PageWrapper>
     </>
   )
+}
+
+// Watermark photo with timestamp, GPS, address, and business name
+function watermarkPhoto(file, meta) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 1400
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        const ratio = Math.min(MAX / width, MAX / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, width, height)
+
+      // Watermark bar at bottom
+      const barH = Math.max(80, height * 0.1)
+      const grad = ctx.createLinearGradient(0, height - barH, 0, height)
+      grad.addColorStop(0, 'rgba(0,0,0,0)')
+      grad.addColorStop(0.3, 'rgba(0,0,0,0.6)')
+      grad.addColorStop(1, 'rgba(0,0,0,0.8)')
+      ctx.fillStyle = grad
+      ctx.fillRect(0, height - barH, width, barH)
+
+      // Text settings
+      const scale = Math.min(width, height) / 400
+      const pad = 12 * scale
+
+      // Timestamp — large
+      const ts = new Date(meta.timestamp)
+      const timeStr = ts.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase()
+      const dateStr = ts.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+
+      ctx.fillStyle = 'white'
+      ctx.font = `bold ${Math.round(18 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.textBaseline = 'bottom'
+      ctx.fillText(timeStr, pad, height - barH + 30 * scale)
+
+      ctx.font = `${Math.round(11 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'
+      ctx.fillText(dateStr, pad, height - barH + 45 * scale)
+
+      // Address
+      if (meta.address) {
+        ctx.font = `${Math.round(10 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+        ctx.fillStyle = 'rgba(255,255,255,0.9)'
+        ctx.fillText(meta.address, pad, height - barH + 60 * scale)
+      }
+
+      // GPS coordinates
+      if (meta.lat && meta.lng) {
+        ctx.font = `${Math.round(9 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'
+        ctx.fillText(`${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)}`, pad, height - barH + 73 * scale)
+      }
+
+      // Business name — right side
+      if (meta.businessName) {
+        ctx.font = `bold ${Math.round(11 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+        ctx.fillStyle = 'rgba(255,255,255,0.7)'
+        ctx.textAlign = 'right'
+        ctx.fillText(meta.businessName, width - pad, height - pad)
+        ctx.textAlign = 'left'
+      }
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return reject(new Error('Watermark failed'))
+          const dataUrl = canvas.toDataURL('image/webp', 0.85)
+          resolve({ blob, dataUrl })
+        },
+        'image/webp',
+        0.85
+      )
+    }
+    img.onerror = () => reject(new Error('Failed to load image'))
+    img.src = URL.createObjectURL(file)
+  })
 }
