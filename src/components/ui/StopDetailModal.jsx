@@ -344,6 +344,16 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         if ((form.access_notes || '') !== (stop.access_notes || '')) {
           await supabase.from('pools').update({ access_notes: form.access_notes || null }).eq('id', stop.id)
         }
+        // Save schedule date/time
+        let nextDue = null
+        if (form.next_due_at) {
+          const t = form.next_due_time || '09:00'
+          nextDue = new Date(`${form.next_due_at}T${t}:00`).toISOString()
+        }
+        const origDue = stop.next_due_at || null
+        if (nextDue !== origDue) {
+          await supabase.from('pools').update({ next_due_at: nextDue }).eq('id', stop.id)
+        }
       } else if (stop.type === 'job') {
         const newAddr = (form.address || '').trim()
         const oldAddr = (stop.address || '').trim()
@@ -362,10 +372,16 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             longitude: lng ?? null,
           }).eq('id', stop.pool_id)
         }
-        // Save notes
+        // Save notes + schedule
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
-        if (!isProjected && (form.notes || '') !== (stop.notes || '')) {
-          await supabase.from('jobs').update({ notes: form.notes || null }).eq('id', stop.id)
+        if (!isProjected) {
+          const jobUpdates = {}
+          if ((form.notes || '') !== (stop.notes || '')) jobUpdates.notes = form.notes || null
+          if ((form.scheduled_date || '') !== (stop.scheduled_date || '')) jobUpdates.scheduled_date = form.scheduled_date || null
+          if ((form.scheduled_time || '') !== (stop.scheduled_time || '')) jobUpdates.scheduled_time = form.scheduled_time || null
+          if (Object.keys(jobUpdates).length > 0) {
+            await supabase.from('jobs').update(jobUpdates).eq('id', stop.id)
+          }
         }
       }
       // Save client contact info
@@ -527,15 +543,43 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             </div>
 
             {/* Scheduled */}
-            <DetailRow
-              icon={<CalIcon />}
-              label="Scheduled"
-              value={
-                stop.scheduled_display ||
-                (stop.scheduled_date ? new Date(stop.scheduled_date).toLocaleDateString('en-AU') : '—')
-              }
-              subValue={stop.time_display}
-            />
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><CalIcon /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Scheduled</p>
+                  {quickEdit ? (
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        type="date"
+                        value={stop.type === 'pool' ? form.next_due_at : form.scheduled_date}
+                        onChange={e => stop.type === 'pool'
+                          ? setForm(f => ({ ...f, next_due_at: e.target.value }))
+                          : setForm(f => ({ ...f, scheduled_date: e.target.value }))
+                        }
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                      />
+                      <input
+                        type="time"
+                        value={stop.type === 'pool' ? form.next_due_time : form.scheduled_time}
+                        onChange={e => stop.type === 'pool'
+                          ? setForm(f => ({ ...f, next_due_time: e.target.value }))
+                          : setForm(f => ({ ...f, scheduled_time: e.target.value }))
+                        }
+                        className="w-28 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-sm font-medium text-gray-900">
+                        {stop.scheduled_display || (stop.scheduled_date ? new Date(stop.scheduled_date).toLocaleDateString('en-AU') : '—')}
+                      </div>
+                      {stop.time_display && <div className="text-xs text-gray-500 mt-0.5">{stop.time_display}</div>}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
             {stop.duration && (
               <DetailRow icon={<ClockIcon />} label="Duration" value={`${stop.duration} min`} />
             )}
