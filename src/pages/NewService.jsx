@@ -75,7 +75,7 @@ export default function NewService() {
 
   // Step 2: Task checklist — start with just "Checked water level"
   const [tasks, setTasks] = useState([
-    { name: 'Checked water level', completed: true },
+    { name: 'Checked water level', completed: false },
   ])
   const [customTask, setCustomTask] = useState('')
 
