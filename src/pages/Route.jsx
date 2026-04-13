@@ -306,9 +306,11 @@ function ScheduleView({ business, view, setView }) {
         const d = new Date(p.next_due_at)
         if (d >= startOfToday) continue
         if (poolIdsCoveredByJob.has(p.id)) continue // has a job today already
-        const daysOver = Math.floor((startOfToday - d) / (1000 * 60 * 60 * 24))
-        if (daysOver === 0) {
-          // Due today (timezone edge case) — goes into today's route, not overdue
+        // Compare date-only (strip time) to avoid timezone edge cases
+        const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
+        const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
+        if (daysOver <= 0) {
+          // Due today (timezone edge case where timestamp is just before midnight)
           todayItems.push(poolToStop(p, { isOverdue: false, daysOverdue: 0 }))
         } else {
           overdueItems.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
@@ -448,8 +450,9 @@ function ScheduleView({ business, view, setView }) {
         const d = new Date(p.next_due_at)
         if (d >= startOfToday) continue
         if (poolIdsInToday.has(p.id)) continue
-        const daysOver = Math.floor((startOfToday - d) / (1000 * 60 * 60 * 24))
-        todayGroup.stops.unshift(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+        const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
+        const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
+        todayGroup.stops.unshift(poolToStop(p, { isOverdue: true, daysOverdue: Math.max(daysOver, 1) }))
         poolIdsInToday.add(p.id)
       }
     }
@@ -558,7 +561,8 @@ function ScheduleView({ business, view, setView }) {
       const d = new Date(p.next_due_at)
       if (d >= today) continue // not overdue
       if (poolIdsInStops.has(p.id)) continue
-      const daysOver = Math.floor((today - d) / (1000 * 60 * 60 * 24))
+      const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
+      const daysOver = Math.max(Math.round((today - dueDate) / (1000 * 60 * 60 * 24)), 1)
       const stop = poolToStop(p, { isOverdue: true, daysOverdue: daysOver })
       allStops.push({ date: new Date(today), stop, sortTime: '00:00' }) // sort first under today
       poolIdsInStops.add(p.id)
@@ -1062,8 +1066,9 @@ function MapView({ pools, onSelect, staffList }) {
     const due = new Date(pool.next_due_at)
     const today = new Date(); today.setHours(0,0,0,0)
     if (due < today) {
-      const days = Math.floor((today - due) / (1000 * 60 * 60 * 24))
-      if (days === 0) return { text: 'Due today', color: 'text-green-600' }
+      const dueDate = new Date(due); dueDate.setHours(0, 0, 0, 0)
+      const days = Math.round((today - dueDate) / (1000 * 60 * 60 * 24))
+      if (days <= 0) return { text: 'Due today', color: 'text-green-600' }
       return { text: `${days}d overdue`, color: 'text-red-600' }
     }
     if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600' }
@@ -1074,7 +1079,9 @@ function MapView({ pools, onSelect, staffList }) {
     const due = p.next_due_at ? new Date(p.next_due_at) : null
     const today = new Date(); today.setHours(0,0,0,0)
     const isOverdue = due && due < today
-    const daysOverdue = isOverdue ? Math.floor((today - due) / (1000 * 60 * 60 * 24)) : 0
+    const dueDate = due ? new Date(due) : null
+    if (dueDate) dueDate.setHours(0, 0, 0, 0)
+    const daysOverdue = isOverdue ? Math.max(Math.round((today - dueDate) / (1000 * 60 * 60 * 24)), 1) : 0
     return {
       type: 'pool', id: p.id, pool_id: p.id, client_id: p.client_id,
       title: 'Pool Service', client_name: p.clients?.name,

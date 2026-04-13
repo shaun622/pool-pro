@@ -182,9 +182,10 @@ export default function TechRunSheet() {
       const d = new Date(p.next_due_at)
       if (d >= startOfToday) continue
       if (poolIdsCovered.has(p.id)) continue
-      const daysOver = Math.floor((startOfToday - d) / (1000 * 60 * 60 * 24))
-      if (daysOver === 0) {
-        // Due today (timezone edge case) — goes into today's route, not overdue
+      const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
+      const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
+      if (daysOver <= 0) {
+        // Due today (timezone edge case where timestamp is just before midnight)
         items.push(poolToStop(p, { isOverdue: false, daysOverdue: 0 }))
       } else {
         overdue.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
@@ -498,8 +499,9 @@ function MapView({ pools, navigate }) {
     const due = new Date(pool.next_due_at)
     const today = new Date(); today.setHours(0,0,0,0)
     if (due < today) {
-      const days = Math.floor((today - due) / (1000 * 60 * 60 * 24))
-      if (days === 0) return { text: 'Due today', color: 'text-green-600' }
+      const dueDate = new Date(due); dueDate.setHours(0, 0, 0, 0)
+      const days = Math.round((today - dueDate) / (1000 * 60 * 60 * 24))
+      if (days <= 0) return { text: 'Due today', color: 'text-green-600' }
       return { text: `${days}d overdue`, color: 'text-red-600' }
     }
     if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600' }
