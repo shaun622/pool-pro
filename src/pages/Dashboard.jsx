@@ -4,11 +4,10 @@ import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
-import Button from '../components/ui/Button'
 import ActivityPanel, { ActivityBell } from '../components/ui/ActivityPanel'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, daysOverdue, getOverdueStatus, cn } from '../lib/utils'
+import { formatDate, cn } from '../lib/utils'
 
 export default function Dashboard() {
   const { business, loading: bizLoading } = useBusiness()
@@ -21,8 +20,7 @@ export default function Dashboard() {
     activeJobs: 0,
     pendingQuotes: 0,
   })
-  const [todayPools, setTodayPools] = useState([])
-  const [overduePools, setOverduePools] = useState([])
+  const [todaySummary, setTodaySummary] = useState({ overdue: 0, dueToday: 0, completed: 0, total: 0, notes: [] })
   const [recentActivity, setRecentActivity] = useState([])
   const [counts, setCounts] = useState({ clients: 0, pools: 0, services: 0 })
   const [loading, setLoading] = useState(true)
@@ -41,10 +39,15 @@ export default function Dashboard() {
       const endOfToday = new Date(now)
       endOfToday.setHours(23, 59, 59, 999)
 
+      const startOfToday = new Date(now)
+      startOfToday.setHours(0, 0, 0, 0)
+
       const [
         servicedRes,
-        dueTodayRes,
-        overdueRes,
+        overduePoolsRes,
+        dueTodayPoolsRes,
+        todayJobsRes,
+        completedTodayRes,
         jobsRes,
         quotesRes,
         activityRes,
@@ -58,20 +61,37 @@ export default function Dashboard() {
           .eq('business_id', business.id)
           .gte('serviced_at', startOfWeek.toISOString()),
 
+        // Overdue pools: next_due_at < start of today
         supabase
           .from('pools')
-          .select('id, address, type, next_due_at, last_serviced_at, schedule_frequency, clients(name)')
+          .select('id, address, access_notes, clients(name)')
           .eq('business_id', business.id)
-          .lte('next_due_at', endOfToday.toISOString())
-          .order('next_due_at', { ascending: true })
-          .limit(5),
+          .lt('next_due_at', startOfToday.toISOString()),
 
+        // Due today pools: next_due_at between start and end of today
         supabase
           .from('pools')
-          .select('id, address, next_due_at, clients(name)')
+          .select('id, address, access_notes, clients(name)')
           .eq('business_id', business.id)
-          .lt('next_due_at', now.toISOString())
-          .order('next_due_at', { ascending: true }),
+          .gte('next_due_at', startOfToday.toISOString())
+          .lte('next_due_at', endOfToday.toISOString()),
+
+        // Jobs scheduled today
+        supabase
+          .from('jobs')
+          .select('id, title, notes, scheduled_date, clients(name)')
+          .eq('business_id', business.id)
+          .eq('scheduled_date', startOfToday.toISOString().split('T')[0])
+          .in('status', ['scheduled', 'in_progress']),
+
+        // Services completed today
+        supabase
+          .from('service_records')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', business.id)
+          .eq('status', 'completed')
+          .gte('completed_at', startOfToday.toISOString())
+          .lte('completed_at', endOfToday.toISOString()),
 
         supabase
           .from('jobs')
@@ -93,7 +113,6 @@ export default function Dashboard() {
           .order('serviced_at', { ascending: false })
           .limit(5),
 
-        // Total counts for getting started
         supabase
           .from('clients')
           .select('id', { count: 'exact', head: true })
@@ -110,9 +129,32 @@ export default function Dashboard() {
           .eq('business_id', business.id),
       ])
 
+      const overdueCount = overduePoolsRes.data?.length || 0
+      const dueTodayCount = (dueTodayPoolsRes.data?.length || 0) + (todayJobsRes.data?.length || 0)
+      const completedCount = completedTodayRes.count || 0
+      const totalStops = overdueCount + dueTodayCount
+
+      // Collect access notes from overdue + due today pools (max 3)
+      const notesItems = []
+      for (const pool of [...(overduePoolsRes.data || []), ...(dueTodayPoolsRes.data || [])]) {
+        if (pool.access_notes && pool.access_notes.trim()) {
+          notesItems.push({ name: pool.clients?.name || 'Client', note: pool.access_notes.trim() })
+        }
+        if (notesItems.length >= 3) break
+      }
+      // Also check job notes
+      if (notesItems.length < 3) {
+        for (const job of (todayJobsRes.data || [])) {
+          if (job.notes && job.notes.trim()) {
+            notesItems.push({ name: job.clients?.name || job.title || 'Job', note: job.notes.trim() })
+          }
+          if (notesItems.length >= 3) break
+        }
+      }
+
       setStats({
         servicedThisWeek: servicedRes.count || 0,
-        overduePools: overdueRes.data?.length || 0,
+        overduePools: overdueCount,
         activeJobs: jobsRes.count || 0,
         pendingQuotes: quotesRes.count || 0,
       })
@@ -123,8 +165,13 @@ export default function Dashboard() {
         services: serviceCountRes.count || 0,
       })
 
-      setTodayPools(dueTodayRes.data || [])
-      setOverduePools(overdueRes.data || [])
+      setTodaySummary({
+        overdue: overdueCount,
+        dueToday: dueTodayCount,
+        completed: completedCount,
+        total: totalStops,
+        notes: notesItems,
+      })
       setRecentActivity(activityRes.data || [])
       setLoading(false)
     }
@@ -275,88 +322,126 @@ export default function Dashboard() {
 
         <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-2 md:space-y-6">
-        {/* Ready to Service */}
-        {todayPools.length > 0 && (
-          <section className="mb-6 md:mb-0">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="section-title">Ready to Service</h3>
+
+        {/* Today's Summary */}
+        <section className="mb-6 md:mb-0">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="section-title">Today's Summary</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+          </div>
+
+          <Card className="space-y-4">
+            {/* Progress bar */}
+            {todaySummary.total > 0 ? (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  {todaySummary.completed >= todaySummary.total ? (
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      All done!
+                    </div>
+                  ) : (
+                    <p className="text-sm font-semibold text-gray-900">
+                      {todaySummary.completed} of {todaySummary.total} stops completed
+                    </p>
+                  )}
+                  <span className="text-xs font-semibold text-gray-400">
+                    {Math.round((todaySummary.completed / todaySummary.total) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-2.5 rounded-full transition-all duration-700',
+                      todaySummary.completed >= todaySummary.total ? 'bg-green-500' : 'bg-gradient-brand'
+                    )}
+                    style={{ width: `${Math.min((todaySummary.completed / todaySummary.total) * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 py-1">
+                <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm text-gray-500">No stops scheduled for today</p>
+              </div>
+            )}
+
+            {/* Stat pills */}
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => navigate('/route')}
-                className="text-xs text-pool-600 font-semibold min-h-tap flex items-center hover:text-pool-700"
+                className={cn(
+                  'rounded-xl py-2.5 text-center transition-colors',
+                  todaySummary.overdue > 0 ? 'bg-red-50 hover:bg-red-100' : 'bg-gray-50 hover:bg-gray-100'
+                )}
               >
-                View all
-                <svg className="w-3.5 h-3.5 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
+                <p className={cn('text-lg font-bold', todaySummary.overdue > 0 ? 'text-red-600' : 'text-gray-400')}>
+                  {todaySummary.overdue}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Overdue</p>
+              </button>
+              <button
+                onClick={() => navigate('/route')}
+                className="rounded-xl py-2.5 text-center bg-pool-50 hover:bg-pool-100 transition-colors"
+              >
+                <p className="text-lg font-bold text-pool-600">{todaySummary.dueToday}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Due Today</p>
+              </button>
+              <button
+                onClick={() => navigate('/route')}
+                className={cn(
+                  'rounded-xl py-2.5 text-center transition-colors',
+                  todaySummary.completed > 0 ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
+                )}
+              >
+                <p className={cn('text-lg font-bold', todaySummary.completed > 0 ? 'text-green-600' : 'text-gray-400')}>
+                  {todaySummary.completed}
+                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Completed</p>
               </button>
             </div>
-            <div className="space-y-2.5">
-              {todayPools.map(pool => {
-                const days = daysOverdue(pool.next_due_at)
-                const isOverdue = days > 0
-                return (
-                  <Card key={pool.id} className="p-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
-                        isOverdue ? 'bg-red-50' : 'bg-emerald-50'
-                      )}>
-                        <div className={cn('w-2.5 h-2.5 rounded-full', isOverdue ? 'bg-red-500' : 'bg-emerald-500')} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{pool.clients?.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{pool.address}</p>
-                        {isOverdue && (
-                          <p className={`text-[11px] font-semibold mt-0.5 ${days === 0 ? 'text-green-600' : 'text-red-500'}`}>{days === 0 ? 'Due today' : `${days}d overdue`}</p>
-                        )}
-                      </div>
-                      <Button
-                        className="text-xs px-4 py-2 min-h-[36px] rounded-xl shadow-sm"
-                        onClick={() => navigate(`/pools/${pool.id}/service`)}
-                      >
-                        Service
-                      </Button>
-                    </div>
-                  </Card>
-                )
-              })}
-            </div>
-          </section>
-        )}
 
-        {/* Overdue Pools */}
-        {overduePools.length > 0 && (
-          <section className="mb-6 md:mb-0">
-            <h3 className="section-title mb-3">Overdue Pools</h3>
-            <div className="space-y-2.5">
-              {overduePools.map((pool) => {
-                const days = daysOverdue(pool.next_due_at)
-                const status = getOverdueStatus(pool.next_due_at)
-                const badgeVariant = status === 'red' ? 'danger' : 'warning'
-
-                return (
-                  <Card
-                    key={pool.id}
-                    onClick={() => navigate(`/pools/${pool.id}`)}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900 truncate text-sm">
-                        {pool.clients?.name}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {pool.address}
+            {/* Notes & Alerts */}
+            {todaySummary.notes.length > 0 && (
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Notes & Alerts</p>
+                <div className="space-y-2">
+                  {todaySummary.notes.map((item, i) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      <p className="text-sm text-gray-700 truncate">
+                        <span className="font-semibold text-gray-900">{item.name}</span>
+                        <span className="text-gray-400 mx-1">—</span>
+                        {item.note}
                       </p>
                     </div>
-                    <Badge variant={days === 0 ? 'success' : badgeVariant} className="ml-3 shrink-0">
-                      {days === 0 ? 'Due today' : `${days}d overdue`}
-                    </Badge>
-                  </Card>
-                )
-              })}
-            </div>
-          </section>
-        )}
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* View Full Schedule link */}
+            <button
+              onClick={() => navigate('/route')}
+              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-pool-600 hover:text-pool-700 pt-1 min-h-tap transition-colors"
+            >
+              View Full Schedule
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </Card>
+        </section>
 
         </div>
         <div className="md:col-span-1">
