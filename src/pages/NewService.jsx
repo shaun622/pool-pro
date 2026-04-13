@@ -73,10 +73,11 @@ export default function NewService() {
     salt: '',
   })
 
-  // Step 2: Task checklist
-  const [tasks, setTasks] = useState(
-    DEFAULT_TASKS.map(name => ({ name, completed: false }))
-  )
+  // Step 2: Task checklist — start with just "Checked water level"
+  const [tasks, setTasks] = useState([
+    { name: 'Checked water level', completed: true },
+  ])
+  const [customTask, setCustomTask] = useState('')
 
   // Step 3: Chemicals added
   const [chemicalsAdded, setChemicalsAdded] = useState([])
@@ -431,33 +432,104 @@ export default function NewService() {
               <h2 className="text-base font-semibold text-gray-900">Task Checklist</h2>
               <span className="text-sm text-gray-500">{completedCount}/{tasks.length}</span>
             </div>
+
+            {/* Active tasks */}
             <div className="space-y-2">
               {tasks.map((task, i) => (
-                <button
-                  key={task.name}
-                  onClick={() => toggleTask(i)}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-4 rounded-xl border text-left transition-colors',
-                    'min-h-[44px]',
-                    task.completed
-                      ? 'bg-green-50 border-green-200 text-green-800'
-                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  )}
-                >
-                  <span className={cn(
-                    'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0',
-                    task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300'
-                  )}>
-                    {task.completed && (
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                <div key={task.name} className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleTask(i)}
+                    className={cn(
+                      'flex-1 flex items-center gap-3 px-4 rounded-xl border text-left transition-colors',
+                      'min-h-[44px]',
+                      task.completed
+                        ? 'bg-green-50 border-green-200 text-green-800'
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                     )}
-                  </span>
-                  <span className="text-sm font-medium">{task.name}</span>
-                </button>
+                  >
+                    <span className={cn(
+                      'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0',
+                      task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                    )}>
+                      {task.completed && (
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="text-sm font-medium">{task.name}</span>
+                  </button>
+                  <button
+                    onClick={() => setTasks(prev => prev.filter((_, idx) => idx !== i))}
+                    className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               ))}
             </div>
+
+            {/* Add from common tasks */}
+            {(() => {
+              const addedNames = tasks.map(t => t.name)
+              const available = DEFAULT_TASKS.filter(t => !addedNames.includes(t))
+              if (available.length === 0) return null
+              return (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Add common task</label>
+                  <select
+                    className="input"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setTasks(prev => [...prev, { name: e.target.value, completed: false }])
+                      }
+                    }}
+                  >
+                    <option value="">Select a task...</option>
+                    {available.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              )
+            })()}
+
+            {/* Custom task input */}
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1 block">Add custom task</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="input flex-1"
+                  placeholder="e.g. Replaced O-ring"
+                  value={customTask}
+                  onChange={e => setCustomTask(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && customTask.trim()) {
+                      setTasks(prev => [...prev, { name: customTask.trim(), completed: false }])
+                      setCustomTask('')
+                    }
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  disabled={!customTask.trim()}
+                  onClick={() => {
+                    if (customTask.trim()) {
+                      setTasks(prev => [...prev, { name: customTask.trim(), completed: false }])
+                      setCustomTask('')
+                    }
+                  }}
+                  className="px-4"
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+
             <div className="flex gap-3 mt-4">
               <Button variant="secondary" onClick={() => setStep(0)} className="flex-1 min-h-[48px]">
                 Back
