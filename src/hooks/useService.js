@@ -136,11 +136,12 @@ export function useService() {
   }, [])
 
   const saveServicePhoto = useCallback(async (serviceRecordId, file) => {
-    const ext = file.name?.split('.').pop() || 'jpg'
-    const path = `${business.id}/${serviceRecordId}/${Date.now()}.${ext}`
+    // Convert to WebP client-side to save storage
+    const webpBlob = await convertToWebP(file, 1200, 0.82)
+    const path = `${business.id}/${serviceRecordId}/${Date.now()}.webp`
     const { error: uploadErr } = await supabase.storage
       .from('service-photos')
-      .upload(path, file, { upsert: true })
+      .upload(path, webpBlob, { upsert: true, contentType: 'image/webp' })
     if (uploadErr) throw uploadErr
     const { data: urlData } = supabase.storage
       .from('service-photos')
@@ -158,6 +159,32 @@ export function useService() {
   }, [business])
 
   return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, saveServicePhoto, completeService, getServiceHistory }
+}
+
+function convertToWebP(file, maxSize = 1200, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      let { width, height } = img
+      if (width > maxSize || height > maxSize) {
+        const ratio = Math.min(maxSize / width, maxSize / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, width, height)
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error('WebP conversion failed')),
+        'image/webp',
+        quality
+      )
+    }
+    img.onerror = () => reject(new Error('Failed to load image'))
+    img.src = URL.createObjectURL(file)
+  })
 }
 
 function calculateNextDueDate(from, frequency) {
