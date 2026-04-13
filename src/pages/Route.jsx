@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Header from '../components/layout/Header'
@@ -177,6 +177,7 @@ export default function Route() {
 // ─── Schedule (List / Upcoming / Map) ──────────
 function ScheduleView({ business, view, setView }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [allJobs, setAllJobs] = useState([])
   const [allPools, setAllPools] = useState([])
@@ -233,7 +234,7 @@ function ScheduleView({ business, view, setView }) {
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [business?.id])
+  useEffect(() => { fetchData() }, [business?.id, location.key])
 
   // Build stops for the selected date — merges jobs, due pools, overdue pools, and recurring profiles.
   // Deduplicates: if a pool has a jobs row for the day, prefer the job.

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -12,6 +12,7 @@ import { formatDate, cn } from '../lib/utils'
 export default function Dashboard() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
+  const location = useLocation()
   const [activityOpen, setActivityOpen] = useState(false)
 
   const [stats, setStats] = useState({
@@ -177,7 +178,7 @@ export default function Dashboard() {
     }
 
     fetchDashboard()
-  }, [business?.id])
+  }, [business?.id, location.key])
 
   if (bizLoading || loading) {
     return (

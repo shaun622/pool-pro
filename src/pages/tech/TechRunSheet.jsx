@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Badge from '../../components/ui/Badge'
@@ -73,6 +73,7 @@ function FitBounds({ stops }) {
 export default function TechRunSheet() {
   const { business, staffRecord } = useBusiness()
   const navigate = useNavigate()
+  const location = useLocation()
   const [view, setView] = useState('today')
   const [jobs, setJobs] = useState([])
   const [pools, setPools] = useState([])
@@ -118,7 +119,7 @@ export default function TechRunSheet() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [business?.id, staffId])
+  useEffect(() => { fetchData() }, [business?.id, staffId, location.key])
 
   // Build today's stops
   const todayStops = useMemo(() => {
