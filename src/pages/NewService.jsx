@@ -24,7 +24,9 @@ import {
 
 const STEPS = ['Chemicals', 'Tasks', 'Added', 'Review']
 
-const READING_FIELDS = [
+const DEFAULT_READINGS = ['ph', 'free_chlorine']
+
+const ALL_READING_FIELDS = [
   { key: 'ph', rangeKey: 'ph' },
   { key: 'free_chlorine', rangeKey: 'free_cl' },
   { key: 'total_chlorine', rangeKey: 'total_cl' },
@@ -72,6 +74,9 @@ export default function NewService() {
     calcium_hardness: '',
     salt: '',
   })
+
+  // Which chemical readings to show (start with pH + free chlorine)
+  const [visibleReadings, setVisibleReadings] = useState([...DEFAULT_READINGS])
 
   // Step 2: Task checklist — start with just "Checked water level"
   const [tasks, setTasks] = useState([
@@ -389,12 +394,13 @@ export default function NewService() {
               />
             )}
             <h2 className="text-base font-semibold text-gray-900">Chemical Readings</h2>
-            {READING_FIELDS.map(({ key, rangeKey, saltOnly }) => {
+            {ALL_READING_FIELDS.filter(f => visibleReadings.includes(f.key)).map(({ key, rangeKey, saltOnly }) => {
               if (saltOnly && !isSaltPool) return null
               const info = CHEMICAL_LABELS[key]
               const value = readings[key]
               const range = targetRanges[rangeKey]
               const status = value !== '' ? getChemicalStatus(parseFloat(value), range) : 'neutral'
+              const isDefault = DEFAULT_READINGS.includes(key)
               return (
                 <div key={key} className="flex items-center gap-3">
                   <span className={cn('w-3 h-3 rounded-full flex-shrink-0', statusDot(status))} />
@@ -416,9 +422,54 @@ export default function NewService() {
                       <div className="mt-0.5">{renderDelta(key)}</div>
                     )}
                   </div>
+                  {!isDefault && (
+                    <button
+                      onClick={() => {
+                        setVisibleReadings(prev => prev.filter(k => k !== key))
+                        handleReadingChange(key, '')
+                      }}
+                      className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors mt-5"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               )
             })}
+
+            {/* Add more readings dropdown */}
+            {(() => {
+              const available = ALL_READING_FIELDS.filter(f =>
+                !visibleReadings.includes(f.key) && !(f.saltOnly && !isSaltPool)
+              )
+              if (available.length === 0) return null
+              return (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Add reading</label>
+                  <select
+                    className="input"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setVisibleReadings(prev => [...prev, e.target.value])
+                      }
+                    }}
+                  >
+                    <option value="">Select a reading...</option>
+                    {available.map(f => {
+                      const info = CHEMICAL_LABELS[f.key]
+                      return (
+                        <option key={f.key} value={f.key}>
+                          {info?.label || f.key}{info?.unit ? ` (${info.unit})` : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+              )
+            })()}
             <Button onClick={() => setStep(1)} className="w-full min-h-[48px] mt-4">
               Next: Tasks
             </Button>
@@ -721,7 +772,7 @@ export default function NewService() {
                 <p className="text-xs text-gray-400 mb-2">Compared to last service</p>
               )}
               <div className="space-y-2">
-                {READING_FIELDS.map(({ key, rangeKey, saltOnly }) => {
+                {ALL_READING_FIELDS.map(({ key, rangeKey, saltOnly }) => {
                   if (saltOnly && !isSaltPool) return null
                   const value = readings[key]
                   if (value === '') return null
