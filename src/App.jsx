@@ -73,6 +73,15 @@ function BusinessGuard() {
   return <AppShell />
 }
 
+// Shared guard: renders correct shell based on role (for routes accessible to both techs and admins)
+function RoleShell() {
+  const { business, loading, userRole } = useBusiness()
+  if (loading) return <Loading />
+  if (!business) return <Navigate to="/login" replace />
+  if (userRole === 'tech') return <TechShell />
+  return <AppShell />
+}
+
 // Tech guard: requires tech role staff member
 function TechGuard() {
   const { business, loading, userRole } = useBusiness()
@@ -107,13 +116,17 @@ export default function App() {
               <Route element={<ProtectedRoute />}>
                 <Route path="/onboarding" element={<Onboarding />} />
 
+                {/* Shared routes — accessible to both techs and admins */}
+                <Route element={<RoleShell />}>
+                  <Route path="/pools/:id/service" element={<NewService />} />
+                  <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
+                  <Route path="/services/:id" element={<ServiceDetail />} />
+                </Route>
+
                 {/* Tech routes */}
                 <Route element={<TechGuard />}>
                   <Route path="/tech" element={<TechRunSheet />} />
                   <Route path="/tech/profile" element={<TechProfile />} />
-                  <Route path="/pools/:id/service" element={<NewService />} />
-                  <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
-                  <Route path="/services/:id" element={<ServiceDetail />} />
                 </Route>
 
                 {/* Admin/Owner routes */}
@@ -123,10 +136,7 @@ export default function App() {
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/clients/:id" element={<ClientDetail />} />
                   <Route path="/pools/:id" element={<PoolDetail />} />
-                  <Route path="/pools/:id/service" element={<NewService />} />
-                  <Route path="/services/:id" element={<ServiceDetail />} />
                   <Route path="/work-orders" element={<WorkOrders />} />
-                  <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
                   <Route path="/recurring-jobs" element={<RecurringJobs />} />
                   <Route path="/quotes" element={<Quotes />} />
                   <Route path="/quotes/new" element={<QuoteBuilder />} />

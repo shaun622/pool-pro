@@ -404,6 +404,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   }
 
   async function handleStartJob() {
+    onClose?.()
     if (stop.type === 'job') {
       await supabase.from('jobs').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', stop.id)
       onUpdated?.()
