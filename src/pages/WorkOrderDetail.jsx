@@ -92,7 +92,7 @@ export default function JobDetail() {
       }
       if (jobData.quote_id) {
         promises.push(
-          supabase.from('quotes').select('id, line_items, scope, total, status')
+          supabase.from('quotes').select('id, line_items, scope, total, status, responded_at')
             .eq('id', jobData.quote_id).single().then(r => ({ quote: r.data }))
         )
       }
@@ -501,25 +501,38 @@ export default function JobDetail() {
 
         {/* Quote Reference */}
         {quote && (
-          <Card className="mb-3" onClick={() => navigate(`/quotes/${quote.id}`)}>
+          <Card className="mb-3">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">From Quote</h3>
-            <div className="space-y-2">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-bold text-gray-900">Quote: {formatCurrency(quote.total)}</p>
+              <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
+                quote.status === 'accepted' || quote.status === 'converted' ? 'bg-green-50 text-green-700' :
+                quote.status === 'sent' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600')}>
+                {quote.status === 'converted' ? 'Converted' : quote.status === 'accepted' ? 'Accepted' : quote.status?.charAt(0).toUpperCase() + quote.status?.slice(1)}
+              </span>
+            </div>
+            {quote.responded_at && (
+              <p className="text-xs text-gray-400 mb-2">
+                {quote.status === 'accepted' ? 'Accepted' : 'Responded'} {new Date(quote.responded_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            )}
+            <div className="space-y-1 mb-3">
               {(quote.line_items || []).map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
                   <span className="text-gray-700 truncate flex-1">{item.description}</span>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    {item.recurring && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-pool-50 text-pool-600 font-medium">{item.recurring}</span>
-                    )}
-                    <span className="font-medium text-gray-900">{formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</span>
-                  </div>
+                  <span className="font-medium text-gray-900 shrink-0 ml-2">{formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</span>
                 </div>
               ))}
-              <div className="pt-2 border-t border-gray-100 flex justify-between">
-                <span className="text-xs text-gray-400">Quote total</span>
-                <span className="font-bold text-gray-900">{formatCurrency(quote.total)}</span>
-              </div>
             </div>
+            <button
+              onClick={() => navigate(`/quotes/${quote.id}`)}
+              className="text-sm font-semibold text-pool-600 hover:text-pool-700 flex items-center gap-1"
+            >
+              View Quote
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </Card>
         )}
 

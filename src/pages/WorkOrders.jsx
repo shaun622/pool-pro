@@ -19,6 +19,7 @@ const QUOTE_STATUS_BADGE = {
   draft: 'default',
   sent: 'primary',
   accepted: 'success',
+  converted: 'default',
   declined: 'danger',
   expired: 'default',
 }
@@ -27,6 +28,7 @@ const QUOTE_STATUS_LABEL = {
   draft: 'Draft',
   sent: 'Quote Sent',
   accepted: 'Quote Accepted',
+  converted: 'Converted',
   declined: 'Declined',
   expired: 'Expired',
 }
@@ -194,9 +196,14 @@ export default function WorkOrders() {
     return (quote.line_items || []).reduce((s, i) => s + (i.amount || i.quantity * i.unit_price || 0), 0)
   }
 
-  const filteredQuotes = quoteFilter === 'all' ? quotes : quotes.filter(q => q.status === quoteFilter)
+  // Active quotes = sent + accepted (actionable). "All" shows these, not truly all.
+  const activeQuotes = quotes.filter(q => q.status === 'sent' || q.status === 'accepted')
+  const convertedQuotes = quotes.filter(q => q.status === 'converted')
   const quoteSentCount = quotes.filter(q => q.status === 'sent').length
   const quoteAcceptedCount = quotes.filter(q => q.status === 'accepted').length
+  const filteredQuotes = quoteFilter === 'converted' ? convertedQuotes
+    : quoteFilter === 'all' ? activeQuotes
+    : quotes.filter(q => q.status === quoteFilter)
 
   // Pre-fill from query params (from Quote → Add as Work Order)
   useEffect(() => {
@@ -350,9 +357,9 @@ export default function WorkOrders() {
             className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all relative',
               tab === 'quotes' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
             Quotes
-            {quotes.length > 0 && (
+            {activeQuotes.length > 0 && (
               <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-pool-100 text-pool-700">
-                {quotes.length}
+                {activeQuotes.length}
               </span>
             )}
           </button>
@@ -417,9 +424,10 @@ export default function WorkOrders() {
           {/* Quote filter pills */}
           <div className="flex flex-wrap gap-1.5 pb-3">
             {[
-              { key: 'all', label: `All (${quotes.length})` },
+              { key: 'all', label: `All (${activeQuotes.length})` },
               { key: 'sent', label: `Quote Sent (${quoteSentCount})` },
               { key: 'accepted', label: `Quote Accepted (${quoteAcceptedCount})` },
+              ...(convertedQuotes.length > 0 ? [{ key: 'converted', label: `Converted (${convertedQuotes.length})` }] : []),
             ].map(f => (
               <button key={f.key} onClick={() => setQuoteFilter(f.key)}
                 className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
@@ -454,6 +462,11 @@ export default function WorkOrders() {
                           {QUOTE_STATUS_LABEL[quote.status] || quote.status}
                         </Badge>
                       </div>
+                      {(quote.line_items || []).filter(li => li.description).length > 0 && (
+                        <p className="text-xs text-gray-500 truncate mb-1">
+                          {(quote.line_items || []).filter(li => li.description).map(li => li.description).join(', ')}
+                        </p>
+                      )}
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-bold text-gray-700">{formatCurrency(getQuoteTotal(quote))}</p>
                         <p className="text-xs text-gray-400">{formatDate(quote.created_at)}</p>

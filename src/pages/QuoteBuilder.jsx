@@ -319,6 +319,42 @@ export default function QuoteBuilder() {
     }
   }
 
+  async function convertToWorkOrder() {
+    if (!id || !clientId) return
+    setConverting(true)
+    try {
+      // Build job title from line items
+      const firstItem = lineItems.find(li => li.description)
+      const jobTitle = firstItem?.description || 'Job from quote'
+
+      // Create the work order linked to this quote
+      const { data: job, error } = await supabase.from('jobs').insert({
+        business_id: business.id,
+        client_id: clientId,
+        pool_id: poolId || null,
+        quote_id: id,
+        title: jobTitle,
+        status: 'scheduled',
+        scheduled_date: new Date().toISOString().split('T')[0],
+        price: total || null,
+      }).select().single()
+      if (error) throw error
+
+      // Mark quote as converted
+      await supabase.from('quotes').update({
+        status: 'converted',
+      }).eq('id', id)
+
+      // Navigate to the new work order
+      navigate(`/work-orders/${job.id}`)
+    } catch (err) {
+      console.error('Error converting to work order:', err)
+      alert(err.message || 'Failed to create work order')
+    } finally {
+      setConverting(false)
+    }
+  }
+
   async function acceptQuote() {
     if (!id) return
     setConverting(true)
@@ -626,19 +662,26 @@ export default function QuoteBuilder() {
               </button>
               <Button
                 className="w-full min-h-tap"
-                onClick={() => {
-                  const params = new URLSearchParams()
-                  if (clientId) params.set('client', clientId)
-                  if (poolId) params.set('pool', poolId)
-                  params.set('quote', id)
-                  const firstItem = lineItems.find(li => li.description)
-                  if (firstItem) params.set('title', firstItem.description)
-                  if (total) params.set('price', String(total))
-                  navigate(`/work-orders?${params.toString()}`)
-                }}
+                onClick={convertToWorkOrder}
+                loading={converting}
               >
                 Add as Work Order
               </Button>
+              <Button
+                variant="secondary"
+                className="w-full min-h-tap"
+                onClick={() => saveQuote('sent')}
+                loading={sending}
+              >
+                Resend Quote
+              </Button>
+            </div>
+          ) : isEditing && quoteStatus === 'converted' ? (
+            /* Converted to work order */
+            <div className="space-y-3">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+                <p className="text-sm font-semibold text-gray-600">Converted to Work Order</p>
+              </div>
               <Button
                 variant="secondary"
                 className="w-full min-h-tap"
