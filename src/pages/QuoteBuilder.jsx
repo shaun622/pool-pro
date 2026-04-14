@@ -327,7 +327,7 @@ export default function QuoteBuilder() {
         status: 'accepted',
         responded_at: new Date().toISOString(),
       }).eq('id', id)
-      setQuoteStatus('accepted')
+      navigate(-1)
     } catch (err) {
       console.error('Error accepting quote:', err)
     } finally {
@@ -341,7 +341,7 @@ export default function QuoteBuilder() {
       status: 'declined',
       responded_at: new Date().toISOString(),
     }).eq('id', id)
-    navigate('/quotes')
+    navigate(-1)
   }
 
   async function deleteQuote() {
