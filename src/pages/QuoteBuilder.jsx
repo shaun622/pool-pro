@@ -71,7 +71,7 @@ export default function QuoteBuilder() {
 
       if (error || !data) {
         console.error('Error fetching quote:', error)
-        navigate('/quotes')
+        navigate('/work-orders?tab=quotes')
         return
       }
 
@@ -257,7 +257,7 @@ export default function QuoteBuilder() {
         }
       }
 
-      navigate('/quotes')
+      navigate('/work-orders?tab=quotes')
     } catch (err) {
       console.error('Error saving quote:', err)
     } finally {
@@ -311,7 +311,7 @@ export default function QuoteBuilder() {
         })
       }
 
-      navigate('/quotes')
+      navigate('/work-orders?tab=quotes')
     } catch (err) {
       console.error('Error converting quote:', err)
     } finally {
@@ -327,7 +327,7 @@ export default function QuoteBuilder() {
         status: 'accepted',
         responded_at: new Date().toISOString(),
       }).eq('id', id)
-      navigate(-1)
+      navigate('/work-orders?tab=quotes')
     } catch (err) {
       console.error('Error accepting quote:', err)
     } finally {
@@ -341,20 +341,20 @@ export default function QuoteBuilder() {
       status: 'declined',
       responded_at: new Date().toISOString(),
     }).eq('id', id)
-    navigate(-1)
+    navigate('/work-orders?tab=quotes')
   }
 
   async function deleteQuote() {
     if (!id || !window.confirm('Delete this quote? This cannot be undone.')) return
     const { error } = await supabase.from('quotes').delete().eq('id', id)
     if (error) { console.error('Error deleting quote:', error); return }
-    navigate('/work-orders', { replace: true })
+    navigate('/work-orders?tab=quotes', { replace: true })
   }
 
   if (loading) {
     return (
       <>
-        <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/quotes" />
+        <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/work-orders?tab=quotes" />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -366,7 +366,7 @@ export default function QuoteBuilder() {
 
   return (
     <>
-      <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/quotes" />
+      <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/work-orders?tab=quotes" />
       <PageWrapper>
         <div className="space-y-5">
           {/* Client & Pool selection */}

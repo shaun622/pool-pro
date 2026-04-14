@@ -85,7 +85,7 @@ export default function WorkOrders() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [tab, setTab] = useState('jobs') // 'jobs' | 'quotes'
+  const [tab, setTab] = useState(searchParams.get('tab') === 'quotes' ? 'quotes' : 'jobs')
   const [jobs, setJobs] = useState([])
   const [statusFilter, setStatusFilter] = useState('all')
   const [loading, setLoading] = useState(true)
