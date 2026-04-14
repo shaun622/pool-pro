@@ -13,7 +13,23 @@ import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, cn } from '../lib/utils'
+import { formatDate, formatCurrency, cn } from '../lib/utils'
+
+const QUOTE_STATUS_BADGE = {
+  draft: 'default',
+  sent: 'primary',
+  accepted: 'success',
+  declined: 'danger',
+  expired: 'default',
+}
+
+const QUOTE_STATUS_LABEL = {
+  draft: 'Draft',
+  sent: 'Quote Sent',
+  accepted: 'Quote Accepted',
+  declined: 'Declined',
+  expired: 'Expired',
+}
 
 const JOB_STATUS_BADGE = {
   scheduled: 'primary',
@@ -67,9 +83,15 @@ function jobToStop(j) {
 export default function WorkOrders() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
+  const [tab, setTab] = useState('jobs') // 'jobs' | 'quotes'
   const [jobs, setJobs] = useState([])
   const [statusFilter, setStatusFilter] = useState('all')
   const [loading, setLoading] = useState(true)
+
+  // Quotes
+  const [quotes, setQuotes] = useState([])
+  const [quotesLoading, setQuotesLoading] = useState(false)
+  const [quoteFilter, setQuoteFilter] = useState('all')
 
   // Job detail modal
   const [selectedJob, setSelectedJob] = useState(null)
@@ -151,6 +173,28 @@ export default function WorkOrders() {
 
     return () => { supabase.removeChannel(channel) }
   }, [business?.id])
+
+  // Fetch quotes
+  useEffect(() => {
+    if (!business?.id) return
+    async function fetchQuotes() {
+      setQuotesLoading(true)
+      const { data } = await supabase.from('quotes').select('*, clients(name)')
+        .eq('business_id', business.id)
+        .order('created_at', { ascending: false })
+      setQuotes(data || [])
+      setQuotesLoading(false)
+    }
+    fetchQuotes()
+  }, [business?.id])
+
+  function getQuoteTotal(quote) {
+    return (quote.line_items || []).reduce((s, i) => s + (i.amount || i.quantity * i.unit_price || 0), 0)
+  }
+
+  const filteredQuotes = quoteFilter === 'all' ? quotes : quotes.filter(q => q.status === quoteFilter)
+  const quoteSentCount = quotes.filter(q => q.status === 'sent').length
+  const quoteAcceptedCount = quotes.filter(q => q.status === 'accepted').length
 
   // Fetch clients when modal opens
   useEffect(() => {
@@ -270,9 +314,27 @@ export default function WorkOrders() {
     <>
       <Header title="Work Orders" right={headerAction} />
       <PageWrapper width="wide">
-        {/* Subtitle on desktop */}
-        <p className="hidden md:block text-sm text-gray-500 -mt-2 mb-4">One-off repairs, call-outs & extra work</p>
+        {/* Jobs / Quotes tab toggle */}
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
+          <button onClick={() => setTab('jobs')}
+            className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all',
+              tab === 'jobs' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
+            Jobs
+          </button>
+          <button onClick={() => setTab('quotes')}
+            className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all relative',
+              tab === 'quotes' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
+            Quotes
+            {quotes.length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-pool-100 text-pool-700">
+                {quotes.length}
+              </span>
+            )}
+          </button>
+        </div>
 
+        {tab === 'jobs' ? (
+        <div>
         {/* Action buttons — stacked mobile, side by side desktop */}
         <div className="mb-4 flex flex-col gap-2 md:flex-row">
           <button onClick={() => setJobModalOpen(true)}
@@ -324,6 +386,69 @@ export default function WorkOrders() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
         </button>
+        </div>
+        ) : (
+        <div>
+          {/* Quote filter pills */}
+          <div className="flex flex-wrap gap-1.5 pb-3">
+            {[
+              { key: 'all', label: `All (${quotes.length})` },
+              { key: 'sent', label: `Quote Sent (${quoteSentCount})` },
+              { key: 'accepted', label: `Quote Accepted (${quoteAcceptedCount})` },
+            ].map(f => (
+              <button key={f.key} onClick={() => setQuoteFilter(f.key)}
+                className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
+                  quoteFilter === f.key ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
+                    : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {quotesLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filteredQuotes.length === 0 ? (
+            <EmptyState
+              icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+              title="No quotes yet"
+              description="Create your first quote"
+              action="Create Quote"
+              onAction={() => navigate('/quotes/new')}
+            />
+          ) : (
+            <div className="space-y-2.5">
+              {filteredQuotes.map(quote => (
+                <Card key={quote.id} onClick={() => navigate(`/quotes/${quote.id}`)}>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className="font-semibold text-gray-900 truncate">{quote.clients?.name || 'Unknown'}</p>
+                        <Badge variant={QUOTE_STATUS_BADGE[quote.status]} className="ml-2 shrink-0 text-[10px]">
+                          {QUOTE_STATUS_LABEL[quote.status] || quote.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-gray-700">{formatCurrency(getQuoteTotal(quote))}</p>
+                        <p className="text-xs text-gray-400">{formatDate(quote.created_at)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* FAB for new quote */}
+          <button onClick={() => navigate('/quotes/new')}
+            className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20">
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+        )}
       </PageWrapper>
 
       {/* Job Detail Modal */}
