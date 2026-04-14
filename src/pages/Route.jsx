@@ -646,8 +646,8 @@ function ScheduleView({ business, view, setView }) {
         ))}
       </div>
 
-      {/* Add Recurring Service + Manage link */}
-      <div className="flex items-center justify-between mb-4">
+      {/* Add Recurring Service */}
+      <div className="mb-4">
         <button
           onClick={() => setRecurModalOpen(true)}
           className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-brand text-white shadow-md shadow-pool-500/20 text-sm font-semibold hover:shadow-lg active:scale-[0.98] transition-all min-h-tap"
@@ -656,12 +656,6 @@ function ScheduleView({ business, view, setView }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
           Add Recurring Service
-        </button>
-        <button
-          onClick={() => navigate('/recurring-jobs')}
-          className="text-xs font-medium text-gray-400 hover:text-pool-600 transition-colors"
-        >
-          Manage Recurring
         </button>
       </div>
 
@@ -1573,6 +1567,8 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   const [step, setStep] = useState(1) // 1=client, 2=pool, 3=details, 4=confirm
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState('')
+  const [clientSearch, setClientSearch] = useState('')
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [clientPools, setClientPools] = useState([])
   const [poolId, setPoolId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -1603,7 +1599,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   // Fetch clients on open
   useEffect(() => {
     if (!open || !business?.id) return
-    supabase.from('clients').select('id, name, address').eq('business_id', business.id).order('name')
+    supabase.from('clients').select('id, name, address, email, phone').eq('business_id', business.id).order('name')
       .then(({ data }) => setClients(data || []))
   }, [open, business?.id])
 
@@ -1619,7 +1615,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   }, [clientId])
 
   function reset() {
-    setStep(1); setClientId(''); setPoolId(''); setRecurrenceRule('weekly')
+    setStep(1); setClientId(''); setClientSearch(''); setClientDropdownOpen(false); setPoolId(''); setRecurrenceRule('weekly')
     setCustomDays(7); setPreferredDay(''); setFirstDate(new Date().toISOString().split('T')[0])
     setAssignedStaffId(''); setNotes(''); setShowNewClient(false); setShowNewPool(false)
     setNewClientForm({ name: '', email: '', phone: '', address: '' })
@@ -1738,12 +1734,80 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
         <div className="space-y-3">
           {!showNewClient ? (
             <>
-              <Select
-                label="Client"
-                value={clientId}
-                onChange={e => { setClientId(e.target.value); setPoolId('') }}
-                options={[{ value: '', label: 'Select a client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
-              />
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+                <input
+                  type="text"
+                  value={clientId ? (selectedClient?.name || '') : clientSearch}
+                  onChange={e => {
+                    setClientSearch(e.target.value)
+                    setClientId('')
+                    setPoolId('')
+                    setClientDropdownOpen(true)
+                  }}
+                  onFocus={() => setClientDropdownOpen(true)}
+                  placeholder="Search clients..."
+                  className="input w-full"
+                />
+                {clientId && (
+                  <button type="button" onClick={() => { setClientId(''); setClientSearch(''); setPoolId(''); setClientDropdownOpen(true) }}
+                    className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+                {clientDropdownOpen && !clientId && (
+                  <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-elevated max-h-48 overflow-y-auto">
+                    {clients
+                      .filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .map(c => (
+                        <button key={c.id} type="button"
+                          onClick={() => { setClientId(c.id); setClientSearch(''); setPoolId(''); setClientDropdownOpen(false) }}
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-pool-50 transition-colors border-b border-gray-50 last:border-0">
+                          <p className="font-medium text-gray-900">{c.name}</p>
+                          {c.address && <p className="text-xs text-gray-400 truncate">{c.address}</p>}
+                        </button>
+                      ))}
+                    {clients.filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
+                      <p className="px-3 py-3 text-sm text-gray-400">No clients found</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Selected client contact info */}
+              {selectedClient && (
+                <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+                  <p className="text-sm font-semibold text-gray-900">{selectedClient.name}</p>
+                  {selectedClient.email && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      {selectedClient.email}
+                    </div>
+                  )}
+                  {selectedClient.phone && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                      {selectedClient.phone}
+                    </div>
+                  )}
+                  {selectedClient.address && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {selectedClient.address}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button type="button" onClick={() => setShowNewClient(true)}
                 className="text-xs font-medium text-pool-600 hover:text-pool-700">
                 + Add new client
