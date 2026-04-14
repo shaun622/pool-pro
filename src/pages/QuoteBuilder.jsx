@@ -667,28 +667,28 @@ export default function QuoteBuilder() {
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
                 <p className="text-sm font-semibold text-green-700">Quote Accepted</p>
               </div>
-              <button
-                onClick={() => {
-                  const params = new URLSearchParams()
-                  if (clientId) params.set('client', clientId)
-                  params.set('ref', `quote:${id}`)
-                  const items = lineItems.filter(li => li.description)
-                  if (items.length) params.set('items', JSON.stringify(items))
-                  navigate(`/invoices/new?${params.toString()}`)
-                }}
-                className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Create Invoice
-              </button>
-              <Button
-                className="w-full min-h-tap"
-                onClick={() => setConvertModalOpen(true)}
-              >
-                Add as Work Order
-              </Button>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1 min-h-tap"
+                  onClick={() => {
+                    const params = new URLSearchParams()
+                    if (clientId) params.set('client', clientId)
+                    params.set('ref', `quote:${id}`)
+                    const items = lineItems.filter(li => li.description)
+                    if (items.length) params.set('items', JSON.stringify(items))
+                    navigate(`/invoices/new?${params.toString()}`)
+                  }}
+                >
+                  Create Invoice
+                </Button>
+                <Button
+                  className="flex-1 min-h-tap"
+                  onClick={() => setConvertModalOpen(true)}
+                >
+                  Add as Work Order
+                </Button>
+              </div>
               <Button
                 variant="secondary"
                 className="w-full min-h-tap"
