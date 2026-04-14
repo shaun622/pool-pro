@@ -201,7 +201,7 @@ export default function JobDetail() {
   if (loading) {
     return (
       <>
-        <Header title="Work Order" back="/work-orders" />
+        <Header title="Work Order" backTo="/work-orders" />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -214,7 +214,7 @@ export default function JobDetail() {
   if (!job) {
     return (
       <>
-        <Header title="Work Order" back="/work-orders" />
+        <Header title="Work Order" backTo="/work-orders" />
         <PageWrapper>
           <div className="text-center py-20">
             <p className="text-gray-500">Job not found</p>
@@ -240,7 +240,7 @@ export default function JobDetail() {
 
   return (
     <>
-      <Header title="Work Order" back="/work-orders" right={headerAction} />
+      <Header title="Work Order" backTo="/work-orders" right={headerAction} />
       <PageWrapper>
         {/* Mini map hero */}
         {hasCoords && MAPBOX_TILE_URL && (
