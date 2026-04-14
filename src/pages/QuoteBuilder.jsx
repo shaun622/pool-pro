@@ -42,6 +42,25 @@ export default function QuoteBuilder() {
   const [loading, setLoading] = useState(isEditing)
   const [quoteStatus, setQuoteStatus] = useState('draft')
   const [converting, setConverting] = useState(false)
+  const [convertModalOpen, setConvertModalOpen] = useState(false)
+  const [convertForm, setConvertForm] = useState({
+    scheduled_date: new Date().toISOString().split('T')[0],
+    assigned_staff_id: '',
+    notes: '',
+  })
+  const [staffList, setStaffList] = useState([])
+
+  // Fetch staff
+  useEffect(() => {
+    if (!business?.id) return
+    supabase
+      .from('staff_members')
+      .select('id, name')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setStaffList(data || []))
+  }, [business?.id])
 
   // New client modal
   const [newClientOpen, setNewClientOpen] = useState(false)
@@ -327,17 +346,21 @@ export default function QuoteBuilder() {
       const firstItem = lineItems.find(li => li.description)
       const jobTitle = firstItem?.description || 'Job from quote'
 
-      // Create the work order linked to this quote
-      const { data: job, error } = await supabase.from('jobs').insert({
+      const jobData = {
         business_id: business.id,
         client_id: clientId,
         pool_id: poolId || null,
         quote_id: id,
         title: jobTitle,
         status: 'scheduled',
-        scheduled_date: new Date().toISOString().split('T')[0],
+        scheduled_date: convertForm.scheduled_date || new Date().toISOString().split('T')[0],
         price: total || null,
-      }).select().single()
+      }
+      if (convertForm.assigned_staff_id) jobData.assigned_staff_id = convertForm.assigned_staff_id
+      if (convertForm.notes) jobData.notes = convertForm.notes
+
+      // Create the work order linked to this quote
+      const { data: job, error } = await supabase.from('jobs').insert(jobData).select().single()
       if (error) throw error
 
       // Mark quote as converted
@@ -345,7 +368,7 @@ export default function QuoteBuilder() {
         status: 'converted',
       }).eq('id', id)
 
-      // Navigate to the new work order
+      setConvertModalOpen(false)
       navigate('/work-orders')
     } catch (err) {
       console.error('Error converting to work order:', err)
@@ -662,8 +685,7 @@ export default function QuoteBuilder() {
               </button>
               <Button
                 className="w-full min-h-tap"
-                onClick={convertToWorkOrder}
-                loading={converting}
+                onClick={() => setConvertModalOpen(true)}
               >
                 Add as Work Order
               </Button>
@@ -791,6 +813,48 @@ export default function QuoteBuilder() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Convert to Work Order modal */}
+      <Modal open={convertModalOpen} onClose={() => setConvertModalOpen(false)} title="Add as Work Order">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">Set the details for this work order before creating it.</p>
+          <Input
+            label="Scheduled Date"
+            type="date"
+            value={convertForm.scheduled_date}
+            onChange={e => setConvertForm(f => ({ ...f, scheduled_date: e.target.value }))}
+          />
+          <Select
+            label="Assign Technician"
+            value={convertForm.assigned_staff_id}
+            onChange={e => setConvertForm(f => ({ ...f, assigned_staff_id: e.target.value }))}
+            options={[
+              { value: '', label: 'Unassigned' },
+              ...staffList.map(s => ({ value: s.id, label: s.name })),
+            ]}
+          />
+          <TextArea
+            label="Notes"
+            value={convertForm.notes}
+            onChange={e => setConvertForm(f => ({ ...f, notes: e.target.value }))}
+            placeholder="Any notes for this job..."
+            rows={3}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setConvertModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={convertToWorkOrder}
+              loading={converting}
+              disabled={!convertForm.scheduled_date}
+            >
+              Create Work Order
+            </Button>
+          </div>
+        </div>
       </Modal>
     </>
   )
