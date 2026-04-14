@@ -160,7 +160,7 @@ export default function WorkOrders() {
       .select('*, clients(name, email, phone), pools(address, latitude, longitude)')
       .eq('business_id', business.id)
       .is('recurring_profile_id', null)
-      .order('scheduled_date', { ascending: false, nullsFirst: false })
+      .order('scheduled_date', { ascending: true, nullsFirst: false })
     setJobs(data || [])
     setLoading(false)
   }
