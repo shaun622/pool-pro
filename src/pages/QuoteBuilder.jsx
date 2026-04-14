@@ -570,31 +570,21 @@ export default function QuoteBuilder() {
                 </svg>
                 Accept & Create Job
               </Button>
-              <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  className="flex-1 min-h-tap"
-                  onClick={() => saveQuote('sent')}
-                  loading={sending}
-                >
-                  Resend
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="flex-1 min-h-tap"
-                  onClick={() => saveQuote('draft')}
-                  loading={saving}
-                >
-                  Save Changes
-                </Button>
-                <Button
-                  variant="danger"
-                  className="min-h-tap px-4"
-                  onClick={declineQuote}
-                >
-                  Decline
-                </Button>
-              </div>
+              <Button
+                variant="secondary"
+                className="w-full min-h-tap"
+                onClick={() => saveQuote('sent')}
+                loading={sending}
+              >
+                Resend Quote
+              </Button>
+              <Button
+                variant="danger"
+                className="w-full min-h-tap"
+                onClick={declineQuote}
+              >
+                Decline
+              </Button>
             </div>
           ) : isEditing && quoteStatus === 'accepted' ? (
             /* Already accepted — show convert options */
@@ -636,10 +626,10 @@ export default function QuoteBuilder() {
               <Button
                 variant="secondary"
                 className="w-full min-h-tap"
-                onClick={() => saveQuote('draft')}
-                loading={saving}
+                onClick={() => saveQuote('sent')}
+                loading={sending}
               >
-                Save Changes
+                Resend Quote
               </Button>
             </div>
           ) : isEditing && quoteStatus === 'declined' ? (
