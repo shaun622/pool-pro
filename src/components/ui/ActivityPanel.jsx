@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActivity } from '../../hooks/useActivity'
 import { cn } from '../../lib/utils'
@@ -32,21 +32,19 @@ export default function ActivityPanel({ open, onClose }) {
   const navigate = useNavigate()
   const { activities, unreadCount, loading, markAllRead, markRead } = useActivity()
 
+  const scrollYRef = useRef(0)
+
   useEffect(() => {
     if (!open) return
-    const scrollY = window.scrollY
-    document.body.style.position = 'fixed'
-    document.body.style.top = `-${scrollY}px`
-    document.body.style.left = '0'
-    document.body.style.right = '0'
-    document.body.style.overflow = 'hidden'
+    scrollYRef.current = window.scrollY
+    document.documentElement.style.position = 'fixed'
+    document.documentElement.style.top = `-${scrollYRef.current}px`
+    document.documentElement.style.width = '100%'
     return () => {
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.left = ''
-      document.body.style.right = ''
-      document.body.style.overflow = ''
-      window.scrollTo(0, scrollY)
+      document.documentElement.style.position = ''
+      document.documentElement.style.top = ''
+      document.documentElement.style.width = ''
+      window.scrollTo(0, scrollYRef.current)
     }
   }, [open])
 
