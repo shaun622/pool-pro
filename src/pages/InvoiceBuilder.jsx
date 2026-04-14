@@ -365,7 +365,7 @@ export default function InvoiceBuilder() {
               onClick={() => setConfirmSendOpen(true)}
               disabled={!clientId || lineItems.every(li => !li.description)}
             >
-              Mark as Sent
+              Send
             </Button>
           </div>
         </div>

@@ -1090,7 +1090,7 @@ function QuotesSection({ clientId, navigate }) {
 
 // ─── Invoices Section (fetches its own data) ────────
 const INVOICE_STATUS_BADGE = { draft: 'default', sent: 'primary', paid: 'success', overdue: 'danger', void: 'default' }
-const INVOICE_STATUS_LABEL = { draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', void: 'Void' }
+const INVOICE_STATUS_LABEL = { draft: 'Draft', sent: 'Invoice Sent', paid: 'Paid', overdue: 'Overdue', void: 'Void' }
 
 function InvoicesSection({ clientId, navigate }) {
   const [invoices, setInvoices] = useState([])

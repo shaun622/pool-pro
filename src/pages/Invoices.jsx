@@ -19,6 +19,14 @@ const STATUS_BADGE = {
   void: 'warning',
 }
 
+const STATUS_LABEL = {
+  draft: 'Draft',
+  sent: 'Invoice Sent',
+  paid: 'Paid',
+  overdue: 'Overdue',
+  void: 'Void',
+}
+
 function InvoiceCard({ invoice, onClick }) {
   return (
     <Card onClick={onClick}>
@@ -39,7 +47,7 @@ function InvoiceCard({ invoice, onClick }) {
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-gray-900 truncate">{invoice.invoice_number}</h3>
             <Badge variant={STATUS_BADGE[invoice.status] || 'default'}>
-              {invoice.status}
+              {STATUS_LABEL[invoice.status] || invoice.status}
             </Badge>
           </div>
           <p className="text-xs text-gray-400 truncate mt-0.5">
