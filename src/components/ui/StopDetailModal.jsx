@@ -441,6 +441,20 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
+  async function handleDeleteJob() {
+    if (!stop || stop.type !== 'job') return
+    if (!window.confirm('Delete this job? This cannot be undone.')) return
+    try {
+      const { error } = await supabase.from('jobs').delete().eq('id', stop.id)
+      if (error) throw error
+      onClose?.()
+      onUpdated?.()
+    } catch (err) {
+      console.error('Delete job error:', err)
+      alert(err.message || 'Failed to delete job')
+    }
+  }
+
   const hasCoords = stop.lat != null && stop.lng != null
   const statusLabel = stop.status || (stop.type === 'pool' ? 'due' : 'scheduled')
   const assignedStaff = staffList.find(s => s.id === stop.assigned_staff_id)
@@ -450,17 +464,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       open={open}
       onClose={onClose}
       title={stop.type === 'job' ? 'Job Details' : 'Service Details'}
-      headerAction={!editing && !quickEdit ? (
-        <button
-          onClick={() => setQuickEdit(true)}
-          className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
-          title="Quick edit"
-        >
-          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
-        </button>
-      ) : null}
+      headerAction={null}
     >
       <div className="space-y-4">
         {/* Mini map */}
@@ -888,9 +892,16 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 Start Service
               </Button>
             )}
-            <Button variant="secondary" onClick={() => setEditing(true)} className="w-full">
-              {stop.type === 'job' ? 'Edit Job' : 'Edit Service'}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setEditing(true)} className="flex-1">
+                {stop.type === 'job' ? 'Edit Job' : 'Edit Service'}
+              </Button>
+              {stop.type === 'job' && (
+                <Button variant="danger" onClick={handleDeleteJob} className="flex-1">
+                  Delete Job
+                </Button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="flex gap-3">

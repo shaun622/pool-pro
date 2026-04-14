@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -83,6 +83,7 @@ function jobToStop(j) {
 export default function WorkOrders() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [tab, setTab] = useState('jobs') // 'jobs' | 'quotes'
   const [jobs, setJobs] = useState([])
@@ -159,7 +160,7 @@ export default function WorkOrders() {
       .select('*, clients(name, email, phone), pools(address, latitude, longitude)')
       .eq('business_id', business.id)
       .is('recurring_profile_id', null)
-      .order('created_at', { ascending: false })
+      .order('scheduled_date', { ascending: false, nullsFirst: false })
     setJobs(data || [])
     setLoading(false)
   }
@@ -173,7 +174,7 @@ export default function WorkOrders() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [business?.id])
+  }, [business?.id, location.key])
 
   // Fetch quotes
   useEffect(() => {
