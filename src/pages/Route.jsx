@@ -185,6 +185,15 @@ function ScheduleView({ business, view, setView }) {
   const [allStaff, setAllStaff] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
+
+  // Jobs navigate to full detail page; pools open the modal
+  function handleStopSelect(stop) {
+    if (stop.type === 'job') {
+      navigate(`/work-orders/${stop.id}`)
+    } else {
+      setSelectedStop(stop)
+    }
+  }
   const [routeInfo, setRouteInfo] = useState(null) // { distance_km, duration_min, coordinates }
   const [upcomingPage, setUpcomingPage] = useState(0) // 0 = next 5 jobs, 1 = following 5, etc.
   const [recurModalOpen, setRecurModalOpen] = useState(false)
@@ -680,14 +689,14 @@ function ScheduleView({ business, view, setView }) {
       {loading ? (
         <LoadingSpinner />
       ) : view === 'list' ? (
-        <ListView stops={stopsForDate} onSelect={setSelectedStop} navigate={navigate} isViewingToday={sameYMD(selectedDate, new Date())} />
+        <ListView stops={stopsForDate} onSelect={handleStopSelect} navigate={navigate} isViewingToday={sameYMD(selectedDate, new Date())} />
       ) : view === 'week' ? (
         <WeekView
           weekStart={weekGroups.weekStart}
           weekEnd={weekGroups.weekEnd}
           groups={weekGroups.groups}
           selectedDate={selectedDate}
-          onSelect={setSelectedStop}
+          onSelect={handleStopSelect}
           onPrev={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })}
           onNext={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })}
           onPickDay={(d) => setSelectedDate(d)}
@@ -696,13 +705,13 @@ function ScheduleView({ business, view, setView }) {
         <UpcomingView
           groups={upcomingGroups}
           hasMore={upcomingHasMore}
-          onSelect={setSelectedStop}
+          onSelect={handleStopSelect}
           page={upcomingPage}
           onPrev={() => setUpcomingPage(p => Math.max(0, p - 1))}
           onNext={() => setUpcomingPage(p => p + 1)}
         />
       ) : (
-        <MapView pools={allPools} onSelect={setSelectedStop} staffList={allStaff} />
+        <MapView pools={allPools} onSelect={handleStopSelect} staffList={allStaff} />
       )}
 
       <StopDetailModal

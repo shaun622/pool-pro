@@ -346,7 +346,7 @@ export default function QuoteBuilder() {
       }).eq('id', id)
 
       // Navigate to the new work order
-      navigate(`/work-orders/${job.id}`)
+      navigate('/work-orders')
     } catch (err) {
       console.error('Error converting to work order:', err)
       alert(err.message || 'Failed to create work order')

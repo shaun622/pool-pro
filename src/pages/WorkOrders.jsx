@@ -406,7 +406,7 @@ export default function WorkOrders() {
         ) : (
           <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
             {filteredJobs.map(job => (
-              <JobListCard key={job.id} job={job} onClick={() => setSelectedJob(job)} />
+              <JobListCard key={job.id} job={job} onClick={() => navigate(`/work-orders/${job.id}`)} />
             ))}
           </div>
         )}
