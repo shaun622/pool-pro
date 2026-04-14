@@ -354,7 +354,7 @@ export default function QuoteBuilder() {
   if (loading) {
     return (
       <>
-        <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo={-1} />
+        <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/quotes" />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -366,7 +366,7 @@ export default function QuoteBuilder() {
 
   return (
     <>
-      <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo={-1} />
+      <Header title={isEditing ? 'Edit Quote' : 'New Quote'} backTo="/quotes" />
       <PageWrapper>
         <div className="space-y-5">
           {/* Client & Pool selection */}
