@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -83,6 +83,7 @@ function jobToStop(j) {
 export default function WorkOrders() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tab, setTab] = useState('jobs') // 'jobs' | 'quotes'
   const [jobs, setJobs] = useState([])
   const [statusFilter, setStatusFilter] = useState('all')
@@ -195,6 +196,29 @@ export default function WorkOrders() {
   const filteredQuotes = quoteFilter === 'all' ? quotes : quotes.filter(q => q.status === quoteFilter)
   const quoteSentCount = quotes.filter(q => q.status === 'sent').length
   const quoteAcceptedCount = quotes.filter(q => q.status === 'accepted').length
+
+  // Pre-fill from query params (from Quote → Add as Work Order)
+  useEffect(() => {
+    if (!business?.id) return
+    const clientParam = searchParams.get('client')
+    if (!clientParam) return
+
+    // Fetch clients first, then pre-fill and open modal
+    supabase.from('clients').select('id, name, address').eq('business_id', business.id).order('name')
+      .then(({ data }) => {
+        setClients(data || [])
+        setJobForm(prev => ({
+          ...prev,
+          client_id: clientParam,
+          pool_id: searchParams.get('pool') || '',
+          title: searchParams.get('title') || '',
+          price: searchParams.get('price') || '',
+        }))
+        setJobModalOpen(true)
+        // Clear params so reopening doesn't re-trigger
+        setSearchParams({}, { replace: true })
+      })
+  }, [business?.id, searchParams])
 
   // Fetch clients when modal opens
   useEffect(() => {

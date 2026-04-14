@@ -328,6 +328,13 @@ export default function QuoteBuilder() {
     navigate('/quotes')
   }
 
+  async function deleteQuote() {
+    if (!id || !window.confirm('Delete this quote? This cannot be undone.')) return
+    const { error } = await supabase.from('quotes').delete().eq('id', id)
+    if (error) { console.error('Error deleting quote:', error); return }
+    navigate('/work-orders', { replace: true })
+  }
+
   if (loading) {
     return (
       <>
@@ -600,7 +607,6 @@ export default function QuoteBuilder() {
                   const params = new URLSearchParams()
                   if (clientId) params.set('client', clientId)
                   params.set('ref', `quote:${id}`)
-                  // Pass line items as JSON for pre-fill
                   const items = lineItems.filter(li => li.description)
                   if (items.length) params.set('items', JSON.stringify(items))
                   navigate(`/invoices/new?${params.toString()}`)
@@ -610,14 +616,22 @@ export default function QuoteBuilder() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Convert to Invoice
+                Create Invoice
               </button>
               <Button
                 className="w-full min-h-tap"
-                onClick={acceptAndConvert}
-                loading={converting}
+                onClick={() => {
+                  const params = new URLSearchParams()
+                  if (clientId) params.set('client', clientId)
+                  if (poolId) params.set('pool', poolId)
+                  params.set('quote', id)
+                  const firstItem = lineItems.find(li => li.description)
+                  if (firstItem) params.set('title', firstItem.description)
+                  if (total) params.set('price', String(total))
+                  navigate(`/work-orders?${params.toString()}`)
+                }}
               >
-                Convert to Work Order
+                Add as Work Order
               </Button>
               <Button
                 variant="secondary"
@@ -674,6 +688,16 @@ export default function QuoteBuilder() {
                 Send Quote
               </Button>
             </div>
+          )}
+
+          {/* Delete quote */}
+          {isEditing && (
+            <button
+              onClick={deleteQuote}
+              className="w-full mt-6 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors min-h-tap"
+            >
+              Delete Quote
+            </button>
           )}
         </div>
       </PageWrapper>
