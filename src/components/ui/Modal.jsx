@@ -13,12 +13,12 @@ export default function Modal({ open, onClose, title, headerAction, children }) 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in overscroll-none touch-none">
       {/* Backdrop */}
       <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-elevated animate-slide-up">
+      <div className="relative bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto overscroll-contain touch-auto p-6 shadow-elevated animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-bold text-gray-900">{title}</h2>

@@ -319,6 +319,22 @@ export default function QuoteBuilder() {
     }
   }
 
+  async function acceptQuote() {
+    if (!id) return
+    setConverting(true)
+    try {
+      await supabase.from('quotes').update({
+        status: 'accepted',
+        responded_at: new Date().toISOString(),
+      }).eq('id', id)
+      setQuoteStatus('accepted')
+    } catch (err) {
+      console.error('Error accepting quote:', err)
+    } finally {
+      setConverting(false)
+    }
+  }
+
   async function declineQuote() {
     if (!id) return
     await supabase.from('quotes').update({
@@ -562,13 +578,13 @@ export default function QuoteBuilder() {
             <div className="space-y-3">
               <Button
                 className="w-full min-h-tap"
-                onClick={acceptAndConvert}
+                onClick={acceptQuote}
                 loading={converting}
               >
                 <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                Accept & Create Job
+                Accept
               </Button>
               <Button
                 variant="secondary"
