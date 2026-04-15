@@ -12,6 +12,7 @@ import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -1867,7 +1868,13 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                   <Input label="Name" value={editClientForm.name} onChange={e => setEditClientForm(p => ({ ...p, name: e.target.value }))} required />
                   <Input label="Email" type="email" value={editClientForm.email} onChange={e => setEditClientForm(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" />
                   <Input label="Phone" type="tel" value={editClientForm.phone} onChange={e => setEditClientForm(p => ({ ...p, phone: e.target.value }))} placeholder="04XX XXX XXX" />
-                  <Input label="Address" value={editClientForm.address} onChange={e => setEditClientForm(p => ({ ...p, address: e.target.value }))} placeholder="Street address" />
+                  <AddressAutocomplete
+                    label="Address"
+                    value={editClientForm.address}
+                    onChange={v => setEditClientForm(p => ({ ...p, address: v }))}
+                    onSelect={({ address }) => setEditClientForm(p => ({ ...p, address }))}
+                    placeholder="Start typing a street address..."
+                  />
                   <div className="flex gap-3">
                     <button type="button" onClick={() => setEditingClient(false)}
                       className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-sm font-semibold">
@@ -1896,7 +1903,13 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
               </div>
               <Input label="Name" value={newClientForm.name} onChange={e => setNewClientForm(p => ({ ...p, name: e.target.value }))} required />
               <Input label="Phone" value={newClientForm.phone} onChange={e => setNewClientForm(p => ({ ...p, phone: e.target.value }))} />
-              <Input label="Address" value={newClientForm.address} onChange={e => setNewClientForm(p => ({ ...p, address: e.target.value }))} />
+              <AddressAutocomplete
+                label="Address"
+                value={newClientForm.address}
+                onChange={v => setNewClientForm(p => ({ ...p, address: v }))}
+                onSelect={({ address }) => setNewClientForm(p => ({ ...p, address }))}
+                placeholder="Start typing a street address..."
+              />
               <button type="button" onClick={handleCreateClient} disabled={!newClientForm.name.trim() || newClientSaving}
                 className="w-full py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50">
                 {newClientSaving ? 'Saving...' : 'Create Client'}
