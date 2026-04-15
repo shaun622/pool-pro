@@ -106,8 +106,12 @@ export default function WorkOrders() {
   const [clientPools, setClientPools] = useState([])
   const [jobForm, setJobForm] = useState({
     client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
-    scheduled_time: '09:00', notes: '', price: '',
+    scheduled_time: '09:00', notes: '', price: '', assigned_staff_id: '',
   })
+  const [staffList, setStaffList] = useState([])
+  const [showAddTech, setShowAddTech] = useState(false)
+  const [newTechForm, setNewTechForm] = useState({ name: '', email: '', phone: '', role: 'tech' })
+  const [newTechSaving, setNewTechSaving] = useState(false)
   const [jobSaving, setJobSaving] = useState(false)
   const jobSubmittingRef = useRef(false)
 
@@ -228,11 +232,17 @@ export default function WorkOrders() {
       })
   }, [business?.id, searchParams])
 
-  // Fetch clients when modal opens
+  // Fetch clients and staff when modal opens
   useEffect(() => {
-    if (!jobModalOpen || !business?.id || clients.length > 0) return
-    supabase.from('clients').select('id, name, address').eq('business_id', business.id).order('name')
-      .then(({ data }) => setClients(data || []))
+    if (!jobModalOpen || !business?.id) return
+    if (!clients.length) {
+      supabase.from('clients').select('id, name, address').eq('business_id', business.id).order('name')
+        .then(({ data }) => setClients(data || []))
+    }
+    if (!staffList.length) {
+      supabase.from('staff_members').select('id, name').eq('business_id', business.id).eq('is_active', true).order('name')
+        .then(({ data }) => setStaffList(data || []))
+    }
   }, [jobModalOpen, business?.id])
 
   // Fetch pools when client changes
@@ -245,10 +255,34 @@ export default function WorkOrders() {
   const resetJobForm = () => {
     setJobForm({
       client_id: '', pool_id: '', title: '', scheduled_date: new Date().toISOString().split('T')[0],
-      scheduled_time: '09:00', notes: '', price: '',
+      scheduled_time: '09:00', notes: '', price: '', assigned_staff_id: '',
     })
     setShowNewPool(false)
     setNewPoolForm(emptyPool)
+    setShowAddTech(false)
+    setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
+  }
+
+  async function handleAddTech() {
+    if (!newTechForm.name.trim()) return
+    setNewTechSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('staff_members')
+        .insert({ ...newTechForm, business_id: business.id })
+        .select('id, name')
+        .single()
+      if (error) throw error
+      setStaffList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setJobForm(f => ({ ...f, assigned_staff_id: data.id }))
+      setShowAddTech(false)
+      setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
+    } catch (err) {
+      console.error('Error adding technician:', err)
+      alert(err.message || 'Failed to add technician')
+    } finally {
+      setNewTechSaving(false)
+    }
   }
 
   async function handleCreatePool() {
@@ -281,7 +315,7 @@ export default function WorkOrders() {
     jobSubmittingRef.current = true
     setJobSaving(true)
     try {
-      const { data, error } = await supabase.from('jobs').insert({
+      const jobData = {
         business_id: business.id,
         client_id: jobForm.client_id,
         pool_id: jobForm.pool_id || null,
@@ -291,7 +325,9 @@ export default function WorkOrders() {
         scheduled_time: jobForm.scheduled_time || null,
         price: jobForm.price ? Number(jobForm.price) : null,
         notes: jobForm.notes.trim() || null,
-      }).select('*, clients(name), pools(address)').single()
+      }
+      if (jobForm.assigned_staff_id) jobData.assigned_staff_id = jobForm.assigned_staff_id
+      const { data, error } = await supabase.from('jobs').insert(jobData).select('*, clients(name), pools(address)').single()
       if (error) throw error
 
       // Log activity
@@ -660,6 +696,57 @@ export default function WorkOrders() {
             onChange={e => setJobForm(prev => ({ ...prev, price: e.target.value }))}
             placeholder="Optional"
           />
+          <Select
+            label="Assign Technician"
+            value={jobForm.assigned_staff_id}
+            onChange={e => {
+              if (e.target.value === '__add__') {
+                setShowAddTech(true)
+                setJobForm(f => ({ ...f, assigned_staff_id: '' }))
+              } else {
+                setJobForm(f => ({ ...f, assigned_staff_id: e.target.value }))
+                setShowAddTech(false)
+              }
+            }}
+            options={[
+              { value: '', label: 'Unassigned' },
+              ...staffList.map(s => ({ value: s.id, label: s.name })),
+              { value: '__add__', label: '+ Add Technician' },
+            ]}
+          />
+          {showAddTech && (
+            <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+              <Input
+                label="Name"
+                value={newTechForm.name}
+                onChange={e => setNewTechForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Full name"
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={newTechForm.email}
+                onChange={e => setNewTechForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@example.com"
+              />
+              <Input
+                label="Phone"
+                type="tel"
+                value={newTechForm.phone}
+                onChange={e => setNewTechForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="04XX XXX XXX"
+              />
+              <div className="flex gap-3">
+                <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowAddTech(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" className="flex-1" onClick={handleAddTech} loading={newTechSaving} disabled={!newTechForm.name.trim()}>
+                  Add
+                </Button>
+              </div>
+            </div>
+          )}
           <TextArea
             label="Notes"
             value={jobForm.notes}
