@@ -443,6 +443,21 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
 
   async function handleDeleteJob() {
     if (!stop || stop.type !== 'job') return
+    // Projected recurring stop — delete the recurring profile
+    if (stop.projected) {
+      if (!window.confirm('Cancel this recurring service? This will remove all future occurrences.')) return
+      try {
+        const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+        const { error } = await supabase.from('recurring_job_profiles').update({ is_active: false, status: 'cancelled' }).eq('id', profileId)
+        if (error) throw error
+        onClose?.()
+        onUpdated?.()
+      } catch (err) {
+        console.error('Cancel recurring error:', err)
+        alert(err.message || 'Failed to cancel recurring service')
+      }
+      return
+    }
     if (!window.confirm('Delete this job? This cannot be undone.')) return
     try {
       const { error } = await supabase.from('jobs').delete().eq('id', stop.id)
@@ -898,7 +913,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               </Button>
               {stop.type === 'job' && (
                 <Button variant="danger" onClick={handleDeleteJob} className="flex-1">
-                  Delete Job
+                  {stop.projected ? 'Cancel Recurring' : 'Delete Job'}
                 </Button>
               )}
             </div>
