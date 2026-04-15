@@ -187,9 +187,9 @@ function ScheduleView({ business, view, setView }) {
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
 
-  // Jobs navigate to full detail page; pools open the modal
+  // Real jobs navigate to full detail page; pools and recurring projections open the modal
   function handleStopSelect(stop) {
-    if (stop.type === 'job') {
+    if (stop.type === 'job' && !stop.projected) {
       navigate(`/work-orders/${stop.id}`)
     } else {
       setSelectedStop(stop)
@@ -1754,7 +1754,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
 
       // Update pool frequency and next_due_at
       await supabase.from('pools').update({
-        frequency: recurrenceRule === 'custom' ? `${customDays}` : recurrenceRule,
+        schedule_frequency: recurrenceRule === 'custom' ? `${customDays}` : recurrenceRule,
         next_due_at: firstDate,
       }).eq('id', poolId)
 
