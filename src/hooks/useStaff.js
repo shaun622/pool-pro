@@ -17,7 +17,7 @@ export function useStaff() {
   const canAddStaff = staff.filter(s => s.is_active).length < staffLimit
 
   const fetchStaff = useCallback(async () => {
-    if (!business?.id) return
+    if (!business?.id) { setLoading(false); return }
     setLoading(true)
     const { data, error } = await supabase
       .from('staff_members')
