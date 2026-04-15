@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import StaffCard, { ROLE_LABELS } from '../components/ui/StaffCard'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
+import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 
 const ROLE_OPTIONS = [
@@ -22,6 +23,7 @@ const emptyForm = {
   role: 'tech',
   phone: '',
   email: '',
+  password: '',
   bio: '',
 }
 
@@ -79,6 +81,10 @@ export default function Staff() {
 
   async function handleSave() {
     if (!form.name.trim()) return
+    if (!editing && form.email && form.password && form.password.length < 6) {
+      alert('Password must be at least 6 characters.')
+      return
+    }
     setSaving(true)
     try {
       let photo_url = editing?.photo_url || null
@@ -86,12 +92,29 @@ export default function Staff() {
         photo_url = await uploadPhoto(photoFile)
       }
 
-      const payload = { ...form, photo_url }
+      // Strip password from the staff record payload
+      const { password, ...staffFields } = form
+      const payload = { ...staffFields, photo_url }
 
       if (editing) {
         await updateStaff(editing.id, payload)
       } else {
-        await createStaff(payload)
+        // Create auth account if email + password provided
+        let userId = null
+        if (form.email && form.password) {
+          const { data: authData, error: signupErr } = await supabase.auth.signUp({
+            email: form.email,
+            password: form.password,
+            options: { data: { role: 'staff' } },
+          })
+          if (signupErr) throw signupErr
+          // If identities exist, it's a new user; otherwise email was already registered (still OK)
+          userId = authData.user?.identities?.length > 0 ? authData.user.id : null
+        }
+        await createStaff({
+          ...payload,
+          ...(userId ? { user_id: userId, invite_status: 'accepted' } : {}),
+        })
       }
       setShowModal(false)
     } catch (err) {
@@ -269,6 +292,17 @@ export default function Staff() {
               onChange={handleChange}
               placeholder="matt@example.com"
             />
+            {!editing && form.email && (
+              <Input
+                label="Password (for their login)"
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="At least 6 characters"
+                autoComplete="new-password"
+              />
+            )}
             <TextArea
               label="Bio"
               name="bio"
