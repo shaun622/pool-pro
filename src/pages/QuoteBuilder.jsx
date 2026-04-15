@@ -49,9 +49,12 @@ export default function QuoteBuilder() {
     notes: '',
   })
   const [staffList, setStaffList] = useState([])
+  const [showAddTech, setShowAddTech] = useState(false)
+  const [newTechForm, setNewTechForm] = useState({ name: '', email: '', phone: '', role: 'tech' })
+  const [newTechSaving, setNewTechSaving] = useState(false)
 
   // Fetch staff
-  useEffect(() => {
+  function fetchStaff() {
     if (!business?.id) return
     supabase
       .from('staff_members')
@@ -60,7 +63,33 @@ export default function QuoteBuilder() {
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => setStaffList(data || []))
+  }
+
+  useEffect(() => {
+    fetchStaff()
   }, [business?.id])
+
+  async function handleAddTech() {
+    if (!newTechForm.name.trim()) return
+    setNewTechSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('staff_members')
+        .insert({ ...newTechForm, business_id: business.id })
+        .select('id, name')
+        .single()
+      if (error) throw error
+      setStaffList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setConvertForm(f => ({ ...f, assigned_staff_id: data.id }))
+      setShowAddTech(false)
+      setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
+    } catch (err) {
+      console.error('Error adding technician:', err)
+      alert(err.message || 'Failed to add technician')
+    } finally {
+      setNewTechSaving(false)
+    }
+  }
 
   // New client modal
   const [newClientOpen, setNewClientOpen] = useState(false)
@@ -828,12 +857,63 @@ export default function QuoteBuilder() {
           <Select
             label="Assign Technician"
             value={convertForm.assigned_staff_id}
-            onChange={e => setConvertForm(f => ({ ...f, assigned_staff_id: e.target.value }))}
+            onChange={e => {
+              if (e.target.value === '__add__') {
+                setShowAddTech(true)
+                setConvertForm(f => ({ ...f, assigned_staff_id: '' }))
+              } else {
+                setConvertForm(f => ({ ...f, assigned_staff_id: e.target.value }))
+                setShowAddTech(false)
+              }
+            }}
             options={[
               { value: '', label: 'Unassigned' },
               ...staffList.map(s => ({ value: s.id, label: s.name })),
+              { value: '__add__', label: '+ Add Technician' },
             ]}
           />
+          {showAddTech && (
+            <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+              <Input
+                label="Name"
+                value={newTechForm.name}
+                onChange={e => setNewTechForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Full name"
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={newTechForm.email}
+                onChange={e => setNewTechForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@example.com"
+              />
+              <Input
+                label="Phone"
+                type="tel"
+                value={newTechForm.phone}
+                onChange={e => setNewTechForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="04XX XXX XXX"
+              />
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setShowAddTech(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleAddTech}
+                  loading={newTechSaving}
+                  disabled={!newTechForm.name.trim()}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+          )}
           <TextArea
             label="Notes"
             value={convertForm.notes}
