@@ -48,11 +48,12 @@ export function useStaff() {
       .from('staff_members')
       .update(updates)
       .eq('id', id)
+      .eq('business_id', business.id)
       .select()
-      .single()
     if (error) throw error
-    setStaff(prev => prev.map(s => (s.id === id ? data : s)))
-    return data
+    const updated = data?.[0]
+    if (updated) setStaff(prev => prev.map(s => (s.id === id ? updated : s)))
+    return updated
   }
 
   async function deleteStaff(id) {
