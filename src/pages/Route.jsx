@@ -1593,6 +1593,12 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   const [editClientForm, setEditClientForm] = useState({ name: '', email: '', phone: '', address: '' })
   const [editClientSaving, setEditClientSaving] = useState(false)
 
+  // Add technician inline
+  const [showAddTech, setShowAddTech] = useState(false)
+  const [newTechForm, setNewTechForm] = useState({ name: '', email: '', phone: '', role: 'tech' })
+  const [newTechSaving, setNewTechSaving] = useState(false)
+  const [localStaff, setLocalStaff] = useState([])
+
   // New pool inline
   const [showNewPool, setShowNewPool] = useState(false)
   const [newPoolForm, setNewPoolForm] = useState(emptyPool)
@@ -1635,6 +1641,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
     setAssignedStaffId(''); setNotes(''); setShowNewClient(false); setShowNewPool(false)
     setNewClientForm({ name: '', email: '', phone: '', address: '' })
     setEditingClient(false); setEditClientForm({ name: '', email: '', phone: '', address: '' })
+    setShowAddTech(false); setNewTechForm({ name: '', email: '', phone: '', role: 'tech' }); setLocalStaff([])
     setNewPoolForm(emptyPool)
     setDurationType('ongoing'); setEndDate(''); setTotalVisits('')
   }
@@ -1679,6 +1686,25 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
     } catch (err) {
       alert(err?.message || 'Failed to update client')
     } finally { setEditClientSaving(false) }
+  }
+
+  async function handleAddTechInline() {
+    if (!newTechForm.name.trim()) return
+    setNewTechSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('staff_members')
+        .insert({ ...newTechForm, business_id: business.id })
+        .select('id, name')
+        .single()
+      if (error) throw error
+      setLocalStaff(prev => [...prev, data])
+      setAssignedStaffId(data.id)
+      setShowAddTech(false)
+      setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
+    } catch (err) {
+      alert(err?.message || 'Failed to add technician')
+    } finally { setNewTechSaving(false) }
   }
 
   async function handleCreatePool() {
@@ -1742,7 +1768,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
 
   const selectedClient = clients.find(c => c.id === clientId)
   const selectedPool = clientPools.find(p => p.id === poolId)
-  const selectedTech = staff.find(s => s.id === assignedStaffId)
+  const selectedTech = staff.find(s => s.id === assignedStaffId) || localStaff.find(s => s.id === assignedStaffId)
   const freqLabel = recurrenceRule === 'custom' ? `Every ${customDays} days` : RECURRENCE_OPTIONS.find(o => o.value === recurrenceRule)?.label
   const durationLabel = durationType === 'ongoing' ? 'Ongoing' : durationType === 'until_date' ? `Until ${endDate}` : `${totalVisits} visits`
 
@@ -2037,10 +2063,44 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
             )}
           </div>
 
-          {staff.length > 0 && (
-            <Select label="Assign Technician" value={assignedStaffId} onChange={e => setAssignedStaffId(e.target.value)}
-              options={[{ value: '', label: 'Unassigned' }, ...staff.map(s => ({ value: s.id, label: s.name }))]} />
-          )}
+          {(() => {
+            const allTechs = [...staff, ...localStaff.filter(ls => !staff.some(s => s.id === ls.id))]
+            return (
+              <>
+                <Select label="Assign Technician" value={assignedStaffId}
+                  onChange={e => {
+                    if (e.target.value === '__add__') {
+                      setShowAddTech(true)
+                      setAssignedStaffId('')
+                    } else {
+                      setAssignedStaffId(e.target.value)
+                      setShowAddTech(false)
+                    }
+                  }}
+                  options={[
+                    { value: '', label: 'Unassigned' },
+                    ...allTechs.map(s => ({ value: s.id, label: s.name })),
+                    { value: '__add__', label: '+ Add Technician' },
+                  ]}
+                />
+                {showAddTech && (
+                  <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+                    <Input label="Name" value={newTechForm.name} onChange={e => setNewTechForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" />
+                    <Input label="Email" type="email" value={newTechForm.email} onChange={e => setNewTechForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" />
+                    <Input label="Phone" type="tel" value={newTechForm.phone} onChange={e => setNewTechForm(f => ({ ...f, phone: e.target.value }))} placeholder="04XX XXX XXX" />
+                    <div className="flex gap-3">
+                      <button type="button" onClick={() => setShowAddTech(false)} className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-sm font-semibold">Cancel</button>
+                      <button type="button" onClick={handleAddTechInline} disabled={!newTechForm.name.trim() || newTechSaving}
+                        className="flex-1 py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50">
+                        {newTechSaving ? 'Saving...' : 'Add'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          })()}
           <TextArea label="Notes" value={notes} onChange={e => setNotes(e.target.value)}
             placeholder="e.g. Back gate code 1234" rows={2} />
           <div className="flex justify-between pt-2">
