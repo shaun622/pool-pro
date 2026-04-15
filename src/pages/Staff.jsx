@@ -10,7 +10,6 @@ import EmptyState from '../components/ui/EmptyState'
 import StaffCard, { ROLE_LABELS } from '../components/ui/StaffCard'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
-import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 
 const ROLE_OPTIONS = [
@@ -99,22 +98,34 @@ export default function Staff() {
       if (editing) {
         await updateStaff(editing.id, payload)
       } else {
-        // Create auth account if email + password provided
-        let userId = null
-        if (form.email && form.password) {
-          const { data: authData, error: signupErr } = await supabase.auth.signUp({
-            email: form.email,
-            password: form.password,
-            options: { data: { role: 'staff' } },
-          })
-          if (signupErr) throw signupErr
-          // If identities exist, it's a new user; otherwise email was already registered (still OK)
-          userId = authData.user?.identities?.length > 0 ? authData.user.id : null
+        // Create staff record first
+        const newStaff = await createStaff(payload)
+
+        // Then create auth account if email + password provided
+        // Use a separate client so we don't replace the admin's session
+        if (form.email && form.password && newStaff?.id) {
+          try {
+            const { createClient } = await import('@supabase/supabase-js')
+            const authClient = createClient(
+              import.meta.env.VITE_SUPABASE_URL,
+              import.meta.env.VITE_SUPABASE_ANON_KEY,
+              { auth: { persistSession: false } }
+            )
+            const { data: authData, error: signupErr } = await authClient.auth.signUp({
+              email: form.email,
+              password: form.password,
+              options: { data: { role: 'staff' } },
+            })
+            if (!signupErr && authData.user?.identities?.length > 0) {
+              await updateStaff(newStaff.id, {
+                user_id: authData.user.id,
+                invite_status: 'accepted',
+              })
+            }
+          } catch (authErr) {
+            console.warn('Auth account creation failed (staff still added):', authErr)
+          }
         }
-        await createStaff({
-          ...payload,
-          ...(userId ? { user_id: userId, invite_status: 'accepted' } : {}),
-        })
       }
       setShowModal(false)
     } catch (err) {
