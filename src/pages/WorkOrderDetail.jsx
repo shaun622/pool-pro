@@ -58,6 +58,10 @@ export default function JobDetail() {
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
+  const [staffList, setStaffList] = useState([])
+  const [showAddTech, setShowAddTech] = useState(false)
+  const [newTechForm, setNewTechForm] = useState({ name: '', email: '', phone: '', role: 'tech' })
+  const [newTechSaving, setNewTechSaving] = useState(false)
 
   useEffect(() => {
     loadJob()
@@ -148,8 +152,37 @@ export default function JobDetail() {
       price: job.price || '',
       notes: job.notes || '',
       status: job.status || 'scheduled',
+      assigned_staff_id: job.assigned_staff_id || '',
     })
+    setShowAddTech(false)
+    // Fetch staff if not loaded
+    if (!staffList.length && job.business_id) {
+      supabase.from('staff_members').select('id, name').eq('business_id', job.business_id).eq('is_active', true).order('name')
+        .then(({ data }) => setStaffList(data || []))
+    }
     setEditModalOpen(true)
+  }
+
+  async function handleAddTech() {
+    if (!newTechForm.name.trim() || !job.business_id) return
+    setNewTechSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('staff_members')
+        .insert({ ...newTechForm, business_id: job.business_id })
+        .select('id, name')
+        .single()
+      if (error) throw error
+      setStaffList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setEditForm(f => ({ ...f, assigned_staff_id: data.id }))
+      setShowAddTech(false)
+      setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
+    } catch (err) {
+      console.error('Error adding technician:', err)
+      alert(err.message || 'Failed to add technician')
+    } finally {
+      setNewTechSaving(false)
+    }
   }
 
   async function handleEditSubmit(e) {
@@ -163,6 +196,7 @@ export default function JobDetail() {
         price: editForm.price ? Number(editForm.price) : null,
         notes: editForm.notes.trim() || null,
         status: editForm.status,
+        assigned_staff_id: editForm.assigned_staff_id || null,
       }
       if (editForm.status === 'completed' && job.status !== 'completed') {
         updates.completed_at = new Date().toISOString()
@@ -580,6 +614,57 @@ export default function JobDetail() {
             value={editForm.price || ''}
             onChange={e => setEditForm(prev => ({ ...prev, price: e.target.value }))}
           />
+          <Select
+            label="Assign Technician"
+            value={editForm.assigned_staff_id || ''}
+            onChange={e => {
+              if (e.target.value === '__add__') {
+                setShowAddTech(true)
+                setEditForm(f => ({ ...f, assigned_staff_id: '' }))
+              } else {
+                setEditForm(f => ({ ...f, assigned_staff_id: e.target.value }))
+                setShowAddTech(false)
+              }
+            }}
+            options={[
+              { value: '', label: 'Unassigned' },
+              ...staffList.map(s => ({ value: s.id, label: s.name })),
+              { value: '__add__', label: '+ Add Technician' },
+            ]}
+          />
+          {showAddTech && (
+            <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+              <Input
+                label="Name"
+                value={newTechForm.name}
+                onChange={e => setNewTechForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Full name"
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={newTechForm.email}
+                onChange={e => setNewTechForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@example.com"
+              />
+              <Input
+                label="Phone"
+                type="tel"
+                value={newTechForm.phone}
+                onChange={e => setNewTechForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="04XX XXX XXX"
+              />
+              <div className="flex gap-3">
+                <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowAddTech(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" className="flex-1" onClick={handleAddTech} loading={newTechSaving} disabled={!newTechForm.name.trim()}>
+                  Add
+                </Button>
+              </div>
+            </div>
+          )}
           <TextArea
             label="Notes"
             value={editForm.notes || ''}
