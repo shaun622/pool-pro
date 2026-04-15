@@ -387,11 +387,26 @@ function ScheduleView({ business, view, setView }) {
       ensure(d)
     }
 
+    // Track which pool_ids are covered per day (by jobs or pool stops) to avoid duplicates with profiles
+    const poolIdsCoveredByDay = new Map() // ymd -> Set of pool_ids
+    const coverPool = (d, poolId) => {
+      if (!poolId) return
+      const key = ymd(d)
+      if (!poolIdsCoveredByDay.has(key)) poolIdsCoveredByDay.set(key, new Set())
+      poolIdsCoveredByDay.get(key).add(poolId)
+    }
+    const isPoolCovered = (d, poolId) => {
+      if (!poolId) return false
+      const covered = poolIdsCoveredByDay.get(ymd(d))
+      return covered ? covered.has(poolId) : false
+    }
+
     for (const j of allJobs) {
       if (!j.scheduled_date) continue
       const d = new Date(j.scheduled_date + 'T00:00:00')
       if (d < weekStart || d > weekEnd) continue
       ensure(d).stops.push(jobToStop(j))
+      coverPool(d, j.pool_id)
     }
 
     for (const p of allPools) {
@@ -413,7 +428,9 @@ function ScheduleView({ business, view, setView }) {
         }
       }
       for (const occ of occurrences) {
+        if (isPoolCovered(occ, p.id)) continue
         ensure(occ).stops.push(poolToStop({ ...p, next_due_at: occ.toISOString() }))
+        coverPool(occ, p.id)
       }
     }
 
@@ -442,7 +459,10 @@ function ScheduleView({ business, view, setView }) {
         const key = ymd(cursor)
         const taken = takenByProfile.get(profile.id)
         if (!taken || !taken.has(key)) {
-          ensure(cursor).stops.push(profileToStop(profile, cursor))
+          if (!isPoolCovered(cursor, profile.pool_id)) {
+            ensure(cursor).stops.push(profileToStop(profile, cursor))
+            coverPool(cursor, profile.pool_id)
+          }
         }
         cursor.setDate(cursor.getDate() + intervalDays)
         occurrenceIdx++
@@ -497,6 +517,20 @@ function ScheduleView({ business, view, setView }) {
 
     const allStops = []
 
+    // Track which pool_ids are covered per day to avoid duplicates
+    const poolIdsCoveredByDay = new Map()
+    const coverPool = (d, poolId) => {
+      if (!poolId) return
+      const key = ymd(d)
+      if (!poolIdsCoveredByDay.has(key)) poolIdsCoveredByDay.set(key, new Set())
+      poolIdsCoveredByDay.get(key).add(poolId)
+    }
+    const isPoolCovered = (d, poolId) => {
+      if (!poolId) return false
+      const covered = poolIdsCoveredByDay.get(ymd(d))
+      return covered ? covered.has(poolId) : false
+    }
+
     // Jobs from today forward
     for (const j of allJobs) {
       if (!j.scheduled_date) continue
@@ -504,6 +538,7 @@ function ScheduleView({ business, view, setView }) {
       if (d < today || d > horizonEnd) continue
       const stop = jobToStop(j)
       allStops.push({ date: d, stop, sortTime: stop.sortTime || '99:99' })
+      coverPool(d, j.pool_id)
     }
 
     // Pools: project recurring occurrences from today to horizon
@@ -527,8 +562,10 @@ function ScheduleView({ business, view, setView }) {
       }
 
       for (const occ of occurrences) {
+        if (isPoolCovered(occ, p.id)) continue
         const stop = poolToStop({ ...p, next_due_at: occ.toISOString() })
         allStops.push({ date: new Date(occ), stop, sortTime: stop.sortTime || '99:99' })
+        coverPool(occ, p.id)
       }
     }
 
@@ -557,8 +594,11 @@ function ScheduleView({ business, view, setView }) {
         const key = ymd(cursor)
         const taken = takenByProfile.get(profile.id)
         if (!taken || !taken.has(key)) {
-          const stop = profileToStop(profile, cursor)
-          allStops.push({ date: new Date(cursor), stop, sortTime: stop.sortTime || '99:99' })
+          if (!isPoolCovered(cursor, profile.pool_id)) {
+            const stop = profileToStop(profile, cursor)
+            allStops.push({ date: new Date(cursor), stop, sortTime: stop.sortTime || '99:99' })
+            coverPool(cursor, profile.pool_id)
+          }
         }
         cursor.setDate(cursor.getDate() + intervalDays)
         occurrenceIdx++

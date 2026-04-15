@@ -53,6 +53,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   const [assigning, setAssigning] = useState(false)
   const [pendingStaffId, setPendingStaffId] = useState(null)
   const [form, setForm] = useState({})
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // null | 'confirm' | 'recurring'
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (stop) {
@@ -107,6 +109,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       setEditing(false)
       setQuickEdit(false)
       setPendingStaffId(null)
+      setDeleteConfirm(null)
+      setDeleting(false)
     }
   }, [stop])
 
@@ -463,32 +467,126 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
-  async function handleDeleteJob() {
-    if (!stop || stop.type !== 'job') return
-    // Projected recurring stop — delete the recurring profile
-    if (stop.projected) {
-      if (!window.confirm('Cancel this recurring service? This will remove all future occurrences.')) return
-      try {
-        const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
-        const { error } = await supabase.from('recurring_job_profiles').update({ is_active: false, status: 'cancelled' }).eq('id', profileId)
-        if (error) throw error
-        onClose?.()
-        onUpdated?.()
-      } catch (err) {
-        console.error('Cancel recurring error:', err)
-        alert(err.message || 'Failed to cancel recurring service')
-      }
-      return
+  function handleDeleteClick() {
+    if (!stop) return
+    const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
+    const isRecurringJob = stop.type === 'job' && (isProjected || form.recurring_profile_id)
+    const isRecurringPool = stop.type === 'pool' && stop.schedule_frequency
+
+    if (isRecurringJob || isRecurringPool) {
+      setDeleteConfirm('recurring')
+    } else {
+      setDeleteConfirm('confirm')
     }
-    if (!window.confirm('Delete this job? This cannot be undone.')) return
+  }
+
+  async function handleDeleteSingle() {
+    setDeleting(true)
     try {
-      const { error } = await supabase.from('jobs').delete().eq('id', stop.id)
-      if (error) throw error
+      if (stop.type === 'job') {
+        const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
+        if (isProjected) {
+          // Skip this single occurrence by advancing the profile's next_generation_at past this date
+          const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+          const { data: profile } = await supabase.from('recurring_job_profiles').select('recurrence_rule, custom_interval_days, pool_id').eq('id', profileId).single()
+          if (profile) {
+            const days = profile.recurrence_rule === 'custom' ? (profile.custom_interval_days || 7) :
+              ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[profile.recurrence_rule] || 7)
+            const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
+            if (stopDate) {
+              const nextGen = new Date(stopDate)
+              nextGen.setDate(nextGen.getDate() + days)
+              await supabase.from('recurring_job_profiles').update({
+                next_generation_at: nextGen.toISOString().split('T')[0],
+                last_generated_at: new Date().toISOString(),
+              }).eq('id', profileId)
+              // Also advance the pool's next_due_at
+              if (profile.pool_id) {
+                await supabase.from('pools').update({
+                  next_due_at: nextGen.toISOString(),
+                }).eq('id', profile.pool_id)
+              }
+            }
+          }
+        } else {
+          // Real job — just delete it
+          const { error } = await supabase.from('jobs').delete().eq('id', stop.id)
+          if (error) throw error
+        }
+      } else if (stop.type === 'pool') {
+        // Skip this single pool service by advancing next_due_at
+        const freq = stop.schedule_frequency || 'weekly'
+        const days = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[freq] || 7
+        const dueDate = stop.next_due_at ? new Date(stop.next_due_at) : new Date()
+        dueDate.setDate(dueDate.getDate() + days)
+        await supabase.from('pools').update({
+          next_due_at: dueDate.toISOString(),
+        }).eq('id', stop.id)
+      }
+      setDeleteConfirm(null)
       onClose?.()
       onUpdated?.()
     } catch (err) {
-      console.error('Delete job error:', err)
-      alert(err.message || 'Failed to delete job')
+      console.error('Delete single error:', err)
+      alert(err.message || 'Failed to delete service')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleDeleteAllFuture() {
+    setDeleting(true)
+    try {
+      if (stop.type === 'job') {
+        const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
+        if (isProjected) {
+          const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+          await supabase.from('recurring_job_profiles').update({ is_active: false, status: 'cancelled' }).eq('id', profileId)
+        } else if (form.recurring_profile_id) {
+          await supabase.from('recurring_job_profiles').update({ is_active: false, status: 'cancelled' }).eq('id', form.recurring_profile_id)
+          await supabase.from('jobs').delete().eq('id', stop.id)
+        } else {
+          await supabase.from('jobs').delete().eq('id', stop.id)
+        }
+      } else if (stop.type === 'pool') {
+        // Cancel the pool's recurring schedule
+        await supabase.from('pools').update({
+          schedule_frequency: null,
+          next_due_at: null,
+        }).eq('id', stop.id)
+      }
+      setDeleteConfirm(null)
+      onClose?.()
+      onUpdated?.()
+    } catch (err) {
+      console.error('Delete all future error:', err)
+      alert(err.message || 'Failed to cancel recurring service')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    // Simple non-recurring delete
+    setDeleting(true)
+    try {
+      if (stop.type === 'job') {
+        const { error } = await supabase.from('jobs').delete().eq('id', stop.id)
+        if (error) throw error
+      } else if (stop.type === 'pool') {
+        await supabase.from('pools').update({
+          schedule_frequency: null,
+          next_due_at: null,
+        }).eq('id', stop.id)
+      }
+      setDeleteConfirm(null)
+      onClose?.()
+      onUpdated?.()
+    } catch (err) {
+      console.error('Delete error:', err)
+      alert(err.message || 'Failed to delete')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -933,11 +1031,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               <Button variant="secondary" onClick={() => setEditing(true)} className="flex-1">
                 {stop.type === 'job' ? 'Edit Job' : 'Edit Service'}
               </Button>
-              {stop.type === 'job' && (
-                <Button variant="danger" onClick={handleDeleteJob} className="flex-1">
-                  {stop.projected ? 'Cancel Recurring' : 'Delete Job'}
-                </Button>
-              )}
+              <Button variant="danger" onClick={handleDeleteClick} className="flex-1">
+                {stop.type === 'job' ? (stop.projected ? 'Cancel' : 'Delete') : 'Delete'}
+              </Button>
             </div>
           </div>
         ) : (
@@ -947,6 +1043,106 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !deleting && setDeleteConfirm(null)} />
+          <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-6 space-y-4 animate-slide-up">
+            {/* Warning icon */}
+            <div className="flex justify-center">
+              <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+            </div>
+
+            {deleteConfirm === 'recurring' ? (
+              <>
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-gray-900">Delete Service</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    This is a recurring service. Would you like to delete just this one or cancel all future services?
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <button
+                    onClick={handleDeleteSingle}
+                    disabled={deleting}
+                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 min-h-tap"
+                  >
+                    {deleting ? (
+                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Delete This Service Only
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleDeleteAllFuture}
+                    disabled={deleting}
+                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center gap-2 min-h-tap"
+                  >
+                    {deleting ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Cancel All Future Services
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(null)}
+                    disabled={deleting}
+                    className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors min-h-tap"
+                  >
+                    Go Back
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {stop.type === 'job' ? 'Delete Job' : 'Delete Service'}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Are you sure? This action cannot be undone.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDeleteConfirm(null)}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors min-h-tap"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteConfirm}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center gap-2 min-h-tap"
+                  >
+                    {deleting ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      'Delete'
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }
