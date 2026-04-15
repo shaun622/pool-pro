@@ -47,7 +47,7 @@ const JOB_STATUS_LABEL = {
   completed: 'Completed',
 }
 
-const JOB_STATUSES = ['all', 'scheduled', 'in_progress', 'on_hold', 'completed']
+const JOB_STATUSES = ['scheduled', 'in_progress', 'on_hold', 'completed']
 
 // Convert a job row into the "stop" shape expected by StopDetailModal
 function jobToStop(j) {
@@ -89,7 +89,7 @@ export default function WorkOrders() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [tab, setTab] = useState(searchParams.get('tab') === 'quotes' ? 'quotes' : 'jobs')
   const [jobs, setJobs] = useState([])
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('scheduled')
   const [loading, setLoading] = useState(true)
 
   // Quotes
@@ -163,7 +163,7 @@ export default function WorkOrders() {
     if (!business?.id) return
     setLoading(true)
     const { data } = await supabase.from('jobs')
-      .select('*, clients(name, email, phone), pools(address, latitude, longitude)')
+      .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff_members(name)')
       .eq('business_id', business.id)
       .is('recurring_profile_id', null)
       .order('scheduled_date', { ascending: true, nullsFirst: false })
@@ -351,7 +351,7 @@ export default function WorkOrders() {
     }
   }
 
-  const filteredJobs = statusFilter === 'all' ? jobs : jobs.filter(j => j.status === statusFilter)
+  const filteredJobs = jobs.filter(j => j.status === statusFilter)
 
   // Header action
   const headerAction = (
@@ -428,7 +428,7 @@ export default function WorkOrders() {
               className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
                 statusFilter === status ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
                   : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
-              {status === 'all' ? `All (${jobs.length})` : `${JOB_STATUS_LABEL[status]} (${jobs.filter(j => j.status === status).length})`}
+              {`${JOB_STATUS_LABEL[status]} (${jobs.filter(j => j.status === status).length})`}
             </button>
           ))}
         </div>
@@ -811,7 +811,12 @@ function JobListCard({ job, onClick }) {
       <div className="flex-1 min-w-0 p-3.5">
         <div className="flex items-start justify-between gap-2 mb-1.5">
           <h3 className="font-bold text-gray-900 truncate">{job.title || 'Job'}</h3>
-          <Badge variant={statusVariant} className="shrink-0 text-[10px]">{statusLabel}</Badge>
+          <div className="flex flex-col items-end gap-0.5 shrink-0">
+            <Badge variant={statusVariant} className="text-[10px]">{statusLabel}</Badge>
+            <span className={cn('text-[10px] font-medium', job.staff_members?.name ? 'text-gray-500' : 'text-gray-400')}>
+              {job.staff_members?.name || 'Unassigned'}
+            </span>
+          </div>
         </div>
 
         {/* Client */}
