@@ -1587,6 +1587,11 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '', address: '' })
   const [newClientSaving, setNewClientSaving] = useState(false)
 
+  // Edit existing client inline
+  const [editingClient, setEditingClient] = useState(false)
+  const [editClientForm, setEditClientForm] = useState({ name: '', email: '', phone: '', address: '' })
+  const [editClientSaving, setEditClientSaving] = useState(false)
+
   // New pool inline
   const [showNewPool, setShowNewPool] = useState(false)
   const [newPoolForm, setNewPoolForm] = useState(emptyPool)
@@ -1628,6 +1633,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
     setCustomDays(7); setPreferredDay(''); setFirstDate(new Date().toISOString().split('T')[0])
     setAssignedStaffId(''); setNotes(''); setShowNewClient(false); setShowNewPool(false)
     setNewClientForm({ name: '', email: '', phone: '', address: '' })
+    setEditingClient(false); setEditClientForm({ name: '', email: '', phone: '', address: '' })
     setNewPoolForm(emptyPool)
     setDurationType('ongoing'); setEndDate(''); setTotalVisits('')
   }
@@ -1653,6 +1659,25 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
     } catch (err) {
       alert(err?.message || 'Failed to create client')
     } finally { setNewClientSaving(false) }
+  }
+
+  async function handleSaveClientEdit() {
+    if (!editClientForm.name.trim() || !clientId) return
+    setEditClientSaving(true)
+    try {
+      const updates = {
+        name: editClientForm.name.trim(),
+        email: editClientForm.email.trim() || null,
+        phone: editClientForm.phone.trim() || null,
+        address: editClientForm.address.trim() || null,
+      }
+      const { error } = await supabase.from('clients').update(updates).eq('id', clientId)
+      if (error) throw error
+      setClients(prev => prev.map(c => c.id === clientId ? { ...c, ...updates } : c))
+      setEditingClient(false)
+    } catch (err) {
+      alert(err?.message || 'Failed to update client')
+    } finally { setEditClientSaving(false) }
   }
 
   async function handleCreatePool() {
@@ -1786,9 +1811,24 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
               </div>
 
               {/* Selected client contact info */}
-              {selectedClient && (
+              {selectedClient && !editingClient && (
                 <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
-                  <p className="text-sm font-semibold text-gray-900">{selectedClient.name}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-900">{selectedClient.name}</p>
+                    <button type="button" onClick={() => {
+                      setEditClientForm({
+                        name: selectedClient.name || '',
+                        email: selectedClient.email || '',
+                        phone: selectedClient.phone || '',
+                        address: selectedClient.address || '',
+                      })
+                      setEditingClient(true)
+                    }} className="text-pool-500 hover:text-pool-700 min-w-[44px] min-h-[44px] flex items-center justify-center -mr-1 -mt-1">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </div>
                   {selectedClient.email && (
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1814,6 +1854,30 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                       {selectedClient.address}
                     </div>
                   )}
+                </div>
+              )}
+              {selectedClient && editingClient && (
+                <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">Edit Client</span>
+                    <button type="button" onClick={() => setEditingClient(false)} className="text-gray-400 hover:text-gray-600">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                  <Input label="Name" value={editClientForm.name} onChange={e => setEditClientForm(p => ({ ...p, name: e.target.value }))} required />
+                  <Input label="Email" type="email" value={editClientForm.email} onChange={e => setEditClientForm(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" />
+                  <Input label="Phone" type="tel" value={editClientForm.phone} onChange={e => setEditClientForm(p => ({ ...p, phone: e.target.value }))} placeholder="04XX XXX XXX" />
+                  <Input label="Address" value={editClientForm.address} onChange={e => setEditClientForm(p => ({ ...p, address: e.target.value }))} placeholder="Street address" />
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setEditingClient(false)}
+                      className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-sm font-semibold">
+                      Cancel
+                    </button>
+                    <button type="button" onClick={handleSaveClientEdit} disabled={!editClientForm.name.trim() || editClientSaving}
+                      className="flex-1 py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50">
+                      {editClientSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
                 </div>
               )}
 
