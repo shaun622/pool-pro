@@ -93,17 +93,15 @@ export default function Staff() {
 
       // Strip password from the staff record payload
       const { password, ...staffFields } = form
-      const payload = { ...staffFields, photo_url }
+      const payload = { ...staffFields, photo_url, is_active: true }
 
       if (editing) {
         await updateStaff(editing.id, payload)
       } else {
-        // Create staff record first
-        const newStaff = await createStaff(payload)
-
-        // Then create auth account if email + password provided
+        // Create auth account first if email + password provided
         // Use a separate client so we don't replace the admin's session
-        if (form.email && form.password && newStaff?.id) {
+        let userId = null
+        if (form.email && form.password) {
           try {
             const { createClient } = await import('@supabase/supabase-js')
             const authClient = createClient(
@@ -116,16 +114,28 @@ export default function Staff() {
               password: form.password,
               options: { data: { role: 'staff' } },
             })
-            if (!signupErr && authData.user?.identities?.length > 0) {
-              await updateStaff(newStaff.id, {
-                user_id: authData.user.id,
-                invite_status: 'accepted',
+            if (!signupErr && authData.user?.id) {
+              // Works for both new users (has identities) and existing users
+              userId = authData.user.identities?.length > 0 ? authData.user.id : null
+            }
+            // If email already exists, try to find the existing auth user via sign in
+            if (!userId) {
+              const { data: signInData } = await authClient.auth.signInWithPassword({
+                email: form.email,
+                password: form.password,
               })
+              userId = signInData?.user?.id || null
             }
           } catch (authErr) {
             console.warn('Auth account creation failed (staff still added):', authErr)
           }
         }
+
+        // Create staff record with user_id linked
+        await createStaff({
+          ...payload,
+          ...(userId ? { user_id: userId, invite_status: 'accepted' } : {}),
+        })
       }
       setShowModal(false)
     } catch (err) {
