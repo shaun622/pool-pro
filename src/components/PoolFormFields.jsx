@@ -64,17 +64,17 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress })
 
   return (
     <>
-      {clientAddress && (
-        <label className="flex items-center gap-2 min-h-tap cursor-pointer">
-          <input
-            type="checkbox"
-            checked={poolForm.sameAsClient}
-            onChange={handleSameAsClient}
-            className="w-5 h-5 rounded border-gray-300 text-pool-500 focus:ring-pool-500"
-          />
-          <span className="text-sm text-gray-700">Same address as client</span>
-        </label>
-      )}
+      <label className={cn('flex items-center gap-2 min-h-tap', clientAddress ? 'cursor-pointer' : 'cursor-not-allowed opacity-50')}>
+        <input
+          type="checkbox"
+          checked={poolForm.sameAsClient}
+          onChange={handleSameAsClient}
+          disabled={!clientAddress}
+          className="w-5 h-5 rounded border-gray-300 text-pool-500 focus:ring-pool-500"
+        />
+        <span className="text-sm text-gray-700">Same address as client</span>
+        {!clientAddress && <span className="text-xs text-gray-400">(no address on file)</span>}
+      </label>
 
       {poolForm.sameAsClient ? (
         <Input label="Pool Address" value={poolForm.address} disabled />
