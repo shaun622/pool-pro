@@ -1752,11 +1752,13 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
       })
       if (error) throw error
 
-      // Update pool frequency and next_due_at
-      await supabase.from('pools').update({
+      // Update pool frequency, next_due_at, and assigned tech
+      const poolUpdate = {
         schedule_frequency: recurrenceRule === 'custom' ? `${customDays}` : recurrenceRule,
         next_due_at: firstDate,
-      }).eq('id', poolId)
+      }
+      if (assignedStaffId) poolUpdate.assigned_staff_id = assignedStaffId
+      await supabase.from('pools').update(poolUpdate).eq('id', poolId)
 
       onCreated()
       reset()
