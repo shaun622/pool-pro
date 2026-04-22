@@ -58,6 +58,7 @@ export default function Staff() {
       role: member.role || 'tech',
       phone: member.phone || '',
       email: member.email || '',
+      password: '',
       bio: member.bio || '',
     })
     setPhotoFile(null)
@@ -78,9 +79,35 @@ export default function Staff() {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
+  // Helper — creates auth account using a separate client so admin session isn't replaced
+  async function createAuthForStaff(email, password) {
+    const { createClient } = await import('@supabase/supabase-js')
+    const authClient = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY,
+      { auth: { persistSession: false } }
+    )
+    const { data: authData, error: signupErr } = await authClient.auth.signUp({
+      email,
+      password,
+      options: { data: { role: 'staff' } },
+    })
+    let userId = null
+    if (!signupErr && authData.user?.id) {
+      userId = authData.user.identities?.length > 0 ? authData.user.id : null
+    }
+    // Email already exists — try to sign in to get the existing user's ID
+    if (!userId) {
+      const { data: signInData } = await authClient.auth.signInWithPassword({ email, password })
+      userId = signInData?.user?.id || null
+    }
+    return userId
+  }
+
   async function handleSave() {
     if (!form.name.trim()) return
-    if (!editing && form.email && form.password && form.password.length < 6) {
+    const needsAuthSetup = form.email && form.password && (!editing || !editing.user_id)
+    if (needsAuthSetup && form.password.length < 6) {
       alert('Password must be at least 6 characters.')
       return
     }
@@ -96,42 +123,29 @@ export default function Staff() {
       const payload = { ...staffFields, photo_url, is_active: true }
 
       if (editing) {
-        await updateStaff(editing.id, payload)
+        // If we need to create an auth account for this existing staff, do it first
+        let userIdUpdate = {}
+        if (needsAuthSetup) {
+          try {
+            const userId = await createAuthForStaff(form.email, form.password)
+            if (userId) {
+              userIdUpdate = { user_id: userId, invite_status: 'accepted' }
+            }
+          } catch (authErr) {
+            console.warn('Auth account creation failed (staff still updated):', authErr)
+          }
+        }
+        await updateStaff(editing.id, { ...payload, ...userIdUpdate })
       } else {
-        // Create auth account first if email + password provided
-        // Use a separate client so we don't replace the admin's session
+        // Create auth account first, then staff record
         let userId = null
         if (form.email && form.password) {
           try {
-            const { createClient } = await import('@supabase/supabase-js')
-            const authClient = createClient(
-              import.meta.env.VITE_SUPABASE_URL,
-              import.meta.env.VITE_SUPABASE_ANON_KEY,
-              { auth: { persistSession: false } }
-            )
-            const { data: authData, error: signupErr } = await authClient.auth.signUp({
-              email: form.email,
-              password: form.password,
-              options: { data: { role: 'staff' } },
-            })
-            if (!signupErr && authData.user?.id) {
-              // Works for both new users (has identities) and existing users
-              userId = authData.user.identities?.length > 0 ? authData.user.id : null
-            }
-            // If email already exists, try to find the existing auth user via sign in
-            if (!userId) {
-              const { data: signInData } = await authClient.auth.signInWithPassword({
-                email: form.email,
-                password: form.password,
-              })
-              userId = signInData?.user?.id || null
-            }
+            userId = await createAuthForStaff(form.email, form.password)
           } catch (authErr) {
             console.warn('Auth account creation failed (staff still added):', authErr)
           }
         }
-
-        // Create staff record with user_id linked
         await createStaff({
           ...payload,
           ...(userId ? { user_id: userId, invite_status: 'accepted' } : {}),
@@ -313,16 +327,31 @@ export default function Staff() {
               onChange={handleChange}
               placeholder="matt@example.com"
             />
-            {!editing && form.email && (
-              <Input
-                label="Password (for their login)"
-                name="password"
-                type="password"
-                value={form.password}
-                onChange={handleChange}
-                placeholder="At least 6 characters"
-                autoComplete="new-password"
-              />
+            {form.email && (!editing || !editing.user_id) && (
+              <div className="space-y-1">
+                <Input
+                  label={editing ? 'Set Password (creates their login)' : 'Password (for their login)'}
+                  name="password"
+                  type="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="At least 6 characters"
+                  autoComplete="new-password"
+                />
+                {editing && !editing.user_id && (
+                  <p className="text-xs text-gray-500">
+                    This staff member doesn't have a login yet. Set a password so they can log in with their email.
+                  </p>
+                )}
+              </div>
+            )}
+            {editing && editing.user_id && (
+              <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-2 flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-xs text-green-700 font-medium">Login active — they can sign in with their email</span>
+              </div>
             )}
             <TextArea
               label="Bio"
