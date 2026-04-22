@@ -62,7 +62,6 @@ export default function AddressAutocomplete({
           },
           body: JSON.stringify({
             input: query,
-            includedRegionCodes: ['au'],
             sessionToken,
           }),
         })
@@ -86,7 +85,7 @@ export default function AddressAutocomplete({
       // Fallback: Nominatim
       const encoded = encodeURIComponent(query)
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&countrycodes=au&addressdetails=1`
+        `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=1`
       )
       if (res.ok) {
         const data = await res.json()
