@@ -227,7 +227,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {/* Activity bell — visible on all sizes */}
-              <ActivityBell onClick={() => setActivityOpen(true)} />
+              <ActivityBell variant="onBrand" onClick={() => setActivityOpen(true)} />
               {/* Desktop: nav buttons */}
               <button
                 onClick={() => navigate('/route')}

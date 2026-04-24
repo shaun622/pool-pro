@@ -176,7 +176,10 @@ export default function WorkOrders() {
     if (!business?.id) return
     fetchData()
 
-    const channel = supabase.channel(`work-orders-${business.id}-${Date.now()}`)
+    const uniqueId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const channel = supabase.channel(`work-orders-${business.id}-${uniqueId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `business_id=eq.${business.id}` }, () => fetchData())
       .subscribe()
 

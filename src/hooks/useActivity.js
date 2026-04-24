@@ -28,7 +28,11 @@ export function useActivity() {
     fetchActivities()
 
     // Realtime — new activities appear instantly
-    const channel = supabase.channel(`activity-feed-${business.id}-${Date.now()}`)
+    // Use a unique channel name (uuid + random) to avoid StrictMode double-mount collisions
+    const uniqueId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const channel = supabase.channel(`activity-feed-${business.id}-${uniqueId}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',

@@ -136,19 +136,34 @@ export default function ActivityPanel({ open, onClose }) {
 }
 
 // Bell icon button for the header
-export function ActivityBell({ onClick }) {
+// variant: 'default' (light neutral for top nav) | 'onBrand' (white icon on coloured hero backgrounds)
+export function ActivityBell({ onClick, variant = 'default' }) {
   const { unreadCount } = useActivity()
+
+  const onBrand = variant === 'onBrand'
 
   return (
     <button
       onClick={onClick}
-      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100/80 dark:hover:bg-gray-800 transition-colors relative"
+      className={cn(
+        'min-h-tap min-w-tap flex items-center justify-center rounded-xl transition-colors relative',
+        onBrand
+          ? 'bg-white/15 border border-white/25 hover:bg-white/25 backdrop-blur'
+          : 'hover:bg-gray-100/80 dark:hover:bg-gray-800'
+      )}
+      aria-label={`Activity${unreadCount > 0 ? ` — ${unreadCount} unread` : ''}`}
     >
-      <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <svg
+        className={cn('w-5 h-5', onBrand ? 'text-white' : 'text-gray-500 dark:text-gray-400')}
+        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}
+      >
         <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
       </svg>
       {unreadCount > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+        <span className={cn(
+          'absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center',
+          onBrand ? 'bg-white text-red-600 ring-2 ring-pool-600' : 'bg-red-500 text-white'
+        )}>
           {unreadCount > 9 ? '9+' : unreadCount}
         </span>
       )}

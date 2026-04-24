@@ -30,6 +30,7 @@ const Automations = lazy(() => import('./pages/settings/Automations'))
 const SurveyResults = lazy(() => import('./pages/settings/SurveyResults'))
 const Integrations = lazy(() => import('./pages/settings/Integrations'))
 const ImportData = lazy(() => import('./pages/settings/ImportData'))
+const BusinessDetails = lazy(() => import('./pages/settings/BusinessDetails'))
 const PublicSurvey = lazy(() => import('./pages/PublicSurvey'))
 const Invoices = lazy(() => import('./pages/Invoices'))
 const InvoiceBuilder = lazy(() => import('./pages/InvoiceBuilder'))
@@ -144,6 +145,7 @@ export default function App() {
                   <Route path="/quotes/new" element={<QuoteBuilder />} />
                   <Route path="/quotes/:id" element={<QuoteBuilder />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/settings/business" element={<BusinessDetails />} />
                   <Route path="/settings/staff" element={<Staff />} />
                   <Route path="/settings/chemicals" element={<ChemicalLibrary />} />
                   <Route path="/settings/templates" element={<CommunicationTemplates />} />

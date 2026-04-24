@@ -4,24 +4,22 @@ import { cn } from '../../lib/utils'
 
 /**
  * Compact toggle (header) — single-button light ↔ dark switch.
+ * For three-mode (Light / System / Dark) use ThemeToggleFull in Settings.
  */
 export function ThemeToggleCompact({ className }) {
-  const { mode, setMode, isDark } = useTheme()
+  const { setMode, isDark } = useTheme()
 
-  function next() {
-    // Cycle: light → dark → system → light
-    if (mode === 'light') setMode('dark')
-    else if (mode === 'dark') setMode('system')
-    else setMode('light')
+  function toggle() {
+    // Simple light ↔ dark — system mode lives in Settings only
+    setMode(isDark ? 'light' : 'dark')
   }
 
-  // Icon shows current effective state
-  const Icon = mode === 'system' ? Monitor : (isDark ? Moon : Sun)
-  const label = mode === 'system' ? 'System theme' : isDark ? 'Dark theme' : 'Light theme'
+  const Icon = isDark ? Moon : Sun
+  const label = isDark ? 'Switch to light theme' : 'Switch to dark theme'
 
   return (
     <button
-      onClick={next}
+      onClick={toggle}
       className={cn(
         'min-h-tap min-w-tap rounded-xl p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors',
         className
