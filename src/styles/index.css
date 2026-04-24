@@ -2,9 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── CSS variables — brand color (PoolPro blue) + easing ─── */
+:root {
+  --pool-50:  240 250 255;
+  --pool-100: 224 244 254;
+  --pool-200: 185 232 254;
+  --pool-300: 124 215 253;
+  --pool-400: 54 193 250;
+  --pool-500: 12 165 235;
+  --pool-600: 0 132 201;
+  --pool-700: 0 105 163;
+  --pool-800: 4 88 134;
+  --pool-900: 10 74 111;
+  --pool-950: 6 47 74;
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.35s var(--ease-out-expo), color 0.35s var(--ease-out-expo);
+  }
+
+  /* Smooth color transitions globally — but constrained to color/border/shadow only */
+  html * {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 0.25s;
+    transition-timing-function: var(--ease-out-expo);
+  }
+
+  /* Honour user motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    html, html * {
+      transition: none !important;
+      animation: none !important;
+    }
   }
 
   html, body {
@@ -12,8 +44,16 @@
   }
 
   body {
-    @apply bg-slate-50 text-gray-900 antialiased;
+    font-family: 'Inter Variable', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    @apply bg-slate-50 text-gray-900;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .dark body {
+    @apply bg-gray-950 text-gray-100;
   }
 
   input[type="number"] {
@@ -26,23 +66,30 @@
     margin: 0;
   }
 
-  /* Smooth scrolling */
   * {
     scroll-behavior: smooth;
   }
 
-  /* Selection color */
   ::selection {
     @apply bg-pool-200 text-pool-900;
+  }
+  .dark ::selection {
+    @apply bg-pool-800 text-pool-100;
   }
 }
 
 @layer components {
+  /* ── Section title — small uppercase label above grouped content ─── */
+  .section-title {
+    @apply text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400;
+  }
+
   /* ── Buttons ─────────────────────────────────────── */
   .btn {
     @apply inline-flex items-center justify-center rounded-xl font-semibold transition-all duration-200
            min-h-tap min-w-tap px-5 py-3 text-sm tracking-wide
            focus:outline-none focus:ring-2 focus:ring-pool-500/40 focus:ring-offset-2
+           dark:focus:ring-offset-gray-950
            disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
            active:scale-[0.98];
   }
@@ -56,7 +103,9 @@
   .btn-secondary {
     @apply btn bg-white text-gray-700 border border-gray-200 shadow-card
            hover:bg-gray-50 hover:border-gray-300 hover:shadow-card-hover
-           active:bg-gray-100;
+           active:bg-gray-100
+           dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700
+           dark:hover:bg-gray-800 dark:hover:border-gray-600;
   }
 
   .btn-danger {
@@ -71,7 +120,9 @@
            placeholder:text-gray-400
            focus:outline-none focus:ring-2 focus:ring-pool-500/30 focus:border-pool-400
            disabled:bg-gray-50 disabled:cursor-not-allowed
-           transition-all duration-200;
+           transition-all duration-200
+           dark:bg-gray-900 dark:border-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500
+           dark:focus:border-pool-400 dark:disabled:bg-gray-800;
     font-size: 16px; /* Prevents iOS auto-zoom on focus */
   }
 
@@ -91,7 +142,8 @@
            shadow-sm
            focus:outline-none focus:ring-2 focus:ring-pool-500/30 focus:border-pool-400
            disabled:bg-gray-50 disabled:cursor-not-allowed
-           transition-all duration-200 pr-8;
+           transition-all duration-200 pr-8
+           dark:bg-gray-900 dark:border-gray-800 dark:text-gray-200;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.5rem center;
@@ -105,13 +157,15 @@
   /* ── Cards ───────────────────────────────────────── */
   .card {
     @apply bg-white rounded-2xl border border-gray-100 p-4 shadow-card
-           transition-all duration-200;
+           transition-all duration-200
+           dark:bg-gray-900 dark:border-gray-800;
   }
 
   .card-interactive {
     @apply card cursor-pointer
            hover:shadow-card-hover hover:border-gray-200 hover:-translate-y-0.5
-           active:translate-y-0 active:shadow-card;
+           active:translate-y-0 active:shadow-card
+           dark:hover:border-gray-700;
   }
 
   .card-gradient {
@@ -120,13 +174,13 @@
 
   /* ── Glass effect ────────────────────────────────── */
   .glass {
-    @apply bg-white/80 backdrop-blur-xl border border-white/20;
+    @apply bg-white/80 backdrop-blur-xl border border-white/20
+           dark:bg-gray-900/80 dark:border-gray-800/40;
   }
 
-  /* ── Section header ──────────────────────────────── */
-  .section-title {
-    @apply text-xs font-semibold text-gray-400 uppercase tracking-wider;
-  }
+  /* ── Hide scrollbars (used by FilterChips & DesktopNav) ─── */
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
 }
 
 /* ── Leaflet z-index fix ────────────────────────────

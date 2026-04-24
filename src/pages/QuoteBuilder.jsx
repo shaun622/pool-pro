@@ -472,7 +472,7 @@ export default function QuoteBuilder() {
                 <button
                   type="button"
                   onClick={() => setNewClientOpen(true)}
-                  className="min-h-[44px] px-3 rounded-lg border border-dashed border-pool-300 text-pool-600 text-sm font-medium hover:bg-pool-50 transition-colors whitespace-nowrap"
+                  className="min-h-[44px] px-3 rounded-lg border border-dashed border-pool-300 text-pool-600 dark:text-pool-400 text-sm font-medium hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors whitespace-nowrap"
                 >
                   + New
                 </button>
@@ -488,7 +488,7 @@ export default function QuoteBuilder() {
                 />
                 {!showNewPool ? (
                   <button type="button" onClick={() => setShowNewPool(true)}
-                    className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700">
+                    className="mt-1.5 text-xs font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700">
                     + Add new pool
                   </button>
                 ) : (
@@ -504,7 +504,7 @@ export default function QuoteBuilder() {
                       Add
                     </Button>
                     <button type="button" onClick={() => { setShowNewPool(false); setNewPoolAddress('') }}
-                      className="px-2 text-gray-400 hover:text-gray-600">
+                      className="px-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -517,7 +517,7 @@ export default function QuoteBuilder() {
 
           {/* Line items */}
           <Card className="p-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
               Line Items
             </h3>
 
@@ -536,7 +536,7 @@ export default function QuoteBuilder() {
 
             <div className="space-y-4">
               {lineItems.map((item, index) => (
-                <div key={index} className="space-y-2 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                <div key={index} className="space-y-2 pb-4 border-b border-gray-100 dark:border-gray-800 last:border-0 last:pb-0">
                   <Input
                     label="Description"
                     placeholder="Item description"
@@ -560,25 +560,25 @@ export default function QuoteBuilder() {
                       onChange={(e) => updateLineItem(index, 'unit_price', e.target.value)}
                     />
                     <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700">Total</label>
-                      <p className="input bg-gray-50 text-gray-600">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Total</label>
+                      <p className="input bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
                         {formatCurrency((item.quantity || 0) * (item.unit_price || 0))}
                       </p>
                     </div>
                   </div>
                   {/* Billing type: one-off or recurring */}
                   <div className="flex items-center gap-2">
-                    <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                       <button type="button"
                         onClick={() => updateLineItem(index, 'recurring', null)}
                         className={cn('px-3 py-1.5 text-xs font-semibold transition-colors',
-                          !item.recurring ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+                          !item.recurring ? 'bg-gray-900 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800')}>
                         One-off
                       </button>
                       <button type="button"
                         onClick={() => updateLineItem(index, 'recurring', 'monthly')}
-                        className={cn('px-3 py-1.5 text-xs font-semibold transition-colors border-l border-gray-200',
-                          item.recurring ? 'bg-pool-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+                        className={cn('px-3 py-1.5 text-xs font-semibold transition-colors border-l border-gray-200 dark:border-gray-700',
+                          item.recurring ? 'bg-pool-500 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800')}>
                         Recurring
                       </button>
                     </div>
@@ -605,7 +605,7 @@ export default function QuoteBuilder() {
 
             <button
               onClick={addLineItem}
-              className="mt-3 text-sm text-pool-600 font-medium hover:text-pool-700 min-h-tap flex items-center gap-1"
+              className="mt-3 text-sm text-pool-600 dark:text-pool-400 font-medium hover:text-pool-700 min-h-tap flex items-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -615,8 +615,8 @@ export default function QuoteBuilder() {
 
             {/* Recurring info note */}
             {lineItems.some(li => li.recurring) && (
-              <div className="bg-pool-50 border border-pool-200 rounded-lg p-2.5 mt-3">
-                <p className="text-xs text-pool-600">
+              <div className="bg-pool-50 dark:bg-pool-950/40 border border-pool-200 rounded-lg p-2.5 mt-3">
+                <p className="text-xs text-pool-600 dark:text-pool-400">
                   <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -646,16 +646,16 @@ export default function QuoteBuilder() {
           <Card className="p-4">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Subtotal</span>
-                <span className="text-gray-700">{formatCurrency(subtotal)}</span>
+                <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
+                <span className="text-gray-700 dark:text-gray-300">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">GST (10%)</span>
-                <span className="text-gray-700">{formatCurrency(gst)}</span>
+                <span className="text-gray-500 dark:text-gray-400">GST (10%)</span>
+                <span className="text-gray-700 dark:text-gray-300">{formatCurrency(gst)}</span>
               </div>
-              <div className="flex justify-between text-base font-semibold border-t border-gray-200 pt-2">
-                <span className="text-gray-900">Total</span>
-                <span className="text-gray-900">{formatCurrency(total)}</span>
+              <div className="flex justify-between text-base font-semibold border-t border-gray-200 dark:border-gray-700 pt-2">
+                <span className="text-gray-900 dark:text-gray-100">Total</span>
+                <span className="text-gray-900 dark:text-gray-100">{formatCurrency(total)}</span>
               </div>
             </div>
           </Card>
@@ -693,7 +693,7 @@ export default function QuoteBuilder() {
           ) : isEditing && quoteStatus === 'accepted' ? (
             /* Already accepted — show convert options */
             <div className="space-y-3">
-              <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+              <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 rounded-xl p-3 text-center">
                 <p className="text-sm font-semibold text-green-700">Quote Accepted</p>
               </div>
               <div className="flex gap-3">
@@ -730,8 +730,8 @@ export default function QuoteBuilder() {
           ) : isEditing && quoteStatus === 'converted' ? (
             /* Converted to work order */
             <div className="space-y-3">
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
-                <p className="text-sm font-semibold text-gray-600">Converted to Work Order</p>
+              <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Converted to Work Order</p>
               </div>
               <Button
                 variant="secondary"
@@ -745,7 +745,7 @@ export default function QuoteBuilder() {
           ) : isEditing && quoteStatus === 'declined' ? (
             /* Declined */
             <div className="space-y-3">
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+              <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 rounded-xl p-3 text-center">
                 <p className="text-sm font-semibold text-red-700">Quote Declined</p>
               </div>
               <div className="flex gap-3">
@@ -794,7 +794,7 @@ export default function QuoteBuilder() {
           {isEditing && (
             <button
               onClick={deleteQuote}
-              className="w-full mt-6 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors min-h-tap"
+              className="w-full mt-6 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors min-h-tap"
             >
               Delete Quote
             </button>
@@ -847,7 +847,7 @@ export default function QuoteBuilder() {
       {/* Convert to Work Order modal */}
       <Modal open={convertModalOpen} onClose={() => setConvertModalOpen(false)} title="Add as Work Order">
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">Set the details for this work order before creating it.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Set the details for this work order before creating it.</p>
           <Input
             label="Scheduled Date"
             type="date"
@@ -873,8 +873,8 @@ export default function QuoteBuilder() {
             ]}
           />
           {showAddTech && (
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">New Technician</h4>
               <Input
                 label="Name"
                 value={newTechForm.name}

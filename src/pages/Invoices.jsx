@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from '../components/layout/Header'
+import { Plus } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
+import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
@@ -45,22 +47,22 @@ function InvoiceCard({ invoice, onClick }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900 truncate">{invoice.invoice_number}</h3>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{invoice.invoice_number}</h3>
             <Badge variant={STATUS_BADGE[invoice.status] || 'default'}>
               {STATUS_LABEL[invoice.status] || invoice.status}
             </Badge>
           </div>
-          <p className="text-xs text-gray-400 truncate mt-0.5">
+          <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
             {invoice.clients?.name || 'Unknown client'}
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-sm font-semibold text-gray-900">{formatCurrency(invoice.total)}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(invoice.total)}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
             {formatDate(invoice.issued_date || invoice.created_at)}
           </p>
         </div>
-        <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       </div>
@@ -117,19 +119,31 @@ export default function Invoices() {
       .reduce((sum, inv) => sum + (inv.paid_amount || inv.total || 0), 0)
   }, [invoices])
 
+  // Subtitle
+  const heroSubtitle = invoices.length === 0
+    ? 'No invoices yet'
+    : outstanding > 0
+      ? `${formatCurrency(outstanding)} outstanding`
+      : `${invoices.length} ${invoices.length === 1 ? 'invoice' : 'invoices'}`
+
   return (
     <>
-      <Header title="Invoices" />
       <PageWrapper>
+        <PageHero
+          title="Invoices"
+          subtitle={heroSubtitle}
+          action={<Button leftIcon={Plus} onClick={() => navigate('/invoices/new')}>New Invoice</Button>}
+        />
+
         {/* Summary stats */}
         <div className="grid grid-cols-2 gap-3 mb-5">
           <div className="card p-4">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Outstanding</p>
-            <p className="text-xl font-bold text-gray-900 mt-1">{formatCurrency(outstanding)}</p>
+            <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Outstanding</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1 tabular-nums">{formatCurrency(outstanding)}</p>
           </div>
           <div className="card p-4">
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Paid This Month</p>
-            <p className="text-xl font-bold text-emerald-600 mt-1">{formatCurrency(paidThisMonth)}</p>
+            <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Paid This Month</p>
+            <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">{formatCurrency(paidThisMonth)}</p>
           </div>
         </div>
 
@@ -143,7 +157,7 @@ export default function Invoices() {
                 'px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors min-h-tap',
                 activeTab === tab
                   ? 'bg-pool-500 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200'
               )}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}

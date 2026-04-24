@@ -87,14 +87,14 @@ const FEATURE_LABELS = {
 
 function FeatureCheck({ enabled }) {
   if (typeof enabled === 'string') {
-    return <span className="text-sm text-gray-700 font-medium">{enabled}</span>
+    return <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">{enabled}</span>
   }
   return enabled ? (
     <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
     </svg>
   ) : (
-    <svg className="w-5 h-5 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg className="w-5 h-5 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
     </svg>
   )
@@ -147,7 +147,7 @@ export default function Subscription() {
         <div className="space-y-5">
           {/* Trial countdown */}
           {trialDaysLeft !== null && (
-            <Card className={cn('p-4 text-center', trialDaysLeft <= 3 ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50')}>
+            <Card className={cn('p-4 text-center', trialDaysLeft <= 3 ? 'border-red-200 bg-red-50 dark:bg-red-950/40' : 'border-amber-200 bg-amber-50 dark:bg-amber-950/40')}>
               <p className={cn('text-sm font-medium', trialDaysLeft <= 3 ? 'text-red-700' : 'text-amber-700')}>
                 {trialDaysLeft === 0
                   ? 'Your trial has expired'
@@ -169,10 +169,10 @@ export default function Subscription() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
-                    <p className="text-gray-500 text-sm">
-                      <span className="text-2xl font-bold text-gray-900">{plan.priceLabel}</span>
-                      {plan.period && <span className="text-gray-400">{plan.period}</span>}
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{plan.name}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{plan.priceLabel}</span>
+                      {plan.period && <span className="text-gray-400 dark:text-gray-500">{plan.period}</span>}
                     </p>
                   </div>
                   {isCurrent && (
@@ -184,7 +184,7 @@ export default function Subscription() {
                 <div className="space-y-2.5 mb-4">
                   {Object.entries(plan.features).map(([key, value]) => (
                     <div key={key} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{FEATURE_LABELS[key]}</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{FEATURE_LABELS[key]}</span>
                       <FeatureCheck enabled={value} />
                     </div>
                   ))}
@@ -193,7 +193,7 @@ export default function Subscription() {
                 {/* Action */}
                 {isCurrent ? (
                   <div className="text-center py-2">
-                    <p className="text-sm text-pool-600 font-medium">Your current plan</p>
+                    <p className="text-sm text-pool-600 dark:text-pool-400 font-medium">Your current plan</p>
                   </div>
                 ) : plan.id === 'trial' ? null : (
                   <Button

@@ -262,13 +262,13 @@ export default function InvoiceBuilder() {
 
           {/* Line items */}
           <Card className="p-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
               Line Items
             </h3>
 
             <div className="space-y-4">
               {lineItems.map((item, index) => (
-                <div key={index} className="space-y-2 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                <div key={index} className="space-y-2 pb-4 border-b border-gray-100 dark:border-gray-800 last:border-0 last:pb-0">
                   <Input
                     label="Description"
                     placeholder="Item description"
@@ -292,8 +292,8 @@ export default function InvoiceBuilder() {
                       onChange={e => updateLineItem(index, 'unit_price', e.target.value)}
                     />
                     <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700">Total</label>
-                      <p className="input bg-gray-50 text-gray-600">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Total</label>
+                      <p className="input bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
                         {formatCurrency((item.quantity || 0) * (item.unit_price || 0))}
                       </p>
                     </div>
@@ -312,7 +312,7 @@ export default function InvoiceBuilder() {
 
             <button
               onClick={addLineItem}
-              className="mt-3 text-sm text-pool-600 font-medium hover:text-pool-700 min-h-tap flex items-center gap-1"
+              className="mt-3 text-sm text-pool-600 dark:text-pool-400 font-medium hover:text-pool-700 min-h-tap flex items-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -335,16 +335,16 @@ export default function InvoiceBuilder() {
           <Card className="p-4">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Subtotal</span>
-                <span className="text-gray-700">{formatCurrency(subtotal)}</span>
+                <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
+                <span className="text-gray-700 dark:text-gray-300">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">GST (10%)</span>
-                <span className="text-gray-700">{formatCurrency(gst)}</span>
+                <span className="text-gray-500 dark:text-gray-400">GST (10%)</span>
+                <span className="text-gray-700 dark:text-gray-300">{formatCurrency(gst)}</span>
               </div>
-              <div className="flex justify-between text-base font-semibold border-t border-gray-200 pt-2">
-                <span className="text-gray-900">Total</span>
-                <span className="text-gray-900">{formatCurrency(total)}</span>
+              <div className="flex justify-between text-base font-semibold border-t border-gray-200 dark:border-gray-700 pt-2">
+                <span className="text-gray-900 dark:text-gray-100">Total</span>
+                <span className="text-gray-900 dark:text-gray-100">{formatCurrency(total)}</span>
               </div>
             </div>
           </Card>
@@ -373,7 +373,7 @@ export default function InvoiceBuilder() {
 
       {/* Confirm send modal */}
       <Modal open={confirmSendOpen} onClose={() => setConfirmSendOpen(false)} title="Send Invoice">
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           This will mark the invoice as sent. The client will be able to view it via their portal.
         </p>
         <div className="flex gap-3 pt-2">

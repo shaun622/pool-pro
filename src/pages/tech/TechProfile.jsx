@@ -93,12 +93,12 @@ export default function TechProfile() {
   return (
     <div className="max-w-lg mx-auto px-4 pb-8">
       {/* Back button */}
-      <button onClick={() => navigate('/tech')} className="flex items-center gap-1 py-3 text-sm text-pool-600 font-semibold">
+      <button onClick={() => navigate('/tech')} className="flex items-center gap-1 py-3 text-sm text-pool-600 dark:text-pool-400 font-semibold">
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         Back to Run Sheet
       </button>
 
-      <h1 className="text-xl font-bold text-gray-900 mb-6">My Profile</h1>
+      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">My Profile</h1>
 
       {/* Avatar */}
       <div className="flex flex-col items-center gap-3 mb-6">
@@ -118,7 +118,7 @@ export default function TechProfile() {
       </div>
 
       {/* Profile fields */}
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-4 space-y-4 mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 p-4 space-y-4 mb-4">
         <Input label="Name" value={name} onChange={e => setName(e.target.value)} />
         <Input label="Email" value={user?.email || staffRecord?.email || ''} disabled className="opacity-60" />
         <Input label="Phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0400 000 000" />
@@ -126,23 +126,23 @@ export default function TechProfile() {
       </div>
 
       {/* Password */}
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-4 mb-4">
-        <h2 className="text-sm font-semibold text-gray-900 mb-3">Change Password</h2>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 p-4 mb-4">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Change Password</h2>
         <form onSubmit={handlePasswordChange} className="space-y-3">
           <Input label="New Password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
           {pwMessage && (
-            <p className={cn('text-xs font-medium', pwMessage.includes('success') ? 'text-green-600' : 'text-red-600')}>{pwMessage}</p>
+            <p className={cn('text-xs font-medium', pwMessage.includes('success') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>{pwMessage}</p>
           )}
           <Button type="submit" variant="secondary" loading={pwSaving} className="w-full min-h-tap">Update Password</Button>
         </form>
       </div>
 
       {/* Logout */}
-      <button onClick={handleLogout} className="w-full py-3 rounded-xl bg-white border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 active:scale-[0.98] transition-all min-h-tap mb-4">
+      <button onClick={handleLogout} className="w-full py-3 rounded-xl bg-white dark:bg-gray-900 border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 active:scale-[0.98] transition-all min-h-tap mb-4">
         Log Out
       </button>
 
-      <p className="text-center text-xs text-gray-300">PoolPro v1.0</p>
+      <p className="text-center text-xs text-gray-300 dark:text-gray-600">PoolPro v1.0</p>
     </div>
   )
 }

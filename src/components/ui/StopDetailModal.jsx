@@ -619,9 +619,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         )}
 
         {/* Title + status */}
-        <div className="flex items-start justify-between gap-3 p-4 bg-white rounded-2xl border border-gray-100">
+        <div className="flex items-start justify-between gap-3 p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-gray-900">{stop.title}</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{stop.title}</h3>
             {stop.client_name && stop.client_id ? (
               <button
                 onClick={() => { onClose(); navigate(`/clients/${stop.client_id}`) }}
@@ -643,14 +643,14 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
 
         {/* Details — view / quick-edit mode */}
         {!editing && (
-          <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-100">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
 
             {/* Address */}
             <div className="px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><PinIcon /></div>
+                <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400"><PinIcon /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Site Address</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Site Address</p>
                   {quickEdit ? (
                     <AddressAutocomplete
                       value={stop.type === 'pool' ? form.pool_address : form.address}
@@ -666,7 +666,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                       className="mt-1"
                     />
                   ) : (
-                    <div className="text-sm font-medium text-gray-900 truncate">{stop.address || '—'}</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{stop.address || '—'}</div>
                   )}
                 </div>
                 {!quickEdit && stop.address && (
@@ -685,9 +685,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {/* Scheduled */}
             <div className="px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><CalIcon /></div>
+                <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400"><CalIcon /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Scheduled</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Scheduled</p>
                   {quickEdit ? (
                     <div className="flex gap-2 mt-1">
                       <input
@@ -697,7 +697,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                           ? setForm(f => ({ ...f, next_due_at: e.target.value }))
                           : setForm(f => ({ ...f, scheduled_date: e.target.value }))
                         }
-                        className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
                       />
                       <input
                         type="time"
@@ -706,17 +706,17 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                           ? setForm(f => ({ ...f, next_due_time: e.target.value }))
                           : setForm(f => ({ ...f, scheduled_time: e.target.value }))
                         }
-                        className="w-28 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                        className="w-28 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
                       />
                     </div>
                   ) : (
                     <>
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {stop.scheduled_display
                           || (stop.scheduled_date ? new Date(stop.scheduled_date).toLocaleDateString('en-AU') : null)
                           || (stop.next_due_at ? new Date(stop.next_due_at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) : '—')}
                       </div>
-                      {stop.time_display && <div className="text-xs text-gray-500 mt-0.5">{stop.time_display}</div>}
+                      {stop.time_display && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stop.time_display}</div>}
                     </>
                   )}
                 </div>
@@ -736,19 +736,19 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {/* Phone */}
             <div className="px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><PhoneIcon /></div>
+                <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400"><PhoneIcon /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Client Phone</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Client Phone</p>
                   {quickEdit ? (
                     <input
                       type="tel"
                       value={form.client_phone}
                       onChange={e => setForm(f => ({ ...f, client_phone: e.target.value }))}
                       placeholder="e.g. 0412 345 678"
-                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
                     />
                   ) : (
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {stop.phone ? (
                         <a href={`tel:${stop.phone}`} className="text-pool-600 font-semibold">{stop.phone}</a>
                       ) : '—'}
@@ -761,19 +761,19 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {/* Email */}
             <div className="px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><MailIcon /></div>
+                <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400"><MailIcon /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Client Email</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Client Email</p>
                   {quickEdit ? (
                     <input
                       type="email"
                       value={form.client_email}
                       onChange={e => setForm(f => ({ ...f, client_email: e.target.value }))}
                       placeholder="e.g. client@email.com"
-                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
+                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
                     />
                   ) : (
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {stop.email ? (
                         <a href={`mailto:${stop.email}`} className="text-pool-600 font-semibold break-all">{stop.email}</a>
                       ) : '—'}
@@ -786,9 +786,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {/* Notes */}
             <div className="px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600"><NoteIcon /></div>
+                <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400"><NoteIcon /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Notes</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Notes</p>
                   {quickEdit ? (
                     <textarea
                       value={stop.type === 'pool' ? form.access_notes : form.notes}
@@ -798,10 +798,10 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                       }
                       placeholder="Gate code, dog, key location..."
                       rows={2}
-                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500 resize-none"
+                      className="w-full mt-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500 resize-none"
                     />
                   ) : (
-                    <div className="text-sm font-medium text-gray-900">{(stop.type === 'pool' ? stop.access_notes : stop.notes) || '—'}</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{(stop.type === 'pool' ? stop.access_notes : stop.notes) || '—'}</div>
                   )}
                 </div>
               </div>
@@ -811,11 +811,11 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {staffList.length > 0 && (
               <div className="px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600">
+                  <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400">
                     <UserIcon />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Assigned Tech</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Assigned Tech</p>
                     <CustomSelect
                       inline
                       value={pendingStaffId !== null ? pendingStaffId : (stop.assigned_staff_id || '')}
@@ -841,7 +841,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   <div className="flex items-center gap-2 mt-2 ml-12 animate-scale-in">
                     <button
                       onClick={() => setPendingStaffId(null)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors min-h-[32px]"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-h-[32px]"
                     >
                       Cancel
                     </button>
@@ -1048,11 +1048,11 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       {deleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => !deleting && setDeleteConfirm(null)} />
-          <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-6 space-y-4 animate-slide-up">
+          <div className="relative bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-6 space-y-4 animate-slide-up">
             {/* Warning icon */}
             <div className="flex justify-center">
-              <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
-                <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-950/40 flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
@@ -1061,8 +1061,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {deleteConfirm === 'recurring' ? (
               <>
                 <div className="text-center">
-                  <h3 className="text-lg font-bold text-gray-900">Delete Service</h3>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Delete Service</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                     This is a recurring service. Would you like to delete just this one or cancel all future services?
                   </p>
                 </div>
@@ -1070,7 +1070,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   <button
                     onClick={handleDeleteSingle}
                     disabled={deleting}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 min-h-tap"
+                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 min-h-tap"
                   >
                     {deleting ? (
                       <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -1102,7 +1102,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   <button
                     onClick={() => setDeleteConfirm(null)}
                     disabled={deleting}
-                    className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors min-h-tap"
+                    className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors min-h-tap"
                   >
                     Go Back
                   </button>
@@ -1111,10 +1111,10 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             ) : (
               <>
                 <div className="text-center">
-                  <h3 className="text-lg font-bold text-gray-900">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                     {stop.type === 'job' ? 'Delete Job' : 'Delete Service'}
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                     Are you sure? This action cannot be undone.
                   </p>
                 </div>
@@ -1122,7 +1122,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   <button
                     onClick={() => setDeleteConfirm(null)}
                     disabled={deleting}
-                    className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors min-h-tap"
+                    className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-h-tap"
                   >
                     Cancel
                   </button>
@@ -1150,13 +1150,13 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
 function DetailRow({ icon, label, value, subValue, action }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
-      <div className="w-9 h-9 rounded-xl bg-pool-50 flex items-center justify-center shrink-0 text-pool-600">
+      <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400">
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-        <div className="text-sm font-medium text-gray-900 truncate">{value || '—'}</div>
-        {subValue && <div className="text-xs text-gray-500 mt-0.5">{subValue}</div>}
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</p>
+        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{value || '—'}</div>
+        {subValue && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subValue}</div>}
       </div>
       {action}
     </div>

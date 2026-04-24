@@ -72,7 +72,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pool-50 via-white to-pool-100">
+    <div className="min-h-screen bg-gradient-to-br from-pool-50 via-white to-pool-100 dark:from-gray-950 dark:via-gray-900 dark:to-pool-950/40">
       <div className="max-w-md mx-auto px-4 pt-12 pb-8">
         {/* Header */}
         <div className="text-center mb-8">
@@ -81,8 +81,8 @@ export default function Onboarding() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Set Up Your Business</h1>
-          <p className="text-sm text-gray-400 mt-1">Step {step} of 2</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Set Up Your Business</h1>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Step {step} of 2</p>
         </div>
 
         {/* Step indicator */}
@@ -93,8 +93,8 @@ export default function Onboarding() {
                 s === step
                   ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
                   : s < step
-                  ? 'bg-emerald-100 text-emerald-600'
-                  : 'bg-gray-100 text-gray-400'
+                  ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
               }`}>
                 {s < step ? (
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -102,21 +102,21 @@ export default function Onboarding() {
                   </svg>
                 ) : s}
               </div>
-              {s < 2 && <div className={`w-12 h-0.5 rounded-full transition-colors ${s < step ? 'bg-emerald-300' : 'bg-gray-200'}`} />}
+              {s < 2 && <div className={`w-12 h-0.5 rounded-full transition-colors ${s < step ? 'bg-emerald-300 dark:bg-emerald-700' : 'bg-gray-200 dark:bg-gray-700'}`} />}
             </div>
           ))}
         </div>
 
         {/* Error */}
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600 font-medium animate-scale-in">
+          <div className="mb-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800/40 px-4 py-3 text-sm text-red-600 dark:text-red-300 font-medium animate-scale-in">
             {error}
           </div>
         )}
 
         {/* Step 1 */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl shadow-elevated p-6 border border-gray-100 space-y-4 animate-fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-elevated p-6 border border-gray-100 dark:border-gray-800 space-y-4 animate-fade-in">
             <Input
               label="Business Name"
               value={businessName}
@@ -152,21 +152,21 @@ export default function Onboarding() {
 
         {/* Step 2 */}
         {step === 2 && (
-          <div className="bg-white rounded-2xl shadow-elevated p-6 border border-gray-100 space-y-4 animate-fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-elevated p-6 border border-gray-100 dark:border-gray-800 space-y-4 animate-fade-in">
             {/* Logo upload */}
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1.5">Logo</label>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">Logo</label>
               {logoPreview && (
                 <div className="mb-3 flex justify-center">
                   <img
                     src={logoPreview}
                     alt="Logo preview"
-                    className="w-20 h-20 object-contain rounded-2xl border border-gray-100 shadow-card"
+                    className="w-20 h-20 object-contain rounded-2xl border border-gray-100 dark:border-gray-700 shadow-card"
                   />
                 </div>
               )}
-              <label className="flex items-center justify-center w-full min-h-[48px] px-4 py-3 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-pool-400 hover:bg-pool-50/50 transition-all">
-                <span className="text-sm text-gray-400">
+              <label className="flex items-center justify-center w-full min-h-[48px] px-4 py-3 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl cursor-pointer hover:border-pool-400 hover:bg-pool-50/50 dark:hover:bg-pool-950/20 transition-all">
+                <span className="text-sm text-gray-400 dark:text-gray-500">
                   {logoFile ? logoFile.name : 'Tap to upload logo'}
                 </span>
                 <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
@@ -175,15 +175,15 @@ export default function Onboarding() {
 
             {/* Brand colour */}
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-1.5">Brand Colour</label>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">Brand Colour</label>
               <div className="flex items-center gap-3">
                 <input
                   type="color"
                   value={brandColour}
                   onChange={(e) => setBrandColour(e.target.value)}
-                  className="w-12 h-12 rounded-xl border-2 border-gray-200 cursor-pointer p-0.5 shadow-inner-soft"
+                  className="w-12 h-12 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer p-0.5 shadow-inner-soft"
                 />
-                <span className="text-sm text-gray-400 font-mono">{brandColour}</span>
+                <span className="text-sm text-gray-400 dark:text-gray-500 font-mono">{brandColour}</span>
               </div>
             </div>
 

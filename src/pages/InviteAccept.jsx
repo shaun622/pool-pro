@@ -109,9 +109,9 @@ export default function InviteAccept() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Invalid Invite</h1>
-          <p className="text-gray-500 text-sm mb-6">{error}</p>
-          <button onClick={() => navigate('/login')} className="text-pool-600 font-semibold text-sm hover:text-pool-700">
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Invalid Invite</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{error}</p>
+          <button onClick={() => navigate('/login')} className="text-pool-600 dark:text-pool-400 font-semibold text-sm hover:text-pool-700">
             Go to Login
           </button>
         </div>
@@ -129,25 +129,25 @@ export default function InviteAccept() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome to PoolPro</h1>
-          <p className="text-gray-500 text-sm">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Welcome to PoolPro</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
             You've been invited to join <strong>{businessName}</strong>
           </p>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600 font-medium">
+          <div className="mb-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-100 px-4 py-3 text-sm text-red-600 dark:text-red-400 font-medium">
             {error}
           </div>
         )}
 
         {/* Setup form */}
-        <div className="bg-white rounded-2xl shadow-elevated p-6 border border-gray-100">
-          <div className="mb-4 pb-4 border-b border-gray-100">
-            <p className="text-sm text-gray-500">Setting up account for</p>
-            <p className="text-base font-semibold text-gray-900">{invite?.name}</p>
-            <p className="text-sm text-gray-400">{invite?.email}</p>
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-elevated p-6 border border-gray-100 dark:border-gray-800">
+          <div className="mb-4 pb-4 border-b border-gray-100 dark:border-gray-800">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Setting up account for</p>
+            <p className="text-base font-semibold text-gray-900 dark:text-gray-100">{invite?.name}</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">{invite?.email}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

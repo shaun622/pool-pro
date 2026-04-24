@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { BusinessProvider, useBusiness } from './hooks/useBusiness'
+import { ThemeProvider } from './contexts/ThemeContext'
 import AppShell from './components/layout/AppShell'
 import TechShell from './components/layout/TechShell'
 
@@ -95,6 +96,7 @@ function TechGuard() {
 export default function App() {
   return (
     <BrowserRouter>
+      <ThemeProvider>
       <AuthProvider>
         <BusinessProvider>
           <Suspense fallback={<Loading />}>
@@ -163,6 +165,7 @@ export default function App() {
           </Suspense>
         </BusinessProvider>
       </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

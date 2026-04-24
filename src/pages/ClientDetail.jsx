@@ -350,15 +350,15 @@ export default function ClientDetail() {
           <div className="flex gap-1">
             <button
               onClick={() => setEditOpen(true)}
-              className="min-h-tap min-w-tap flex items-center justify-center rounded-full hover:bg-gray-100"
+              className="min-h-tap min-w-tap flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800"
             >
-              <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
             <button
               onClick={() => setDeleteOpen(true)}
-              className="min-h-tap min-w-tap flex items-center justify-center rounded-full hover:bg-gray-100"
+              className="min-h-tap min-w-tap flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800"
             >
               <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -373,39 +373,39 @@ export default function ClientDetail() {
           <div className="space-y-2">
             {client.email && (
               <div className="flex items-center gap-2 text-sm">
-                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <span className="text-gray-700 truncate">{client.email}</span>
+                <span className="text-gray-700 dark:text-gray-300 truncate">{client.email}</span>
               </div>
             )}
             {client.phone && (
               <div className="flex items-center gap-2 text-sm">
-                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
-                <span className="text-gray-700">{client.phone}</span>
+                <span className="text-gray-700 dark:text-gray-300">{client.phone}</span>
               </div>
             )}
             {client.address && (
               <div className="flex items-center gap-2 text-sm">
-                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <span className="text-gray-700">{client.address}</span>
+                <span className="text-gray-700 dark:text-gray-300">{client.address}</span>
               </div>
             )}
             {client.service_rate && (
-              <div className="flex items-center gap-2 text-sm pt-1 border-t border-gray-100 mt-2">
-                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex items-center gap-2 text-sm pt-1 border-t border-gray-100 dark:border-gray-800 mt-2">
+                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-gray-700">${client.service_rate}</span>
+                <span className="text-gray-700 dark:text-gray-300">${client.service_rate}</span>
               </div>
             )}
             {client.notes && (
-              <p className="text-sm text-gray-500 pt-1 border-t border-gray-100 mt-2">
+              <p className="text-sm text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800 mt-2">
                 {client.notes}
               </p>
             )}
@@ -415,7 +415,7 @@ export default function ClientDetail() {
         {/* Assigned Staff */}
         {assignedStaff && (
           <Card className="p-4 mb-4">
-            <p className="text-xs text-gray-400 uppercase font-semibold tracking-wide mb-2">Assigned Technician</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 uppercase font-semibold tracking-wide mb-2">Assigned Technician</p>
             <StaffCard staff={assignedStaff} variant="compact" />
           </Card>
         )}
@@ -449,10 +449,10 @@ export default function ClientDetail() {
 
         {/* Pools Section */}
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-900">Pools</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Pools</h2>
           <button
             onClick={() => setPoolModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 dark:bg-pool-950/40 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -495,11 +495,11 @@ export default function ClientDetail() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate">{pool.address}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{pool.address}</p>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <Badge variant={pool.type}>{pool.type}</Badge>
                           {pool.schedule_frequency && (
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-gray-400 dark:text-gray-500">
                               {FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}
                               {profileByPool[pool.id] && (() => {
                                 const rp = profileByPool[pool.id]
@@ -515,7 +515,7 @@ export default function ClientDetail() {
                       {overdueDays > 0 && (
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span className={`w-2.5 h-2.5 rounded-full ${statusDot(overdueStatus)}`} />
-                          <span className="text-xs font-medium text-red-600">
+                          <span className="text-xs font-medium text-red-600 dark:text-red-400">
                             {overdueDays}d overdue
                           </span>
                         </div>
@@ -523,12 +523,12 @@ export default function ClientDetail() {
                     </div>
 
                     {/* Service dates row */}
-                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                       {pool.last_serviced_at && (
                         <span>Last: {formatDate(pool.last_serviced_at)}</span>
                       )}
                       {pool.next_due_at && (
-                        <span className={cn(overdueDays > 0 ? 'text-red-500 font-medium' : 'text-pool-600')}>
+                        <span className={cn(overdueDays > 0 ? 'text-red-500 font-medium' : 'text-pool-600 dark:text-pool-400')}>
                           Next: {formatDate(pool.next_due_at)}
                         </span>
                       )}
@@ -540,7 +540,7 @@ export default function ClientDetail() {
                     {poolStaff?.photo_url ? (
                       <img src={poolStaff.photo_url} alt="" className="w-7 h-7 rounded-full object-cover" />
                     ) : poolStaff ? (
-                      <div className="w-7 h-7 rounded-full bg-pool-100 text-pool-600 flex items-center justify-center text-xs font-bold">
+                      <div className="w-7 h-7 rounded-full bg-pool-100 text-pool-600 dark:text-pool-400 flex items-center justify-center text-xs font-bold">
                         {poolStaff.name?.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
                       </div>
                     ) : null}
@@ -592,7 +592,7 @@ export default function ClientDetail() {
                         e.stopPropagation()
                         setPoolToDelete(pool)
                       }}
-                      className="shrink-0 w-11 h-11 rounded-lg border border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors flex items-center justify-center"
+                      className="shrink-0 w-11 h-11 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors flex items-center justify-center"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -647,8 +647,8 @@ export default function ClientDetail() {
             placeholder="Street address"
           />
 
-          <div className="border-t border-gray-100 pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Pricing</h3>
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Pricing</h3>
             <Input
               label="Service Rate ($) (optional)"
               name="service_rate"
@@ -661,8 +661,8 @@ export default function ClientDetail() {
 
           {/* Staff Assignment */}
           {staffList.length > 0 && (
-            <div className="border-t border-gray-100 pt-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Staff Assignment</h3>
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Staff Assignment</h3>
               <Select
                 label="Assigned Technician"
                 name="assigned_staff_id"
@@ -701,10 +701,10 @@ export default function ClientDetail() {
 
       {/* Delete Confirmation Modal */}
       <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete Client">
-        <p className="text-sm text-gray-600 mb-2">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
           Are you sure you want to delete <strong>{client.name}</strong>?
         </p>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
           This will also delete all associated pools and service records. This action cannot be undone.
         </p>
         <div className="flex gap-3">
@@ -729,10 +729,10 @@ export default function ClientDetail() {
 
       {/* Remove Pool Confirmation Modal */}
       <Modal open={!!poolToDelete} onClose={() => !poolDeleting && setPoolToDelete(null)} title="Remove Pool">
-        <p className="text-sm text-gray-600 mb-2">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
           Are you sure you want to remove <strong>{poolToDelete?.address}</strong>?
         </p>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
           This will also delete all associated service records for this pool. This action cannot be undone.
         </p>
         <div className="flex gap-3">
@@ -761,7 +761,7 @@ export default function ClientDetail() {
         <div className="space-y-4">
           {/* Quick pick options */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Quick Pick</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">Quick Pick</p>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { key: 'today', label: 'Today' },
@@ -775,7 +775,7 @@ export default function ClientDetail() {
                   key={opt.key}
                   type="button"
                   onClick={() => handleQuickDate(opt.key)}
-                  className="px-3 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-pool-50 hover:border-pool-300 hover:text-pool-700 transition-colors min-h-[44px]"
+                  className="px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 hover:bg-pool-50 hover:border-pool-300 hover:text-pool-700 transition-colors min-h-[44px]"
                 >
                   {opt.label}
                 </button>
@@ -794,14 +794,14 @@ export default function ClientDetail() {
           {/* Recurring toggle */}
           <label className="flex items-center justify-between min-h-tap cursor-pointer">
             <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              <span className="text-sm font-medium text-gray-700">Recurring service</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Recurring service</span>
             </div>
             <div className={cn('relative w-11 h-6 rounded-full transition-colors',
               scheduleRecurring ? 'bg-pool-500' : 'bg-gray-200')}>
-              <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+              <div className={cn('absolute top-0.5 w-5 h-5 bg-white dark:bg-gray-900 rounded-full shadow transition-transform',
                 scheduleRecurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
               <input type="checkbox" className="sr-only"
                 checked={scheduleRecurring}
@@ -830,7 +830,7 @@ export default function ClientDetail() {
 
           {/* Summary */}
           {scheduleDate && (
-            <div className="bg-pool-50 border border-pool-200 rounded-lg p-3">
+            <div className="bg-pool-50 dark:bg-pool-950/40 border border-pool-200 rounded-lg p-3">
               <p className="text-sm text-pool-700">
                 <span className="font-semibold">Next service:</span>{' '}
                 {new Date(scheduleDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -865,9 +865,9 @@ export default function ClientDetail() {
       {/* Create Work Order Modal */}
       <Modal open={jobModalOpen} onClose={() => setJobModalOpen(false)} title="New Work Order">
         <form onSubmit={handleJobSubmit} className="space-y-4">
-          <div className="bg-gray-50 rounded-xl p-3 mb-1">
-            <p className="text-sm font-medium text-gray-900">{client?.name}</p>
-            {client?.address && <p className="text-xs text-gray-500">{client.address}</p>}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 mb-1">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{client?.name}</p>
+            {client?.address && <p className="text-xs text-gray-500 dark:text-gray-400">{client.address}</p>}
           </div>
           <div>
             {!jobShowNewPool ? (
@@ -885,7 +885,7 @@ export default function ClientDetail() {
                 <button
                   type="button"
                   onClick={() => setJobShowNewPool(true)}
-                  className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700"
+                  className="mt-1.5 text-xs font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700"
                 >
                   + Add new pool
                 </button>
@@ -933,7 +933,7 @@ export default function ClientDetail() {
                       setJobNewPoolAddress('')
                       setJobNewPoolCoords({ lat: null, lng: null })
                     }}
-                    className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 min-h-tap"
+                    className="px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 min-h-tap"
                   >
                     Cancel
                   </button>
@@ -1036,10 +1036,10 @@ function QuotesSection({ clientId, navigate }) {
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-semibold text-gray-900">Quotes</h2>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Quotes</h2>
         <button
           onClick={() => navigate(`/quotes/new?client=${clientId}`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 dark:bg-pool-950/40 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -1053,7 +1053,7 @@ function QuotesSection({ clientId, navigate }) {
           <div className="w-6 h-6 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : quotes.length === 0 ? (
-        <p className="text-sm text-gray-400 py-4 text-center">No quotes for this client</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">No quotes for this client</p>
       ) : (
         <div className="space-y-2">
           {quotes.map(q => {
@@ -1065,17 +1065,17 @@ function QuotesSection({ clientId, navigate }) {
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                         {q.title || `Quote #${q.id.slice(0, 6)}`}
                       </p>
                       <Badge variant={st} className="text-[10px] shrink-0">{label}</Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       <span>{formatDate(q.created_at)}</span>
-                      {total > 0 && <span className="font-semibold text-gray-700">${total.toFixed(2)}</span>}
+                      {total > 0 && <span className="font-semibold text-gray-700 dark:text-gray-300">${total.toFixed(2)}</span>}
                     </div>
                   </div>
-                  <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -1112,10 +1112,10 @@ function InvoicesSection({ clientId, navigate }) {
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-semibold text-gray-900">Invoices</h2>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Invoices</h2>
         <button
           onClick={() => navigate(`/invoices/new?client=${clientId}`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pool-50 dark:bg-pool-950/40 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-100 active:scale-[0.98] transition-all"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -1129,7 +1129,7 @@ function InvoicesSection({ clientId, navigate }) {
           <div className="w-6 h-6 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : invoices.length === 0 ? (
-        <p className="text-sm text-gray-400 py-4 text-center">No invoices for this client</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">No invoices for this client</p>
       ) : (
         <div className="space-y-2">
           {invoices.map(inv => {
@@ -1140,17 +1140,17 @@ function InvoicesSection({ clientId, navigate }) {
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                         {inv.invoice_number || `Invoice #${inv.id.slice(0, 6)}`}
                       </p>
                       <Badge variant={st} className="text-[10px] shrink-0">{label}</Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       <span>{formatDate(inv.issued_date || inv.created_at)}</span>
-                      {inv.total > 0 && <span className="font-semibold text-gray-700">${Number(inv.total).toFixed(2)}</span>}
+                      {inv.total > 0 && <span className="font-semibold text-gray-700 dark:text-gray-300">${Number(inv.total).toFixed(2)}</span>}
                     </div>
                   </div>
-                  <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </div>

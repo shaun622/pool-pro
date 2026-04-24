@@ -30,17 +30,17 @@ function RatingBar({ star, count, total }) {
   const percent = total > 0 ? (count / total) * 100 : 0
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-500 w-4 text-right">{star}</span>
+      <span className="text-sm text-gray-500 dark:text-gray-400 w-4 text-right">{star}</span>
       <svg className="w-4 h-4 text-amber-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
       </svg>
-      <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
         <div
           className="h-full bg-amber-400 rounded-full transition-all duration-500"
           style={{ width: `${percent}%` }}
         />
       </div>
-      <span className="text-sm text-gray-500 w-8 text-right">{count}</span>
+      <span className="text-sm text-gray-500 dark:text-gray-400 w-8 text-right">{count}</span>
     </div>
   )
 }
@@ -120,7 +120,7 @@ export default function SurveyResults() {
         ) : (
           <>
             {/* Date Filter */}
-            <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
+            <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-5">
               {[
                 { value: 'all', label: 'All Time' },
                 { value: '7d', label: '7 Days' },
@@ -131,7 +131,7 @@ export default function SurveyResults() {
                   key={opt.value}
                   className={cn(
                     'flex-1 py-2 text-xs font-semibold text-center rounded-lg min-h-tap transition-all',
-                    dateFilter === opt.value ? 'bg-white text-gray-900 shadow-card' : 'text-gray-500'
+                    dateFilter === opt.value ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-card' : 'text-gray-500 dark:text-gray-400'
                   )}
                   onClick={() => setDateFilter(opt.value)}
                 >
@@ -144,9 +144,9 @@ export default function SurveyResults() {
             <Card className="mb-4">
               <div className="flex items-center gap-6">
                 <div className="text-center">
-                  <div className="text-4xl font-bold text-gray-900">{avgRating}</div>
+                  <div className="text-4xl font-bold text-gray-900 dark:text-gray-100">{avgRating}</div>
                   <StarDisplay rating={Math.round(Number(avgRating))} size="lg" />
-                  <p className="text-xs text-gray-500 mt-1">{totalResponses} response{totalResponses !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{totalResponses} response{totalResponses !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="flex-1 space-y-1.5">
                   {distribution.map(d => (
@@ -157,7 +157,7 @@ export default function SurveyResults() {
             </Card>
 
             {/* Recent Reviews */}
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2.5">
               Recent Reviews
             </h3>
             <div className="space-y-2.5">
@@ -165,15 +165,15 @@ export default function SurveyResults() {
                 <Card key={survey.id}>
                   <div className="flex items-start justify-between mb-1">
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {survey.clients?.first_name} {survey.clients?.last_name}
                       </p>
-                      <p className="text-xs text-gray-400">{formatDate(survey.submitted_at)}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">{formatDate(survey.submitted_at)}</p>
                     </div>
                     <StarDisplay rating={survey.rating} />
                   </div>
                   {survey.comment && (
-                    <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
                       {survey.comment}
                     </p>
                   )}

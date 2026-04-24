@@ -213,8 +213,8 @@ export default function JobTypeTemplates() {
         title="Job Types"
         backTo="/settings"
         right={
-          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors">
-            <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors">
+            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -250,21 +250,21 @@ export default function JobTypeTemplates() {
                   <div className="flex items-start gap-3">
                     <div className="w-3 h-3 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: t.color || '#0EA5E9' }} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{t.name}</p>
-                      {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.name}</p>
+                      {t.description && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t.description}</p>}
                       <div className="flex items-center gap-3 mt-1.5">
                         {t.default_tasks?.length > 0 && (
-                          <span className="text-[11px] text-gray-400">{t.default_tasks.length} tasks</span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">{t.default_tasks.length} tasks</span>
                         )}
                         {t.estimated_duration_minutes && (
-                          <span className="text-[11px] text-gray-400">{formatDuration(t.estimated_duration_minutes)}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">{formatDuration(t.estimated_duration_minutes)}</span>
                         )}
                         {t.default_price && (
-                          <span className="text-[11px] text-pool-600 font-medium">${Number(t.default_price).toFixed(0)}</span>
+                          <span className="text-[11px] text-pool-600 dark:text-pool-400 font-medium">${Number(t.default_price).toFixed(0)}</span>
                         )}
                       </div>
                     </div>
-                    <svg className="w-4 h-4 text-gray-300 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -278,7 +278,7 @@ export default function JobTypeTemplates() {
           <div className="mt-5 space-y-3 animate-fade-in">
             <div className="flex items-center justify-between">
               <h3 className="section-title">Suggested Job Types</h3>
-              <button onClick={addAllSuggested} className="text-xs text-pool-600 font-semibold min-h-tap flex items-center hover:text-pool-700">
+              <button onClick={addAllSuggested} className="text-xs text-pool-600 dark:text-pool-400 font-semibold min-h-tap flex items-center hover:text-pool-700">
                 Add all
               </button>
             </div>
@@ -290,15 +290,15 @@ export default function JobTypeTemplates() {
                     <div className="flex items-start gap-3">
                       <div className="w-3 h-3 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: jt.color }} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900">{jt.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{jt.description}</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{jt.name}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{jt.description}</p>
                         <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-[11px] text-gray-400">{jt.default_tasks.length} tasks</span>
-                          <span className="text-[11px] text-gray-400">{formatDuration(jt.estimated_duration_minutes)}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">{jt.default_tasks.length} tasks</span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">{formatDuration(jt.estimated_duration_minutes)}</span>
                         </div>
                       </div>
                       {!alreadyAdded ? (
-                        <button onClick={() => addSuggested(jt)} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 transition-colors shrink-0">
+                        <button onClick={() => addSuggested(jt)} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors shrink-0">
                           <svg className="w-5 h-5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                           </svg>
@@ -354,28 +354,28 @@ export default function JobTypeTemplates() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-gray-600">Color</label>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">Color</label>
             <div className="flex items-center gap-3">
               <input
                 type="color"
                 value={form.color}
                 onChange={e => setForm(prev => ({ ...prev, color: e.target.value }))}
-                className="w-11 h-11 rounded-xl border-2 border-gray-200 cursor-pointer p-0.5"
+                className="w-11 h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer p-0.5"
               />
-              <span className="text-sm text-gray-400 font-mono">{form.color}</span>
+              <span className="text-sm text-gray-400 dark:text-gray-500 font-mono">{form.color}</span>
             </div>
           </div>
 
           {/* Tasks */}
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1.5">Default Tasks</label>
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1.5">Default Tasks</label>
             {form.default_tasks.length > 0 && (
               <div className="space-y-1.5 mb-2">
                 {form.default_tasks.map((task, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                    <span className="text-xs text-gray-500 w-5 shrink-0">{i + 1}.</span>
-                    <span className="text-sm text-gray-700 flex-1">{task}</span>
-                    <button type="button" onClick={() => removeTask(i)} className="text-gray-300 hover:text-red-500 shrink-0">
+                  <div key={i} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 w-5 shrink-0">{i + 1}.</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{task}</span>
+                    <button type="button" onClick={() => removeTask(i)} className="text-gray-300 dark:text-gray-600 hover:text-red-500 shrink-0">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>

@@ -188,8 +188,8 @@ export default function Automations() {
         title="Automations"
         backTo="/settings"
         right={
-          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors">
-            <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors">
+            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -197,17 +197,17 @@ export default function Automations() {
       />
       <PageWrapper>
         {/* Tab toggle */}
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
+        <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-5">
           <button
             className={cn('flex-1 py-2.5 text-sm font-semibold text-center rounded-lg min-h-tap transition-all',
-              !showLogs ? 'bg-white text-gray-900 shadow-card' : 'text-gray-500')}
+              !showLogs ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-card' : 'text-gray-500 dark:text-gray-400')}
             onClick={() => setShowLogs(false)}
           >
             Rules ({rules.length})
           </button>
           <button
             className={cn('flex-1 py-2.5 text-sm font-semibold text-center rounded-lg min-h-tap transition-all',
-              showLogs ? 'bg-white text-gray-900 shadow-card' : 'text-gray-500')}
+              showLogs ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-card' : 'text-gray-500 dark:text-gray-400')}
             onClick={() => setShowLogs(true)}
           >
             Activity Log
@@ -234,17 +234,17 @@ export default function Automations() {
                   <Card key={rule.id} onClick={() => openEdit(rule)}>
                     <div className="flex items-start gap-3">
                       <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-sm',
-                        rule.is_active ? 'bg-green-50' : 'bg-gray-100')}>
+                        rule.is_active ? 'bg-green-50' : 'bg-gray-100 dark:bg-gray-800')}>
                         {TRIGGER_ICONS[rule.trigger_event] || '⚡'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <p className={cn('text-sm font-semibold truncate', rule.is_active ? 'text-gray-900' : 'text-gray-400')}>
+                          <p className={cn('text-sm font-semibold truncate', rule.is_active ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500')}>
                             {rule.name}
                           </p>
                           {!rule.is_active && <Badge variant="default">Paused</Badge>}
                         </div>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {triggerLabel(rule.trigger_event)} → {rule.action_type === 'both' ? 'Email + SMS' : rule.action_type === 'send_sms' ? 'SMS' : 'Email'}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
@@ -252,7 +252,7 @@ export default function Automations() {
                             {delayLabel(rule.delay_minutes)}
                           </Badge>
                           {rule.communication_templates?.name && (
-                            <span className="text-[11px] text-gray-400 truncate">{rule.communication_templates.name}</span>
+                            <span className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{rule.communication_templates.name}</span>
                           )}
                         </div>
                       </div>
@@ -261,7 +261,7 @@ export default function Automations() {
                         className={cn('relative w-11 h-6 rounded-full transition-colors shrink-0 mt-1',
                           rule.is_active ? 'bg-green-500' : 'bg-gray-300')}
                       >
-                        <div className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
+                        <div className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white dark:bg-gray-900 shadow transition-transform',
                           rule.is_active ? 'translate-x-[22px]' : 'translate-x-0.5')} />
                       </button>
                     </div>
@@ -274,7 +274,7 @@ export default function Automations() {
           /* Activity Log */
           logs.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-sm text-gray-400">No messages sent yet</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">No messages sent yet</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -285,15 +285,15 @@ export default function Automations() {
                       log.status === 'sent' ? 'bg-green-500' : log.status === 'failed' ? 'bg-red-500' : 'bg-amber-500')} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-gray-900 truncate">{log.template_name || 'Message'}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{log.template_name || 'Message'}</p>
                         <Badge variant={log.channel === 'sms' ? 'success' : 'primary'} className="text-[10px] shrink-0">
                           {log.channel?.toUpperCase()}
                         </Badge>
                       </div>
-                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
                         {log.recipient_email || log.recipient_phone}
                       </p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">{formatDate(log.sent_at)}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{formatDate(log.sent_at)}</p>
                       {log.error_message && (
                         <p className="text-xs text-red-500 mt-0.5">{log.error_message}</p>
                       )}
@@ -345,7 +345,7 @@ export default function Automations() {
             onChange={e => setForm(prev => ({ ...prev, template_id: e.target.value }))}
           />
           {templates.length === 0 && (
-            <p className="text-xs text-amber-600 bg-amber-50 p-3 rounded-xl">
+            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl">
               No message templates found. Create templates in Settings → Message Templates first.
             </p>
           )}

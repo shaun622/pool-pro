@@ -225,8 +225,8 @@ export default function JobDetail() {
 
   const headerAction = job ? (
     <button onClick={openEditModal}
-      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors">
-      <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800/80 transition-colors">
+      <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
       </svg>
     </button>
@@ -251,7 +251,7 @@ export default function JobDetail() {
         <Header title="Work Order" backTo="/work-orders" />
         <PageWrapper>
           <div className="text-center py-20">
-            <p className="text-gray-500">Job not found</p>
+            <p className="text-gray-500 dark:text-gray-400">Job not found</p>
             <Button className="mt-4" onClick={() => navigate('/work-orders')}>Back to Work Orders</Button>
           </div>
         </PageWrapper>
@@ -278,7 +278,7 @@ export default function JobDetail() {
       <PageWrapper>
         {/* Mini map hero */}
         {hasCoords && MAPBOX_TILE_URL && (
-          <div className="h-44 rounded-2xl overflow-hidden border border-gray-100 shadow-card mb-4">
+          <div className="h-44 rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-card mb-4">
             <MapContainer
               center={[lat, lng]}
               zoom={15}
@@ -293,12 +293,12 @@ export default function JobDetail() {
         )}
 
         {/* Hero title card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-4 mb-4">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card p-4 mb-4">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="min-w-0 flex-1">
-              <h2 className="text-xl font-bold text-gray-900 leading-tight">{job.title}</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight">{job.title}</h2>
               {job.clients?.name && (
-                <p className="text-sm text-gray-500 mt-0.5">{job.clients.name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{job.clients.name}</p>
               )}
             </div>
             <Badge variant={JOB_STATUS_BADGE[job.status]} className="shrink-0">
@@ -307,13 +307,13 @@ export default function JobDetail() {
           </div>
 
           {/* Key facts row */}
-          <div className="flex items-center gap-4 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
             {job.scheduled_date && (
               <div className="flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <span className="font-medium text-gray-700">{formatDate(job.scheduled_date)}</span>
+                <span className="font-medium text-gray-700 dark:text-gray-300">{formatDate(job.scheduled_date)}</span>
               </div>
             )}
             {timeLabel && (
@@ -321,7 +321,7 @@ export default function JobDetail() {
                 <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="font-medium text-gray-700">{timeLabel}</span>
+                <span className="font-medium text-gray-700 dark:text-gray-300">{timeLabel}</span>
               </div>
             )}
             {job.price && (
@@ -355,7 +355,7 @@ export default function JobDetail() {
                 className={cn('flex items-center justify-center gap-1.5 py-3 rounded-xl text-sm font-semibold active:scale-[0.98] transition-all disabled:opacity-50',
                   job.status === 'in_progress'
                     ? 'flex-1 bg-gradient-brand text-white shadow-md shadow-pool-500/20'
-                    : 'flex-1 bg-white border border-gray-200 text-gray-700 shadow-card hover:bg-gray-50'
+                    : 'flex-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 shadow-card hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800'
                 )}
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -368,7 +368,7 @@ export default function JobDetail() {
               <button
                 onClick={() => updateStatus('on_hold')}
                 disabled={statusUpdating}
-                className="px-4 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-card active:scale-[0.98] transition-all disabled:opacity-50"
+                className="px-4 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold shadow-card active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -391,7 +391,7 @@ export default function JobDetail() {
         {/* Completed banner — pool-blue theme */}
         {job.status === 'completed' && (
           <div className="mb-4">
-            <div className="p-3.5 bg-pool-50 border border-pool-100 rounded-2xl flex items-center gap-3 mb-2">
+            <div className="p-3.5 bg-pool-50 dark:bg-pool-950/40 border border-pool-100 rounded-2xl flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0 shadow-md shadow-pool-500/20">
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -400,7 +400,7 @@ export default function JobDetail() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-pool-900">Job Completed</p>
                 {job.completed_at && (
-                  <p className="text-xs text-pool-600">{formatDate(job.completed_at)}</p>
+                  <p className="text-xs text-pool-600 dark:text-pool-400">{formatDate(job.completed_at)}</p>
                 )}
               </div>
             </div>
@@ -413,7 +413,7 @@ export default function JobDetail() {
                 params.set('ref', `work-order:${job.id}`)
                 navigate(`/invoices/new?${params.toString()}`)
               }}
-              className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap"
+              className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white dark:bg-gray-900 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -425,18 +425,18 @@ export default function JobDetail() {
 
         {/* Details Card */}
         <Card className="mb-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Details</h3>
+          <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Details</h3>
           <div className="space-y-3">
             {job.scheduled_date && (
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-pool-50 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400">Scheduled</p>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Scheduled</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {formatDate(job.scheduled_date)}
                     {job.scheduled_time && ` at ${job.scheduled_time}`}
                   </p>
@@ -445,27 +445,27 @@ export default function JobDetail() {
             )}
             {job.price && (
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-pool-50 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400">Price</p>
-                  <p className="text-sm font-medium text-gray-900">{formatCurrency(job.price)}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Price</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatCurrency(job.price)}</p>
                 </div>
               </div>
             )}
             {job.notes && (
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400">Notes</p>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.notes}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Notes</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{job.notes}</p>
                 </div>
               </div>
             )}
@@ -475,7 +475,7 @@ export default function JobDetail() {
         {/* Client Card */}
         {job.clients && (
           <Card className="mb-3" onClick={() => navigate(`/clients/${job.clients.id}`)}>
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Client</h3>
+            <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Client</h3>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0">
                 <span className="text-sm font-bold text-white">
@@ -483,24 +483,24 @@ export default function JobDetail() {
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-gray-900 truncate">{job.clients.name}</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{job.clients.name}</p>
                 {job.clients.phone && (
-                  <p className="text-xs text-gray-400 truncate">{job.clients.phone}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{job.clients.phone}</p>
                 )}
               </div>
               <div className="flex gap-1 shrink-0">
                 {job.clients.phone && (
                   <a href={`tel:${job.clients.phone}`} onClick={e => e.stopPropagation()}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 transition-colors">
-                    <svg className="w-4 h-4 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors">
+                    <svg className="w-4 h-4 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                     </svg>
                   </a>
                 )}
                 {job.clients.email && (
                   <a href={`mailto:${job.clients.email}`} onClick={e => e.stopPropagation()}
-                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 transition-colors">
-                    <svg className="w-4 h-4 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors">
+                    <svg className="w-4 h-4 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                   </a>
@@ -513,20 +513,20 @@ export default function JobDetail() {
         {/* Pool Card */}
         {job.pools && (
           <Card className="mb-3" onClick={() => navigate(`/pools/${job.pools.id}`)}>
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Pool</h3>
+            <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Pool</h3>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-pool-50 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="w-10 h-10 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-gray-900 truncate">{job.pools.address}</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{job.pools.address}</p>
                 {job.pools.pool_type && (
-                  <p className="text-xs text-gray-400 capitalize">{job.pools.pool_type}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{job.pools.pool_type}</p>
                 )}
               </div>
-              <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </div>
@@ -536,31 +536,31 @@ export default function JobDetail() {
         {/* Quote Reference */}
         {quote && (
           <Card className="mb-3">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">From Quote</h3>
+            <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">From Quote</h3>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-bold text-gray-900">Quote: {formatCurrency(quote.total)}</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Quote: {formatCurrency(quote.total)}</p>
               <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold',
-                quote.status === 'accepted' || quote.status === 'converted' ? 'bg-green-50 text-green-700' :
-                quote.status === 'sent' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600')}>
+                quote.status === 'accepted' || quote.status === 'converted' ? 'bg-green-50 dark:bg-green-950/40 text-green-700' :
+                quote.status === 'sent' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400')}>
                 {quote.status === 'converted' ? 'Converted' : quote.status === 'accepted' ? 'Accepted' : quote.status?.charAt(0).toUpperCase() + quote.status?.slice(1)}
               </span>
             </div>
             {quote.responded_at && (
-              <p className="text-xs text-gray-400 mb-2">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
                 {quote.status === 'accepted' ? 'Accepted' : 'Responded'} {new Date(quote.responded_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
               </p>
             )}
             <div className="space-y-1 mb-3">
               {(quote.line_items || []).map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700 truncate flex-1">{item.description}</span>
-                  <span className="font-medium text-gray-900 shrink-0 ml-2">{formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</span>
+                  <span className="text-gray-700 dark:text-gray-300 truncate flex-1">{item.description}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100 shrink-0 ml-2">{formatCurrency((item.quantity || 1) * (item.unit_price || 0))}</span>
                 </div>
               ))}
             </div>
             <button
               onClick={() => navigate(`/quotes/${quote.id}`)}
-              className="text-sm font-semibold text-pool-600 hover:text-pool-700 flex items-center gap-1"
+              className="text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 flex items-center gap-1"
             >
               View Quote
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -573,7 +573,7 @@ export default function JobDetail() {
         {/* Delete */}
         <div className="mt-6 mb-4">
           <button onClick={deleteJob}
-            className="w-full py-3 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+            className="w-full py-3 text-sm font-medium text-red-500 hover:text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors">
             Delete Job
           </button>
         </div>
@@ -633,8 +633,8 @@ export default function JobDetail() {
             ]}
           />
           {showAddTech && (
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">New Technician</h4>
               <Input
                 label="Name"
                 value={newTechForm.name}

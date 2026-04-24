@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -182,14 +181,11 @@ export default function Dashboard() {
 
   if (bizLoading || loading) {
     return (
-      <>
-        <Header title="Dashboard" right={<ActivityBell onClick={() => setActivityOpen(true)} />} />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
-      </>
+      <PageWrapper>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </PageWrapper>
     )
   }
 
@@ -212,7 +208,6 @@ export default function Dashboard() {
 
   return (
     <>
-      <Header title="Dashboard" right={<ActivityBell onClick={() => setActivityOpen(true)} />} />
       <PageWrapper width="wide">
         {/* Hero Welcome */}
         <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-brand p-5 md:p-8 mb-6 shadow-elevated shadow-pool-500/10">
@@ -220,26 +215,29 @@ export default function Dashboard() {
           <div className="absolute -top-8 -right-8 w-32 md:w-56 h-32 md:h-56 rounded-full bg-white/10" />
           <div className="absolute -bottom-4 -left-4 w-20 md:w-40 h-20 md:h-40 rounded-full bg-white/5" />
 
-          <div className="relative md:flex md:items-end md:justify-between md:gap-8">
-            <div>
+          <div className="relative flex items-start justify-between gap-3 md:gap-8 md:items-end">
+            <div className="min-w-0 flex-1">
               <p className="text-pool-100 text-sm font-medium">{greeting()}</p>
-              <h2 className="text-xl md:text-3xl font-bold text-white mt-0.5">
+              <h2 className="text-xl md:text-3xl font-bold text-white mt-0.5 truncate">
                 {business?.name || 'Welcome'}
               </h2>
               <p className="text-pool-200 text-sm md:text-base mt-1">
                 {formatDate(new Date())}
               </p>
             </div>
-            <div className="hidden md:flex items-center gap-3">
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Activity bell — visible on all sizes */}
+              <ActivityBell onClick={() => setActivityOpen(true)} />
+              {/* Desktop: nav buttons */}
               <button
                 onClick={() => navigate('/route')}
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-white/15 border border-white/25 hover:bg-white/25 backdrop-blur transition-colors"
+                className="hidden md:inline-flex px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-white/15 border border-white/25 hover:bg-white/25 backdrop-blur transition-colors"
               >
                 View Schedule
               </button>
               <button
                 onClick={() => navigate('/work-orders')}
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-pool-700 bg-white hover:bg-pool-50 shadow-md transition-colors"
+                className="hidden md:inline-flex px-5 py-2.5 rounded-xl text-sm font-semibold text-pool-700 bg-white hover:bg-pool-50 shadow-md transition-colors"
               >
                 Work Orders
               </button>
@@ -252,11 +250,11 @@ export default function Dashboard() {
           <section className="mb-6 animate-fade-in">
             <Card className="overflow-hidden">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-gray-900">Getting Started</h3>
-                <span className="text-xs font-semibold text-pool-600 bg-pool-50 px-2.5 py-0.5 rounded-lg">{completedSteps}/{steps.length}</span>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Getting Started</h3>
+                <span className="text-xs font-semibold text-pool-600 dark:text-pool-400 bg-pool-50 dark:bg-pool-950/40 px-2.5 py-0.5 rounded-lg">{completedSteps}/{steps.length}</span>
               </div>
               {/* Progress bar */}
-              <div className="w-full h-2 bg-gray-100 rounded-full mb-4 overflow-hidden">
+              <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full mb-4 overflow-hidden">
                 <div
                   className="h-2 bg-gradient-brand rounded-full transition-all duration-500"
                   style={{ width: `${(completedSteps / steps.length) * 100}%` }}
@@ -268,8 +266,8 @@ export default function Dashboard() {
                     <div className={cn(
                       'w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold transition-all',
                       step.done
-                        ? 'bg-emerald-100 text-emerald-600'
-                        : 'bg-gray-100 text-gray-400'
+                        ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
                     )}>
                       {step.done ? (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -281,14 +279,14 @@ export default function Dashboard() {
                     </div>
                     <span className={cn(
                       'text-sm flex-1',
-                      step.done ? 'text-gray-400 line-through' : 'text-gray-900 font-medium'
+                      step.done ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100 font-medium'
                     )}>
                       {step.label}
                     </span>
                     {!step.done && step.action && (
                       <button
                         onClick={step.action}
-                        className="text-xs text-pool-600 font-semibold min-h-tap flex items-center px-2 hover:text-pool-700"
+                        className="text-xs text-pool-600 dark:text-pool-400 font-semibold min-h-tap flex items-center px-2 hover:text-pool-700"
                       >
                         {step.actionLabel}
                         <svg className="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -306,17 +304,17 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
           {[
-            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900', to: '/route' },
-            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600' : 'text-gray-900', to: '/route' },
-            { label: 'Work Orders', value: stats.activeJobs, sub: 'in progress', color: 'text-gray-900', to: '/work-orders' },
-            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-gray-900', to: '/work-orders?tab=quotes' },
+            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900 dark:text-gray-100', to: '/route' },
+            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100', to: '/route' },
+            { label: 'Work Orders', value: stats.activeJobs, sub: 'in progress', color: 'text-gray-900 dark:text-gray-100', to: '/work-orders' },
+            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-gray-900 dark:text-gray-100', to: '/work-orders?tab=quotes' },
           ].map((stat, i) => (
             <Card key={i} onClick={() => navigate(stat.to)}>
               <p className="section-title mb-1">{stat.label}</p>
-              <p className={cn('text-2xl font-bold tracking-tight', stat.color)}>
+              <p className={cn('text-2xl font-bold tracking-tight tabular-nums', stat.color)}>
                 {stat.value}
               </p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{stat.sub}</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{stat.sub}</p>
             </Card>
           ))}
         </div>
@@ -329,7 +327,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="section-title">Today's Summary</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                 {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
               </p>
             </div>
@@ -341,22 +339,22 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   {todaySummary.completed >= todaySummary.total ? (
-                    <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600 dark:text-green-400">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                       All done!
                     </div>
                   ) : (
-                    <p className="text-sm font-semibold text-gray-900">
-                      {todaySummary.completed} of {todaySummary.total} stops completed
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      <span className="tabular-nums">{todaySummary.completed} of {todaySummary.total}</span> stops completed
                     </p>
                   )}
-                  <span className="text-xs font-semibold text-gray-400">
+                  <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 tabular-nums">
                     {Math.round((todaySummary.completed / todaySummary.total) * 100)}%
                   </span>
                 </div>
-                <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                   <div
                     className={cn(
                       'h-2.5 rounded-full transition-all duration-700',
@@ -368,10 +366,10 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="flex items-center gap-2.5 py-1">
-                <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg className="w-5 h-5 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm text-gray-500">No stops scheduled for today</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">No stops scheduled for today</p>
               </div>
             )}
 
@@ -381,48 +379,48 @@ export default function Dashboard() {
                 onClick={() => navigate('/route')}
                 className={cn(
                   'rounded-xl py-2.5 text-center transition-colors',
-                  todaySummary.overdue > 0 ? 'bg-red-50 hover:bg-red-100' : 'bg-gray-50 hover:bg-gray-100'
+                  todaySummary.overdue > 0 ? 'bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60' : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
                 )}
               >
-                <p className={cn('text-lg font-bold', todaySummary.overdue > 0 ? 'text-red-600' : 'text-gray-400')}>
+                <p className={cn('text-lg font-bold tabular-nums', todaySummary.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500')}>
                   {todaySummary.overdue}
                 </p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Overdue</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Overdue</p>
               </button>
               <button
                 onClick={() => navigate('/route')}
-                className="rounded-xl py-2.5 text-center bg-pool-50 hover:bg-pool-100 transition-colors"
+                className="rounded-xl py-2.5 text-center bg-pool-50 dark:bg-pool-950/40 hover:bg-pool-100 dark:hover:bg-pool-950/60 transition-colors"
               >
-                <p className="text-lg font-bold text-pool-600">{todaySummary.dueToday}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Due Today</p>
+                <p className="text-lg font-bold text-pool-600 dark:text-pool-400 tabular-nums">{todaySummary.dueToday}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Due Today</p>
               </button>
               <button
                 onClick={() => navigate('/route')}
                 className={cn(
                   'rounded-xl py-2.5 text-center transition-colors',
-                  todaySummary.completed > 0 ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50 hover:bg-gray-100'
+                  todaySummary.completed > 0 ? 'bg-green-50 dark:bg-green-950/40 hover:bg-green-100 dark:hover:bg-green-950/60' : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
                 )}
               >
-                <p className={cn('text-lg font-bold', todaySummary.completed > 0 ? 'text-green-600' : 'text-gray-400')}>
+                <p className={cn('text-lg font-bold tabular-nums', todaySummary.completed > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500')}>
                   {todaySummary.completed}
                 </p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Completed</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Completed</p>
               </button>
             </div>
 
             {/* Notes & Alerts */}
             {todaySummary.notes.length > 0 && (
-              <div className="border-t border-gray-100 pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Notes & Alerts</p>
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">Notes & Alerts</p>
                 <div className="space-y-2">
                   {todaySummary.notes.map((item, i) => (
                     <div key={i} className="flex items-start gap-2.5">
                       <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
-                      <p className="text-sm text-gray-700 truncate">
-                        <span className="font-semibold text-gray-900">{item.name}</span>
-                        <span className="text-gray-400 mx-1">—</span>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{item.name}</span>
+                        <span className="text-gray-400 dark:text-gray-500 mx-1">—</span>
                         {item.note}
                       </p>
                     </div>
@@ -434,7 +432,7 @@ export default function Dashboard() {
             {/* View Full Schedule link */}
             <button
               onClick={() => navigate('/route')}
-              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-pool-600 hover:text-pool-700 pt-1 min-h-tap transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 pt-1 min-h-tap transition-colors"
             >
               View Full Schedule
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -450,19 +448,19 @@ export default function Dashboard() {
         {recentActivity.length > 0 && (
           <section className="mb-6 md:mb-0">
             <h3 className="section-title mb-3">Recent Activity</h3>
-            <Card className="p-0 overflow-hidden divide-y divide-gray-100">
+            <Card className="!p-0 overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
               {recentActivity.map((record, i) => (
-                <div key={record.id} className="px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div key={record.id} className="px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                       {record.pools?.address || 'Pool'}
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
                       {record.technician_name && `${record.technician_name} · `}
                       {formatDate(record.serviced_at)}
                     </p>

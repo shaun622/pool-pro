@@ -259,7 +259,7 @@ export default function Reports() {
                 'px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors min-h-tap',
                 dateRange === range.value
                   ? 'bg-pool-500 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200'
               )}
             >
               {range.label}
@@ -299,7 +299,7 @@ export default function Reports() {
 
             {/* Revenue Chart */}
             <Card className="p-4">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">
                 Revenue (This Year)
               </h3>
               {revenueByMonth.some(d => d.revenue > 0) ? (
@@ -328,13 +328,13 @@ export default function Reports() {
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-gray-400 text-center py-8">No revenue data yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No revenue data yet</p>
               )}
             </Card>
 
             {/* Jobs by Status */}
             <Card className="p-4">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">
                 Jobs by Status
               </h3>
               {jobsByStatus.length > 0 ? (
@@ -359,12 +359,12 @@ export default function Reports() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-gray-400 text-center py-8">No job data yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No job data yet</p>
               )}
               {jobsByStatus.length > 0 && (
                 <div className="flex flex-wrap gap-3 mt-2 justify-center">
                   {jobsByStatus.map((entry, index) => (
-                    <div key={entry.name} className="flex items-center gap-1.5 text-xs text-gray-600">
+                    <div key={entry.name} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                       <div
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
@@ -379,7 +379,7 @@ export default function Reports() {
 
             {/* Chemical Usage */}
             <Card className="p-4">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">
                 Top Chemicals Used
               </h3>
               {chemicalUsage.length > 0 ? (
@@ -401,13 +401,13 @@ export default function Reports() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-sm text-gray-400 text-center py-8">No chemical data yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No chemical data yet</p>
               )}
             </Card>
 
             {/* Staff Performance */}
             <Card className="p-4">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">
                 Staff Performance
               </h3>
               {staffPerformance.length > 0 ? (
@@ -418,10 +418,10 @@ export default function Reports() {
                     return (
                       <div key={index}>
                         <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm font-medium text-gray-700">{staff.name}</span>
-                          <span className="text-sm text-gray-500">{staff.jobs} jobs</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{staff.name}</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">{staff.jobs} jobs</span>
                         </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                           <div
                             className="bg-gradient-brand h-2 rounded-full transition-all duration-500"
                             style={{ width: `${pct}%` }}
@@ -432,7 +432,7 @@ export default function Reports() {
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-gray-400 text-center py-8">No staff data yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No staff data yet</p>
               )}
             </Card>
           </div>

@@ -191,8 +191,8 @@ export default function CommunicationTemplates() {
         title="Message Templates"
         backTo="/settings"
         right={
-          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors">
-            <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors">
+            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -230,24 +230,24 @@ export default function CommunicationTemplates() {
                     <Card key={t.id} onClick={() => openEdit(t)}>
                       <div className="flex items-start gap-3">
                         <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
-                          t.type === 'sms' ? 'bg-green-50' : 'bg-blue-50')}>
+                          t.type === 'sms' ? 'bg-green-50 dark:bg-green-950/40' : 'bg-blue-50 dark:bg-blue-950/40')}>
                           {t.type === 'sms' ? (
-                            <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
                           ) : (
-                            <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{t.name}</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{t.name}</p>
                             {!t.is_active && <Badge variant="default">Disabled</Badge>}
                           </div>
-                          {t.subject && <p className="text-xs text-gray-500 truncate">{t.subject}</p>}
-                          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{t.body}</p>
+                          {t.subject && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{t.subject}</p>}
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 line-clamp-1">{t.body}</p>
                         </div>
                         <Badge variant={TRIGGER_COLORS[t.trigger_type] || 'default'} className="shrink-0 mt-0.5">
                           {t.type.toUpperCase()}
@@ -295,19 +295,19 @@ export default function CommunicationTemplates() {
           )}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-sm font-medium text-gray-600">Message Body</label>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">Message Body</label>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowPlaceholders(!showPlaceholders)}
-                  className="text-[11px] text-pool-600 font-semibold hover:text-pool-700"
+                  className="text-[11px] text-pool-600 dark:text-pool-400 font-semibold hover:text-pool-700"
                 >
                   {showPlaceholders ? 'Hide' : '+ Insert Variable'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowPreview(!showPreview)}
-                  className="text-[11px] text-gray-500 font-semibold hover:text-gray-700"
+                  className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-700 dark:text-gray-300"
                 >
                   {showPreview ? 'Edit' : 'Preview'}
                 </button>
@@ -315,13 +315,13 @@ export default function CommunicationTemplates() {
             </div>
 
             {showPlaceholders && (
-              <div className="flex flex-wrap gap-1.5 mb-2 p-3 bg-gray-50 rounded-xl animate-fade-in">
+              <div className="flex flex-wrap gap-1.5 mb-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl animate-fade-in">
                 {PLACEHOLDERS.map(p => (
                   <button
                     key={p.key}
                     type="button"
                     onClick={() => insertPlaceholder(p.key)}
-                    className="text-[11px] px-2 py-1 bg-white border border-gray-200 rounded-lg text-pool-600 font-medium hover:bg-pool-50 transition-colors"
+                    className="text-[11px] px-2 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-pool-600 font-medium hover:bg-pool-50 transition-colors"
                   >
                     {p.key}
                   </button>
@@ -330,13 +330,13 @@ export default function CommunicationTemplates() {
             )}
 
             {showPreview ? (
-              <div className="p-4 bg-gray-50 rounded-xl text-sm text-gray-700 whitespace-pre-wrap leading-relaxed min-h-[120px]">
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed min-h-[120px]">
                 {form.type === 'email' && form.subject && (
-                  <p className="font-semibold text-gray-900 mb-2 pb-2 border-b border-gray-200">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
                     {renderTemplate(form.subject, previewVars)}
                   </p>
                 )}
-                {renderTemplate(form.body, previewVars) || <span className="text-gray-400 italic">Empty template</span>}
+                {renderTemplate(form.body, previewVars) || <span className="text-gray-400 dark:text-gray-500 italic">Empty template</span>}
               </div>
             ) : (
               <TextArea
@@ -349,7 +349,7 @@ export default function CommunicationTemplates() {
               />
             )}
             {form.type === 'sms' && (
-              <p className="text-[11px] text-gray-400 mt-1">
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
                 {form.body.length}/160 characters {form.body.length > 160 ? `(${Math.ceil(form.body.length / 153)} segments)` : ''}
               </p>
             )}
@@ -360,9 +360,9 @@ export default function CommunicationTemplates() {
               type="checkbox"
               checked={form.is_active}
               onChange={e => setForm(prev => ({ ...prev, is_active: e.target.checked }))}
-              className="w-4 h-4 rounded border-gray-300 text-pool-600 focus:ring-pool-500"
+              className="w-4 h-4 rounded border-gray-300 text-pool-600 dark:text-pool-400 focus:ring-pool-500"
             />
-            <span className="text-sm text-gray-600">Active</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Active</span>
           </label>
 
           <div className="flex gap-3 pt-2">

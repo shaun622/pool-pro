@@ -301,11 +301,11 @@ export default function NewService() {
     if (!lastReadings || lastReadings[key] == null) return null
     const current = parseFloat(readings[key])
     if (isNaN(current)) return (
-      <span className="text-xs text-gray-400">Last: {lastReadings[key]}</span>
+      <span className="text-xs text-gray-400 dark:text-gray-500">Last: {lastReadings[key]}</span>
     )
     const diff = current - lastReadings[key]
     if (diff === 0) return (
-      <span className="text-xs text-gray-400">— no change (was {lastReadings[key]})</span>
+      <span className="text-xs text-gray-400 dark:text-gray-500">— no change (was {lastReadings[key]})</span>
     )
     const arrow = diff > 0 ? '↑' : '↓'
     const color = diff > 0 ? 'text-red-500' : 'text-blue-500'
@@ -346,7 +346,7 @@ export default function NewService() {
                 onClick={() => setStep(i)}
                 className={cn(
                   'text-xs font-medium min-h-[44px] px-1 flex items-center',
-                  i === step ? 'text-pool-600' : i < step ? 'text-green-600' : 'text-gray-400'
+                  i === step ? 'text-pool-600' : i < step ? 'text-green-600' : 'text-gray-400 dark:text-gray-500'
                 )}
               >
                 {label}
@@ -365,17 +365,17 @@ export default function NewService() {
         {step === 0 && !completed && (
           <div className="space-y-3">
             {/* Client & Pool info */}
-            <Card className="bg-pool-50 border-pool-200">
+            <Card className="bg-pool-50 dark:bg-pool-950/40 border-pool-200">
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
-                  <p className="text-base font-bold text-gray-900">{client?.name || 'Client'}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">{pool?.address}</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name || 'Client'}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
                 </div>
                 <Badge variant={pool?.type || 'default'} className="shrink-0 capitalize">{pool?.type || 'pool'}</Badge>
               </div>
               <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-pool-200/50">
                 {client?.phone && (
-                  <a href={`tel:${client.phone}`} className="flex items-center gap-2 text-sm text-pool-600 font-medium">
+                  <a href={`tel:${client.phone}`} className="flex items-center gap-2 text-sm text-pool-600 dark:text-pool-400 font-medium">
                     <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                     </svg>
@@ -383,20 +383,20 @@ export default function NewService() {
                   </a>
                 )}
                 {client?.email && (
-                  <a href={`mailto:${client.email}`} className="flex items-center gap-2 text-sm text-pool-600 font-medium">
+                  <a href={`mailto:${client.email}`} className="flex items-center gap-2 text-sm text-pool-600 dark:text-pool-400 font-medium">
                     <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                     {client.email}
                   </a>
                 )}
-                <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {pool?.schedule_frequency && <span>{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}</span>}
                   {pool?.volume_litres && <span>· {Number(pool.volume_litres).toLocaleString()}L</span>}
                   {pool?.shape && <span>· {pool.shape}</span>}
                 </div>
                 {pool?.access_notes && (
-                  <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1.5">
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                     </svg>
@@ -418,7 +418,7 @@ export default function NewService() {
                 ]}
               />
             )}
-            <h2 className="text-base font-semibold text-gray-900">Chemical Readings</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chemical Readings</h2>
             {ALL_READING_FIELDS.filter(f => visibleReadings.includes(f.key)).map(({ key, rangeKey, saltOnly }) => {
               if (saltOnly && !isSaltPool) return null
               const info = CHEMICAL_LABELS[key]
@@ -430,9 +430,9 @@ export default function NewService() {
                 <div key={key} className="flex items-center gap-3">
                   <span className={cn('w-3 h-3 rounded-full flex-shrink-0', statusDot(status))} />
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       {info?.label || key}
-                      {info?.unit && <span className="text-gray-400 ml-1">{info.unit}</span>}
+                      {info?.unit && <span className="text-gray-400 dark:text-gray-500 ml-1">{info.unit}</span>}
                     </label>
                     <input
                       type="number"
@@ -453,7 +453,7 @@ export default function NewService() {
                         setVisibleReadings(prev => prev.filter(k => k !== key))
                         handleReadingChange(key, '')
                       }}
-                      className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors mt-5"
+                      className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors mt-5"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -472,7 +472,7 @@ export default function NewService() {
               if (available.length === 0) return null
               return (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Add reading</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Add reading</label>
                   <select
                     className="input"
                     value=""
@@ -497,8 +497,8 @@ export default function NewService() {
             })()}
             {/* Pool & Test Kit Photo — Verified with timestamp + GPS */}
             <div className="mt-6">
-              <h2 className="text-base font-semibold text-gray-900 mb-2">Pool & Test Kit Photo</h2>
-              <p className="text-xs text-gray-500 mb-3">Take a live photo — timestamp and GPS location will be verified automatically</p>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Pool & Test Kit Photo</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Take a live photo — timestamp and GPS location will be verified automatically</p>
               <input
                 ref={photoInputRef}
                 type="file"
@@ -571,16 +571,16 @@ export default function NewService() {
                   <img
                     src={photoPreview}
                     alt="Pool & test kit — verified"
-                    className="w-full rounded-xl border border-gray-200 object-cover"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover"
                   />
                   {photoMeta && (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
                         Verified Time
                       </span>
                       {photoMeta.lat && (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
                           Verified GPS
                         </span>
@@ -595,7 +595,7 @@ export default function NewService() {
                       if (photoInputRef.current) photoInputRef.current.value = ''
                       photoInputRef.current?.click()
                     }}
-                    className="mt-2 w-full text-center text-sm font-medium text-pool-600 hover:text-pool-700 py-2"
+                    className="mt-2 w-full text-center text-sm font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700 py-2"
                   >
                     Retake Photo
                   </button>
@@ -604,7 +604,7 @@ export default function NewService() {
                 <button
                   onClick={() => photoInputRef.current?.click()}
                   disabled={capturingPhoto}
-                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-pool-400 hover:text-pool-500 transition-colors"
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
                 >
                   {capturingPhoto ? (
                     <>
@@ -612,7 +612,7 @@ export default function NewService() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <span className="text-sm font-medium text-pool-600">Processing photo...</span>
+                      <span className="text-sm font-medium text-pool-600 dark:text-pool-400">Processing photo...</span>
                     </>
                   ) : (
                     <>
@@ -621,7 +621,7 @@ export default function NewService() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                       </svg>
                       <span className="text-sm font-medium">Tap to take photo</span>
-                      <span className="text-xs text-gray-400">GPS & timestamp verified automatically</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">GPS & timestamp verified automatically</span>
                     </>
                   )}
                 </button>
@@ -636,7 +636,7 @@ export default function NewService() {
               Next: Tasks
             </Button>
             {!servicePhoto && (
-              <p className="text-xs text-center text-amber-600 mt-1">Photo required to continue</p>
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">Photo required to continue</p>
             )}
           </div>
         )}
@@ -645,8 +645,8 @@ export default function NewService() {
         {step === 1 && !completed && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">Task Checklist</h2>
-              <span className="text-sm text-gray-500">{completedCount}/{tasks.length}</span>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Task Checklist</h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{completedCount}/{tasks.length}</span>
             </div>
 
             {/* Active tasks */}
@@ -659,13 +659,13 @@ export default function NewService() {
                       'flex-1 flex items-center gap-3 px-4 rounded-xl border text-left transition-colors',
                       'min-h-[44px]',
                       task.completed
-                        ? 'bg-green-50 border-green-200 text-green-800'
-                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                        ? 'bg-green-50 dark:bg-green-950/40 border-green-200 text-green-800'
+                        : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800'
                     )}
                   >
                     <span className={cn(
                       'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0',
-                      task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                      task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300 dark:border-gray-600'
                     )}>
                       {task.completed && (
                         <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -677,7 +677,7 @@ export default function NewService() {
                   </button>
                   <button
                     onClick={() => setTasks(prev => prev.filter((_, idx) => idx !== i))}
-                    className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors"
+                    className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -694,7 +694,7 @@ export default function NewService() {
               if (available.length === 0) return null
               return (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Add common task</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Add common task</label>
                   <select
                     className="input"
                     value=""
@@ -715,7 +715,7 @@ export default function NewService() {
 
             {/* Custom task input */}
             <div>
-              <label className="text-xs font-medium text-gray-500 mb-1 block">Add custom task</label>
+              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Add custom task</label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -760,7 +760,7 @@ export default function NewService() {
         {/* Step 3: Chemicals Added */}
         {step === 2 && !completed && (
           <div className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">Chemicals Added</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chemicals Added</h2>
 
             {/* Search to quick-add from library */}
             <div className="relative">
@@ -775,7 +775,7 @@ export default function NewService() {
 
               {/* Dropdown */}
               {chemSearchFocused && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-gray-200 shadow-elevated z-10 max-h-64 overflow-y-auto">
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-elevated z-10 max-h-64 overflow-y-auto">
                   {(() => {
                     const query = chemSearch.toLowerCase().trim()
                     const filtered = chemicalProducts.filter(p =>
@@ -795,19 +795,19 @@ export default function NewService() {
                               setChemSearch('')
                               setChemSearchFocused(false)
                             }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-50 last:border-0"
+                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 active:bg-gray-100 dark:bg-gray-800 transition-colors border-b border-gray-50 last:border-0"
                           >
-                            <div className="w-7 h-7 rounded-lg bg-pool-50 flex items-center justify-center shrink-0">
+                            <div className="w-7 h-7 rounded-lg bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
                               <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                               </svg>
                             </div>
-                            <span className="text-sm font-medium text-gray-900">{p.name}</span>
-                            <span className="text-xs text-gray-400 ml-auto">{p.default_unit || 'L'}</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.name}</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">{p.default_unit || 'L'}</span>
                           </button>
                         ))}
                         {filtered.length === 0 && !query && (
-                          <p className="px-4 py-3 text-sm text-gray-400">No saved chemicals yet</p>
+                          <p className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">No saved chemicals yet</p>
                         )}
                         {query && !exactMatch && (
                           <button
@@ -817,14 +817,14 @@ export default function NewService() {
                               setChemSearch('')
                               setChemSearchFocused(false)
                             }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors border-t border-gray-100"
+                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 active:bg-gray-100 dark:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
                           >
-                            <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                              <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
+                              <svg className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                               </svg>
                             </div>
-                            <span className="text-sm font-medium text-gray-700">Add "<span className="text-gray-900">{chemSearch.trim()}</span>"</span>
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Add "<span className="text-gray-900 dark:text-gray-100">{chemSearch.trim()}</span>"</span>
                           </button>
                         )}
                       </>
@@ -839,7 +839,7 @@ export default function NewService() {
               <Card key={i} className="relative">
                 <button
                   onClick={() => removeChemical(i)}
-                  className="absolute top-2 right-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-400 hover:text-red-600"
+                  className="absolute top-2 right-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-400 hover:text-red-600 dark:text-red-400"
                   aria-label="Remove"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -898,11 +898,11 @@ export default function NewService() {
         {step === 3 && !completed && (
           <div className="space-y-4">
             {/* Pool & Client header */}
-            <Card className="bg-pool-50 border-pool-200">
+            <Card className="bg-pool-50 dark:bg-pool-950/40 border-pool-200">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-base font-bold text-gray-900">{client?.name}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">{pool?.address}</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
                 </div>
                 <Badge variant={pool?.type || 'default'}>{pool?.type}</Badge>
               </div>
@@ -912,7 +912,7 @@ export default function NewService() {
                     <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                     </svg>
-                    <a href={`tel:${client.phone}`} className="text-pool-600 font-medium">{client.phone}</a>
+                    <a href={`tel:${client.phone}`} className="text-pool-600 dark:text-pool-400 font-medium">{client.phone}</a>
                   </div>
                 )}
                 {client?.email && (
@@ -920,11 +920,11 @@ export default function NewService() {
                     <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
-                    <a href={`mailto:${client.email}`} className="text-pool-600 font-medium break-all">{client.email}</a>
+                    <a href={`mailto:${client.email}`} className="text-pool-600 dark:text-pool-400 font-medium break-all">{client.email}</a>
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+              <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>{formatDate(new Date())}</span>
                 <span>{FREQUENCY_LABELS[pool?.schedule_frequency] || pool?.schedule_frequency}</span>
               </div>
@@ -933,7 +933,7 @@ export default function NewService() {
             {/* Pool photo */}
             {photoPreview && (
               <Card>
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Pool & Test Kit Photo</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pool & Test Kit Photo</h3>
                 <img
                   src={photoPreview}
                   alt="Pool & test kit"
@@ -944,9 +944,9 @@ export default function NewService() {
 
             {/* Chemical readings summary */}
             <Card>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Chemical Readings</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemical Readings</h3>
               {lastReadings && (
-                <p className="text-xs text-gray-400 mb-2">Compared to last service</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Compared to last service</p>
               )}
               <div className="space-y-2">
                 {ALL_READING_FIELDS.map(({ key, rangeKey, saltOnly }) => {
@@ -962,31 +962,31 @@ export default function NewService() {
                     <div key={key} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0', statusDot(status))} />
-                        <span className="text-sm text-gray-700">{info?.label}</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{info?.label}</span>
                       </div>
                       <div className="text-right flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-900">{value}</span>
-                        <span className="text-xs text-gray-400">{info?.unit}</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{value}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">{info?.unit}</span>
                         {diff !== null && diff !== 0 && (
                           <span className={cn(
                             'text-xs font-medium px-1.5 py-0.5 rounded',
-                            diff > 0 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                            diff > 0 ? 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400'
                           )}>
                             {diff > 0 ? '↑' : '↓'}{Math.abs(diff).toFixed(1)}
                           </span>
                         )}
                         {diff === 0 && (
-                          <span className="text-xs text-gray-400">—</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
                         )}
                         {range && !lastReadings && (
-                          <span className="text-xs text-gray-400">({range[0]}-{range[1]})</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">({range[0]}-{range[1]})</span>
                         )}
                       </div>
                     </div>
                   )
                 })}
                 {Object.values(readings).every(v => v === '') && (
-                  <p className="text-sm text-gray-400 text-center py-2">No readings recorded</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">No readings recorded</p>
                 )}
               </div>
             </Card>
@@ -994,10 +994,10 @@ export default function NewService() {
             {/* Tasks summary */}
             <Card>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700">Tasks</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Tasks</h3>
                 <span className={cn(
                   'text-xs font-medium px-2 py-0.5 rounded-full',
-                  completedCount === tasks.length ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                  completedCount === tasks.length ? 'bg-green-100 text-green-700' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                 )}>
                   {completedCount}/{tasks.length}
                 </span>
@@ -1010,11 +1010,11 @@ export default function NewService() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : (
-                      <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     )}
-                    <span className={task.completed ? 'text-gray-900' : 'text-gray-400'}>
+                    <span className={task.completed ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}>
                       {task.name}
                     </span>
                   </div>
@@ -1025,12 +1025,12 @@ export default function NewService() {
             {/* Chemicals added summary */}
             {chemicalsAdded.length > 0 && (
               <Card>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Chemicals Added</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemicals Added</h3>
                 <div className="space-y-2">
                   {chemicalsAdded.map((c, i) => (
                     <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700">{c.product_name}</span>
-                      <span className="font-medium text-gray-900">{c.quantity} {c.unit}</span>
+                      <span className="text-gray-700 dark:text-gray-300">{c.product_name}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{c.quantity} {c.unit}</span>
                     </div>
                   ))}
                 </div>
@@ -1038,10 +1038,10 @@ export default function NewService() {
             )}
 
             {/* Next service */}
-            <Card className="bg-gray-50">
+            <Card className="bg-gray-50 dark:bg-gray-800">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Next service due</span>
-                <span className="text-sm font-semibold text-gray-900">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Next service due</span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
                 </span>
               </div>
@@ -1057,7 +1057,7 @@ export default function NewService() {
             />
 
             {/* Email notice */}
-            <p className="text-xs text-gray-400 text-center">
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
               {client?.email
                 ? `A service report will be emailed to ${client.email}`
                 : 'No client email set — report will be saved but not emailed'}
@@ -1082,21 +1082,21 @@ export default function NewService() {
         {completed && (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-1">Service Complete</h2>
-            <p className="text-sm text-gray-500 mb-1">{pool?.address}</p>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Service Complete</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{pool?.address}</p>
             {client?.email && (
-              <p className="text-sm text-green-600 mb-4">
+              <p className="text-sm text-green-600 dark:text-green-400 mb-4">
                 Report sent to {client.email}
               </p>
             )}
-            <Card className="w-full bg-gray-50 mb-6">
+            <Card className="w-full bg-gray-50 dark:bg-gray-800 mb-6">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Next service</span>
-                <span className="text-sm font-semibold text-pool-600">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Next service</span>
+                <span className="text-sm font-semibold text-pool-600 dark:text-pool-400">
                   {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
                 </span>
               </div>
@@ -1130,13 +1130,13 @@ export default function NewService() {
             {isTech && nextStop && (
               <button
                 onClick={() => navigate('/tech')}
-                className="text-sm text-pool-600 font-semibold mt-2"
+                className="text-sm text-pool-600 dark:text-pool-400 font-semibold mt-2"
               >
                 Back to Run Sheet
               </button>
             )}
             {isTech && !nextStop && (
-              <p className="text-sm text-green-600 font-medium mt-2">All stops completed for today!</p>
+              <p className="text-sm text-green-600 dark:text-green-400 font-medium mt-2">All stops completed for today!</p>
             )}
           </div>
         )}

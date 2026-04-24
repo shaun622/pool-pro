@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import Header from '../components/layout/Header'
+import { Plus } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
+import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -353,45 +354,44 @@ export default function WorkOrders() {
 
   const filteredJobs = jobs.filter(j => j.status === statusFilter)
 
-  // Header action
-  const headerAction = (
-    <button
-      onClick={() => setJobModalOpen(true)}
-      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100/80 transition-colors"
-    >
-      <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-      </svg>
-    </button>
+  // Subtitle for hero
+  const scheduledCount = jobs.filter(j => j.status === 'scheduled').length
+  const inProgressCount = jobs.filter(j => j.status === 'in_progress').length
+  const heroSubtitle = tab === 'jobs'
+    ? (jobs.length === 0 ? 'No work orders yet' : `${scheduledCount} scheduled${inProgressCount > 0 ? ` · ${inProgressCount} in progress` : ''}`)
+    : (activeQuotes.length === 0 ? 'No active quotes' : `${activeQuotes.length} active ${activeQuotes.length === 1 ? 'quote' : 'quotes'}`)
+
+  const heroAction = tab === 'jobs' ? (
+    <Button leftIcon={Plus} onClick={() => setJobModalOpen(true)}>New Work Order</Button>
+  ) : (
+    <Button leftIcon={Plus} onClick={() => navigate('/quotes/new')}>New Quote</Button>
   )
 
   if (bizLoading || loading) {
     return (
-      <>
-        <Header title="Work Orders" right={headerAction} />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
-      </>
+      <PageWrapper>
+        <PageHero title="Work Orders" />
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </PageWrapper>
     )
   }
 
   return (
     <>
-      <Header title="Work Orders" right={headerAction} />
       <PageWrapper width="wide">
+        <PageHero title="Work Orders" subtitle={heroSubtitle} action={heroAction} />
         {/* Jobs / Quotes tab toggle */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-4">
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
           <button onClick={() => setTab('jobs')}
             className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all',
-              tab === 'jobs' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
+              tab === 'jobs' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
             Jobs
           </button>
           <button onClick={() => setTab('quotes')}
             className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all relative',
-              tab === 'quotes' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500')}>
+              tab === 'quotes' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
             Quotes
             {activeQuotes.length > 0 && (
               <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-pool-100 text-pool-700">
@@ -403,31 +403,13 @@ export default function WorkOrders() {
 
         {tab === 'jobs' ? (
         <div>
-        {/* Action buttons — stacked mobile, side by side desktop */}
-        <div className="mb-4 flex flex-col gap-2 md:flex-row">
-          <button onClick={() => setJobModalOpen(true)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-brand text-white shadow-md shadow-pool-500/20 text-sm font-semibold hover:shadow-lg active:scale-[0.98] transition-all min-h-tap">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            New Work Order
-          </button>
-          <button onClick={() => navigate('/quotes/new')}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Quick Quote
-          </button>
-        </div>
-
         {/* Status filter — wraps on mobile, no horizontal scroll */}
         <div className="flex flex-wrap gap-1.5 pb-3">
           {JOB_STATUSES.map(status => (
             <button key={status} onClick={() => setStatusFilter(status)}
               className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
                 statusFilter === status ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
-                  : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
+                  : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 shadow-card')}>
               {`${JOB_STATUS_LABEL[status]} (${jobs.filter(j => j.status === status).length})`}
             </button>
           ))}
@@ -468,7 +450,7 @@ export default function WorkOrders() {
               <button key={f.key} onClick={() => setQuoteFilter(f.key)}
                 className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
                   quoteFilter === f.key ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
-                    : 'bg-white text-gray-600 border border-gray-200 shadow-card')}>
+                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 shadow-card')}>
                 {f.label}
               </button>
             ))}
@@ -493,19 +475,19 @@ export default function WorkOrders() {
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between mb-0.5">
-                        <p className="font-semibold text-gray-900 truncate">{quote.clients?.name || 'Unknown'}</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{quote.clients?.name || 'Unknown'}</p>
                         <Badge variant={QUOTE_STATUS_BADGE[quote.status]} className="ml-2 shrink-0 text-[10px]">
                           {QUOTE_STATUS_LABEL[quote.status] || quote.status}
                         </Badge>
                       </div>
                       {(quote.line_items || []).filter(li => li.description).length > 0 && (
-                        <p className="text-xs text-gray-500 truncate mb-1">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">
                           {(quote.line_items || []).filter(li => li.description).map(li => li.description).join(', ')}
                         </p>
                       )}
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-bold text-gray-700">{formatCurrency(getQuoteTotal(quote))}</p>
-                        <p className="text-xs text-gray-400">{formatDate(quote.created_at)}</p>
+                        <p className="text-sm font-bold text-gray-700 dark:text-gray-300">{formatCurrency(getQuoteTotal(quote))}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{formatDate(quote.created_at)}</p>
                       </div>
                     </div>
                   </div>
@@ -547,20 +529,20 @@ export default function WorkOrders() {
                 required={!showNewClient}
               />
               <button type="button" onClick={() => setShowNewClient(true)}
-                className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700">
+                className="mt-1.5 text-xs font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700">
                 + Add new client
               </button>
             </div>
           ) : (
             <div
-              className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40 animate-fade-in"
+              className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/40/40 animate-fade-in"
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateClientInline() } }}
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Client</span>
                 <button type="button"
                   onClick={() => { setShowNewClient(false); setNewClientForm({ name: '', email: '', phone: '', address: '', notes: '' }) }}
-                  className="text-gray-400 hover:text-gray-600">
+                  className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -623,19 +605,19 @@ export default function WorkOrders() {
               />
               {!showNewPool ? (
                 <button type="button" onClick={() => setShowNewPool(true)}
-                  className="mt-1.5 text-xs font-medium text-pool-600 hover:text-pool-700">
+                  className="mt-1.5 text-xs font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700">
                   + Add new pool
                 </button>
               ) : (
                 <div
-                  className="mt-2 space-y-4 p-3 rounded-lg border border-pool-200 bg-pool-50/40 animate-fade-in"
+                  className="mt-2 space-y-4 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/40/40 animate-fade-in"
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault() } }}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Pool</span>
                     <button type="button"
                       onClick={() => { setShowNewPool(false); setNewPoolForm(emptyPool) }}
-                      className="text-gray-400 hover:text-gray-600">
+                      className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -666,8 +648,8 @@ export default function WorkOrders() {
             required
           />
 
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5">
-            <p className="text-xs text-gray-500">
+          <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -715,8 +697,8 @@ export default function WorkOrders() {
             ]}
           />
           {showAddTech && (
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">New Technician</h4>
               <Input
                 label="Name"
                 value={newTechForm.name}
@@ -793,10 +775,10 @@ function JobListCard({ job, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-card hover:shadow-card-hover active:scale-[0.99] transition-all overflow-hidden flex"
+      className="w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card hover:shadow-card-hover active:scale-[0.99] transition-all overflow-hidden flex"
     >
       {/* Left date badge */}
-      <div className={`flex flex-col items-center justify-center px-4 py-3 shrink-0 w-[72px] ${dateBadge ? 'bg-gradient-brand text-white' : 'bg-gray-100 text-gray-400'}`}>
+      <div className={`flex flex-col items-center justify-center px-4 py-3 shrink-0 w-[72px] ${dateBadge ? 'bg-gradient-brand text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'}`}>
         <svg className="w-5 h-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
@@ -810,10 +792,10 @@ function JobListCard({ job, onClick }) {
       {/* Right content */}
       <div className="flex-1 min-w-0 p-3.5">
         <div className="flex items-start justify-between gap-2 mb-1.5">
-          <h3 className="font-bold text-gray-900 truncate">{job.title || 'Job'}</h3>
+          <h3 className="font-bold text-gray-900 dark:text-gray-100 truncate">{job.title || 'Job'}</h3>
           <div className="flex flex-col items-end gap-0.5 shrink-0">
             <Badge variant={statusVariant} className="text-[10px]">{statusLabel}</Badge>
-            <span className={cn('text-[10px] font-medium', job.staff_members?.name ? 'text-gray-500' : 'text-gray-400')}>
+            <span className={cn('text-[10px] font-medium', job.staff_members?.name ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500')}>
               {job.staff_members?.name || 'Unassigned'}
             </span>
           </div>
@@ -821,8 +803,8 @@ function JobListCard({ job, onClick }) {
 
         {/* Client */}
         {job.clients?.name && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-1">
-            <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 mb-1">
+            <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
             <span className="truncate">{job.clients.name}</span>
@@ -831,7 +813,7 @@ function JobListCard({ job, onClick }) {
 
         {/* Address */}
         {job.pools?.address && (
-          <div className="flex items-center gap-1.5 text-xs text-pool-600 mb-1">
+          <div className="flex items-center gap-1.5 text-xs text-pool-600 dark:text-pool-400 mb-1">
             <svg className="w-3.5 h-3.5 text-pool-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -842,12 +824,12 @@ function JobListCard({ job, onClick }) {
 
         {/* Time · duration */}
         {timeDisplay && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span>{timeDisplay}</span>
-            <span className="text-gray-300">·</span>
+            <span className="text-gray-300 dark:text-gray-600">·</span>
             <span>{duration}m</span>
           </div>
         )}

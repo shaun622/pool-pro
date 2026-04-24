@@ -112,12 +112,12 @@ export default function ServiceDetail() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Date</p>
-                <p className="text-base font-medium text-gray-900">{formatDate(record.serviced_at)}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Date</p>
+                <p className="text-base font-medium text-gray-900 dark:text-gray-100">{formatDate(record.serviced_at)}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-500">Technician</p>
-                <p className="text-base font-medium text-gray-900">{record.technician_name || '--'}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Technician</p>
+                <p className="text-base font-medium text-gray-900 dark:text-gray-100">{record.technician_name || '--'}</p>
               </div>
             </div>
             <div className="mt-2">
@@ -129,7 +129,7 @@ export default function ServiceDetail() {
 
           {/* Chemical Readings */}
           <Card>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Chemical Readings</h2>
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Chemical Readings</h2>
             <div className="space-y-2">
               {READING_KEYS.map(({ key, rangeKey }) => {
                 const value = log[key]
@@ -160,18 +160,18 @@ export default function ServiceDetail() {
 
           {/* Tasks */}
           <Card>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
               Tasks ({completedTasks}/{tasks.length})
             </h2>
             {tasks.length === 0 ? (
-              <p className="text-sm text-gray-400">No tasks recorded</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500">No tasks recorded</p>
             ) : (
               <div className="space-y-1.5">
                 {tasks.map((task, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className={cn(
                       'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0',
-                      task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                      task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300 dark:border-gray-600'
                     )}>
                       {task.completed && (
                         <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -181,7 +181,7 @@ export default function ServiceDetail() {
                     </span>
                     <span className={cn(
                       'text-sm',
-                      task.completed ? 'text-gray-900' : 'text-gray-400 line-through'
+                      task.completed ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 line-through'
                     )}>
                       {task.task_name}
                     </span>
@@ -194,12 +194,12 @@ export default function ServiceDetail() {
           {/* Chemicals Added */}
           {chemicals.length > 0 && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Chemicals Added</h2>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Chemicals Added</h2>
               <div className="space-y-2">
                 {chemicals.map((chem, i) => (
                   <div key={i} className="flex items-center justify-between py-1">
-                    <span className="text-sm text-gray-700">{chem.product_name}</span>
-                    <span className="text-sm font-medium text-gray-900">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{chem.product_name}</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {chem.quantity} {chem.unit}
                     </span>
                   </div>
@@ -211,10 +211,10 @@ export default function ServiceDetail() {
           {/* Photos */}
           {photos.length > 0 && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Photos</h2>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Photos</h2>
               <div className="grid grid-cols-3 gap-2">
                 {photos.map((photo, i) => (
-                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                     <img
                       src={photo.url}
                       alt={photo.tag || 'Service photo'}
@@ -234,8 +234,8 @@ export default function ServiceDetail() {
           {/* Notes */}
           {record.notes && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes</h2>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{record.notes}</p>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Notes</h2>
+              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{record.notes}</p>
             </Card>
           )}
         </div>

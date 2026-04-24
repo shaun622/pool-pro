@@ -1,4 +1,6 @@
 import { format, parseISO, differenceInDays, addDays, addWeeks } from 'date-fns'
+import { clsx } from 'clsx'
+import { twMerge } from 'tailwind-merge'
 
 export function formatDate(date) {
   if (!date) return ''
@@ -82,8 +84,8 @@ export function calculateGST(subtotal) {
   return Math.round(subtotal * 0.1 * 100) / 100
 }
 
-export function cn(...classes) {
-  return classes.filter(Boolean).join(' ')
+export function cn(...args) {
+  return twMerge(clsx(...args))
 }
 
 export const POOL_TYPES = ['chlorine', 'salt', 'mineral', 'freshwater']

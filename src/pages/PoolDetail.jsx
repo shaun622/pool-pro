@@ -145,15 +145,15 @@ export default function PoolDetail() {
           {/* Client Info */}
           {client && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Client</h2>
-              <p className="font-medium text-gray-900">{client.name}</p>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Client</h2>
+              <p className="font-medium text-gray-900 dark:text-gray-100">{client.name}</p>
               {client.phone && (
-                <a href={`tel:${client.phone}`} className="block text-sm text-pool-600 mt-1 min-h-[44px] flex items-center">
+                <a href={`tel:${client.phone}`} className="block text-sm text-pool-600 dark:text-pool-400 mt-1 min-h-[44px] flex items-center">
                   {client.phone}
                 </a>
               )}
               {client.email && (
-                <a href={`mailto:${client.email}`} className="block text-sm text-pool-600 min-h-[44px] flex items-center">
+                <a href={`mailto:${client.email}`} className="block text-sm text-pool-600 dark:text-pool-400 min-h-[44px] flex items-center">
                   {client.email}
                 </a>
               )}
@@ -162,46 +162,46 @@ export default function PoolDetail() {
 
           {/* Pool Info */}
           <Card>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Pool Info</h2>
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Pool Info</h2>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-xs text-gray-500">Type</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Type</p>
                 <Badge variant={pool.pool_type || 'default'} className="mt-1">
                   {pool.pool_type || 'Unknown'}
                 </Badge>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Volume</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Volume</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">
                   {pool.volume_litres ? `${pool.volume_litres.toLocaleString()} L` : '--'}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Shape</p>
-                <p className="text-sm font-medium text-gray-900 mt-1 capitalize">{pool.shape || '--'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Shape</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1 capitalize">{pool.shape || '--'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Schedule</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency || '--'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Schedule</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">{FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency || '--'}</p>
               </div>
             </div>
           </Card>
 
           {/* Equipment */}
           <Card>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Equipment</h2>
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Equipment</h2>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Pump</span>
-                <span className="text-sm font-medium text-gray-900">{pool.pump_model || '--'}</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">Pump</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.pump_model || '--'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Filter</span>
-                <span className="text-sm font-medium text-gray-900">{pool.filter_type || '--'}</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">Filter</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.filter_type || '--'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Heater</span>
-                <span className="text-sm font-medium text-gray-900">{pool.heater || '--'}</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">Heater</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.heater || '--'}</span>
               </div>
             </div>
           </Card>
@@ -209,19 +209,19 @@ export default function PoolDetail() {
           {/* Notes */}
           {pool.access_notes && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Notes</h2>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{pool.access_notes}</p>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Notes</h2>
+              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{pool.access_notes}</p>
             </Card>
           )}
 
           {/* Target Chemical Ranges */}
           <Card>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Target Ranges</h2>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Target Ranges</h2>
               {!editingRanges ? (
                 <button
                   onClick={() => setEditingRanges(true)}
-                  className="text-xs text-pool-600 font-medium min-h-[44px] flex items-center px-2"
+                  className="text-xs text-pool-600 dark:text-pool-400 font-medium min-h-[44px] flex items-center px-2"
                 >
                   Edit
                 </button>
@@ -232,14 +232,14 @@ export default function PoolDetail() {
                       setTargetRanges(pool.target_ranges || DEFAULT_TARGET_RANGES)
                       setEditingRanges(false)
                     }}
-                    className="text-xs text-gray-500 font-medium min-h-[44px] flex items-center px-2"
+                    className="text-xs text-gray-500 dark:text-gray-400 font-medium min-h-[44px] flex items-center px-2"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={saveTargetRanges}
                     disabled={savingRanges}
-                    className="text-xs text-pool-600 font-medium min-h-[44px] flex items-center px-2"
+                    className="text-xs text-pool-600 dark:text-pool-400 font-medium min-h-[44px] flex items-center px-2"
                   >
                     {savingRanges ? 'Saving...' : 'Save'}
                   </button>
@@ -252,7 +252,7 @@ export default function PoolDetail() {
                 if (!range) return null
                 return (
                   <div key={key} className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-gray-700 w-28">{RANGE_LABELS[key]}</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 w-28">{RANGE_LABELS[key]}</span>
                     {editingRanges ? (
                       <div className="flex items-center gap-1">
                         <input
@@ -262,7 +262,7 @@ export default function PoolDetail() {
                           onChange={e => handleRangeChange(key, 0, e.target.value)}
                           className="input w-20 text-center text-sm"
                         />
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-400 dark:text-gray-500">-</span>
                         <input
                           type="number"
                           step="any"
@@ -272,7 +272,7 @@ export default function PoolDetail() {
                         />
                       </div>
                     ) : (
-                      <span className="text-sm font-medium text-gray-900">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {range[0]} - {range[1]}
                       </span>
                     )}
@@ -285,8 +285,8 @@ export default function PoolDetail() {
           {/* Next service date */}
           {pool.next_due_at && (
             <div className="flex items-center justify-between px-1">
-              <span className="text-sm text-gray-500">Next service due</span>
-              <span className="text-sm font-medium text-gray-900">{formatDate(pool.next_due_at)}</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Next service due</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{formatDate(pool.next_due_at)}</span>
             </div>
           )}
 
@@ -315,7 +315,7 @@ export default function PoolDetail() {
           {/* Chemical Trend Chart */}
           {chartData.length > 1 && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Chemical Trends</h2>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Chemical Trends</h2>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
@@ -330,13 +330,13 @@ export default function PoolDetail() {
                 </ResponsiveContainer>
               </div>
               <div className="flex items-center justify-center gap-4 mt-2">
-                <span className="flex items-center gap-1 text-xs text-gray-600">
+                <span className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
                   <span className="w-3 h-0.5 bg-[#0EA5E9] inline-block" /> pH
                 </span>
-                <span className="flex items-center gap-1 text-xs text-gray-600">
+                <span className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
                   <span className="w-3 h-0.5 bg-[#22C55E] inline-block" /> Free Cl
                 </span>
-                <span className="flex items-center gap-1 text-xs text-gray-600">
+                <span className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
                   <span className="w-3 h-0.5 bg-[#F59E0B] inline-block" /> Alkalinity
                 </span>
               </div>
@@ -345,7 +345,7 @@ export default function PoolDetail() {
 
           {/* Service History */}
           <div>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Service History</h2>
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Service History</h2>
             {history.length === 0 ? (
               <EmptyState
                 title="No services yet"
@@ -360,13 +360,13 @@ export default function PoolDetail() {
                     <Card
                       key={record.id}
                       onClick={() => navigate(`/services/${record.id}`)}
-                      className="active:bg-gray-50"
+                      className="active:bg-gray-50 dark:bg-gray-800"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {formatDate(record.serviced_at)}
                         </span>
-                        <span className="text-xs text-gray-500">{record.technician_name}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{record.technician_name}</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {log.ph != null && (
@@ -400,7 +400,7 @@ export default function PoolDetail() {
       {/* Schedule Service Modal */}
       <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule Service">
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             Set the next service date for this pool. It will appear on your Route when due.
           </p>
           <Input

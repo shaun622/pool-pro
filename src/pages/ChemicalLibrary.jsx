@@ -218,9 +218,9 @@ export default function ChemicalLibrary() {
         right={
           <button
             onClick={openAdd}
-            className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
+            className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors"
           >
-            <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -261,7 +261,7 @@ export default function ChemicalLibrary() {
                       <div className="flex items-start gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.name}</p>
                             {p.category && (
                               <Badge variant={CATEGORY_COLORS[p.category] || 'default'} className="shrink-0">
                                 {categoryLabel(p.category)}
@@ -269,13 +269,13 @@ export default function ChemicalLibrary() {
                             )}
                           </div>
                           {p.suggested_dose && (
-                            <p className="text-xs text-pool-600 font-medium mt-1">{p.suggested_dose}</p>
+                            <p className="text-xs text-pool-600 dark:text-pool-400 font-medium mt-1">{p.suggested_dose}</p>
                           )}
                           {p.notes && (
-                            <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{p.notes}</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 line-clamp-2">{p.notes}</p>
                           )}
                         </div>
-                        <span className="text-xs text-gray-400 shrink-0 mt-0.5">{p.default_unit}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 mt-0.5">{p.default_unit}</span>
                       </div>
                     </Card>
                   ))}
@@ -292,7 +292,7 @@ export default function ChemicalLibrary() {
               <h3 className="section-title">Suggested Chemicals</h3>
               <button
                 onClick={addAllSuggested}
-                className="text-xs text-pool-600 font-semibold min-h-tap flex items-center hover:text-pool-700"
+                className="text-xs text-pool-600 dark:text-pool-400 font-semibold min-h-tap flex items-center hover:text-pool-700"
               >
                 Add all
               </button>
@@ -305,18 +305,18 @@ export default function ChemicalLibrary() {
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-semibold text-gray-900">{chem.name}</p>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{chem.name}</p>
                           <Badge variant={CATEGORY_COLORS[chem.category] || 'default'} className="shrink-0">
                             {categoryLabel(chem.category)}
                           </Badge>
                         </div>
-                        <p className="text-xs text-pool-600 font-medium mt-1">{chem.suggested_dose}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{chem.notes}</p>
+                        <p className="text-xs text-pool-600 dark:text-pool-400 font-medium mt-1">{chem.suggested_dose}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{chem.notes}</p>
                       </div>
                       {!alreadyAdded ? (
                         <button
                           onClick={() => addSuggested(chem)}
-                          className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 transition-colors shrink-0"
+                          className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors shrink-0"
                         >
                           <svg className="w-5 h-5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

@@ -54,7 +54,7 @@ export default function Integrations() {
       <Header title="Integrations" backTo="/settings" />
       <PageWrapper>
         <div className="mb-5">
-          <p className="text-sm text-gray-500 leading-relaxed">
+          <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
             Connect PoolPro with your favourite tools to streamline your workflow.
           </p>
         </div>
@@ -63,7 +63,7 @@ export default function Integrations() {
           {INTEGRATIONS.map(integration => (
             <Card key={integration.name}>
               <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden shrink-0">
                   <img
                     src={integration.logo}
                     alt={integration.name}
@@ -73,10 +73,10 @@ export default function Integrations() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <h3 className="text-sm font-bold text-gray-900">{integration.name}</h3>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">{integration.name}</h3>
                     <Badge variant="default">Coming Soon</Badge>
                   </div>
-                  <p className="text-xs text-gray-400">{integration.description}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">{integration.description}</p>
                 </div>
               </div>
             </Card>
@@ -84,9 +84,9 @@ export default function Integrations() {
         </div>
 
         <div className="mt-8 text-center">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             Want an integration we don't have? Let us know at{' '}
-            <a href="mailto:info@poolmateapp.online" className="text-pool-600">info@poolmateapp.online</a>
+            <a href="mailto:info@poolmateapp.online" className="text-pool-600 dark:text-pool-400">info@poolmateapp.online</a>
           </p>
         </div>
       </PageWrapper>

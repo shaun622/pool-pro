@@ -51,28 +51,28 @@ export default function CustomSelect({
 
   const triggerClasses = inline
     ? cn(
-        'flex items-center justify-between gap-2 w-full rounded-lg border bg-white px-3 py-1.5',
-        'text-sm font-medium transition-all duration-200 cursor-pointer',
+        'flex items-center justify-between gap-2 w-full rounded-lg border bg-white dark:bg-gray-900 px-3 py-1.5',
+        'text-sm font-medium text-gray-700 dark:text-gray-200 transition-all duration-200 cursor-pointer',
         'focus:outline-none focus:ring-2 focus:ring-pool-500/30 focus:border-pool-400',
-        open ? 'border-pool-400 ring-2 ring-pool-500/30 shadow-sm' : 'border-gray-200 shadow-sm',
+        open ? 'border-pool-400 ring-2 ring-pool-500/30 shadow-sm' : 'border-gray-200 dark:border-gray-700 shadow-sm',
         error && 'border-red-300 focus:ring-red-500/30 focus:border-red-400',
-        disabled && 'bg-gray-50 cursor-not-allowed opacity-60',
+        disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-60',
         className,
       )
     : cn(
-        'flex items-center justify-between gap-2 w-full rounded-xl border bg-white px-4 py-3',
-        'min-h-tap shadow-inner-soft text-base font-normal transition-all duration-200 cursor-pointer',
+        'flex items-center justify-between gap-2 w-full rounded-xl border bg-white dark:bg-gray-900 px-4 py-3',
+        'min-h-tap shadow-inner-soft text-base font-normal text-gray-900 dark:text-gray-100 transition-all duration-200 cursor-pointer',
         'focus:outline-none focus:ring-2 focus:ring-pool-500/30 focus:border-pool-400',
-        open ? 'border-pool-400 ring-2 ring-pool-500/30' : 'border-gray-200',
+        open ? 'border-pool-400 ring-2 ring-pool-500/30' : 'border-gray-200 dark:border-gray-700',
         error && 'border-red-300 focus:ring-red-500/30 focus:border-red-400',
-        disabled && 'bg-gray-50 cursor-not-allowed opacity-60',
+        disabled && 'bg-gray-50 dark:bg-gray-800 cursor-not-allowed opacity-60',
         className,
       )
 
   return (
     <div className="space-y-1.5" ref={ref}>
       {label && (
-        <label className="block text-sm font-medium text-gray-600">{label}</label>
+        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">{label}</label>
       )}
       <div className="relative">
         {/* Trigger button */}
@@ -81,12 +81,12 @@ export default function CustomSelect({
           onClick={() => !disabled && setOpen(v => !v)}
           className={triggerClasses}
         >
-          <span className={cn('truncate', !selected && 'text-gray-400')}>
+          <span className={cn('truncate', !selected && 'text-gray-400 dark:text-gray-500')}>
             {displayLabel}
           </span>
           <svg
             className={cn(
-              'w-4 h-4 shrink-0 text-gray-400 transition-transform duration-200',
+              'w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500 transition-transform duration-200',
               open && 'rotate-180',
             )}
             fill="none"
@@ -100,7 +100,7 @@ export default function CustomSelect({
 
         {/* Dropdown list */}
         {open && (
-          <div className="absolute z-50 mt-1.5 w-full min-w-[180px] bg-white rounded-xl border border-gray-100 shadow-elevated py-1 animate-scale-in overflow-hidden max-h-60 overflow-y-auto">
+          <div className="absolute z-50 mt-1.5 w-full min-w-[180px] bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-elevated py-1 animate-scale-in overflow-hidden max-h-60 overflow-y-auto">
             {options.map((opt) => {
               const isActive = String(opt.value) === String(value)
               return (
@@ -112,8 +112,8 @@ export default function CustomSelect({
                     'w-full text-left px-4 py-2.5 text-sm transition-colors duration-100',
                     'flex items-center justify-between gap-2',
                     isActive
-                      ? 'bg-pool-50 text-pool-700 font-semibold'
-                      : 'text-gray-700 hover:bg-gray-50',
+                      ? 'bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 font-semibold'
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800',
                   )}
                 >
                   <span className="truncate">{opt.label}</span>

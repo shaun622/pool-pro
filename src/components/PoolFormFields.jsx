@@ -75,10 +75,10 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress })
           checked={poolForm.sameAsClient}
           onChange={handleSameAsClient}
           disabled={!clientAddress}
-          className="w-5 h-5 rounded border-gray-300 text-pool-500 focus:ring-pool-500"
+          className="w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-pool-500 focus:ring-pool-500 dark:bg-gray-800"
         />
-        <span className="text-sm text-gray-700">Same address as client</span>
-        {!clientAddress && <span className="text-xs text-gray-400">(no address on file)</span>}
+        <span className="text-sm text-gray-700 dark:text-gray-300">Same address as client</span>
+        {!clientAddress && <span className="text-xs text-gray-400 dark:text-gray-500">(no address on file)</span>}
       </label>
 
       {poolForm.sameAsClient ? (
@@ -119,13 +119,13 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress })
 
       <label className="flex items-center justify-between min-h-tap cursor-pointer">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          <span className="text-sm font-medium text-gray-700">Regular Servicing</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Regular Servicing</span>
         </div>
         <div className={cn('relative w-11 h-6 rounded-full transition-colors',
-          poolForm.regular_service ? 'bg-pool-500' : 'bg-gray-200')}>
+          poolForm.regular_service ? 'bg-pool-500' : 'bg-gray-200 dark:bg-gray-700')}>
           <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
             poolForm.regular_service ? 'translate-x-[22px]' : 'translate-x-0.5')} />
           <input type="checkbox" className="sr-only"
@@ -163,7 +163,7 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress })
       )}
 
       <div>
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Equipment</h3>
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Equipment</h3>
         <div className="space-y-3">
           <Input label="Pump Model" name="pump_model" value={poolForm.pump_model} onChange={handlePoolChange} placeholder="e.g. Astral CTX 280" />
           <Input label="Filter Type" name="filter_type" value={poolForm.filter_type} onChange={handlePoolChange} placeholder="e.g. Sand / Cartridge" />
@@ -252,8 +252,8 @@ function ManualPinPicker({ address, lat, lng, onPick }) {
         className={cn(
           'w-full flex items-center justify-center gap-2 py-2 rounded-xl border text-xs font-medium transition-colors',
           hasCoords
-            ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
-            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+            ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/40 text-green-700 dark:text-green-300 hover:bg-green-100'
+            : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
         )}
       >
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -265,7 +265,7 @@ function ManualPinPicker({ address, lat, lng, onPick }) {
 
       <Modal open={open} onClose={() => setOpen(false)} title="Drop Pin">
         <div className="space-y-3">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             Tap anywhere on the map to drop a pin at the pool location. Useful when the address can't be found.
           </p>
           {address && (
@@ -273,12 +273,12 @@ function ManualPinPicker({ address, lat, lng, onPick }) {
               type="button"
               onClick={handleSearchAddress}
               disabled={searching}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-pool-50 border border-pool-200 text-pool-700 text-xs font-medium hover:bg-pool-100 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-pool-50 dark:bg-pool-950/40 border border-pool-200 dark:border-pool-800/40 text-pool-700 dark:text-pool-300 text-xs font-medium hover:bg-pool-100 disabled:opacity-50"
             >
               {searching ? 'Searching…' : `Try to find "${address.slice(0, 30)}${address.length > 30 ? '...' : ''}" on map`}
             </button>
           )}
-          <div className="h-72 rounded-xl overflow-hidden border border-gray-200">
+          <div className="h-72 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
             <MapContainer
               center={[tempLat ?? initialLat, tempLng ?? initialLng]}
               zoom={tempLat != null ? 16 : 11}
@@ -293,7 +293,7 @@ function ManualPinPicker({ address, lat, lng, onPick }) {
             </MapContainer>
           </div>
           {tempLat != null && tempLng != null && (
-            <p className="text-xs text-gray-500 text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
               {tempLat.toFixed(5)}, {tempLng.toFixed(5)}
             </p>
           )}

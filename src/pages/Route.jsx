@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Header from '../components/layout/Header'
+import PageHero from '../components/layout/PageHero'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
@@ -148,23 +149,28 @@ export default function Route() {
 
   if (bizLoading) return <LoadingPage />
 
+  const today = new Date()
+  const todayLabel = today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+
   return (
     <>
-      <Header
-        title="Schedule"
-        right={
-          <button
-            onClick={() => setShowCalendar(v => !v)}
-            className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100"
-            title="Calendar"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-            </svg>
-          </button>
-        }
-      />
       <PageWrapper width="wide">
+        <PageHero
+          title="Schedule"
+          subtitle={todayLabel}
+          action={
+            <button
+              onClick={() => setShowCalendar(v => !v)}
+              className="min-h-tap min-w-tap flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              title="Calendar"
+              aria-label="Toggle calendar"
+            >
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+              </svg>
+            </button>
+          }
+        />
         {showCalendar ? (
           <CalendarView business={business} onClose={() => setShowCalendar(false)} />
         ) : (
@@ -654,29 +660,29 @@ function ScheduleView({ business, view, setView }) {
   return (
     <>
       {/* Date navigator */}
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-3 mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 p-3 mb-4">
         <div className="flex items-center justify-between">
-          <button onClick={prevDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
-            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          <button onClick={prevDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
+            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>
           <div className="text-center">
-            <p className="text-sm font-bold text-gray-900">
+            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
               {selectedDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
             {!isToday && (
-              <button onClick={jumpToday} className="text-xs font-semibold text-pool-600 mt-0.5 hover:text-pool-700">
+              <button onClick={jumpToday} className="text-xs font-semibold text-pool-600 dark:text-pool-400 mt-0.5 hover:text-pool-700">
                 Jump to today
               </button>
             )}
           </div>
-          <button onClick={nextDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
-            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          <button onClick={nextDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
+            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
           </button>
         </div>
       </div>
 
       {/* Tab switcher */}
-      <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
+      <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
         {[
           { key: 'list', label: 'Today' },
           { key: 'week', label: 'Week' },
@@ -688,7 +694,7 @@ function ScheduleView({ business, view, setView }) {
             onClick={() => setView(t.key)}
             className={cn(
               'flex-1 py-2 rounded-lg text-sm font-semibold text-center min-h-tap transition-all',
-              view === t.key ? 'bg-white text-pool-700 shadow-card' : 'text-gray-500'
+              view === t.key ? 'bg-white dark:bg-gray-900 text-pool-700 shadow-card' : 'text-gray-500 dark:text-gray-400'
             )}
           >
             {t.label}
@@ -711,18 +717,18 @@ function ScheduleView({ business, view, setView }) {
 
       {/* Total route card */}
       {routeInfo && stopsForDate.length > 1 && (
-        <div className="bg-white rounded-2xl p-4 mb-4 shadow-card border border-gray-100 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-pool-50 flex items-center justify-center shrink-0">
-            <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 mb-4 shadow-card border border-gray-100 dark:border-gray-800 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
+            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Total Route</p>
-            <p className="text-base font-bold text-gray-900">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Total Route</p>
+            <p className="text-base font-bold text-gray-900 dark:text-gray-100">
               {routeInfo.distance_km.toFixed(1)} km · ~{Math.round(routeInfo.duration_min)} min travel
             </p>
-            {routeInfo.coordinates && <p className="text-[11px] text-gray-400">via road network</p>}
+            {routeInfo.coordinates && <p className="text-[11px] text-gray-400 dark:text-gray-500">via road network</p>}
           </div>
         </div>
       )}
@@ -789,7 +795,7 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
         <section>
           <div className="flex items-center gap-2 mb-2">
             <div className={`w-2 h-2 rounded-full ${overdueStops.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
-            <h3 className={`text-xs font-bold uppercase tracking-wide ${overdueStops.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+            <h3 className={`text-xs font-bold uppercase tracking-wide ${overdueStops.length > 0 ? 'text-red-600' : 'text-gray-400 dark:text-gray-500'}`}>
               Overdue {overdueStops.length > 0 ? `(${overdueStops.length})` : ''}
             </h3>
           </div>
@@ -808,7 +814,7 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
               })}
             </div>
           ) : (
-            <div className="bg-green-50/50 rounded-xl border border-green-100 px-4 py-3 flex items-center gap-2.5">
+            <div className="bg-green-50 dark:bg-green-950/30 rounded-xl border border-green-100 px-4 py-3 flex items-center gap-2.5">
               <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
@@ -821,7 +827,7 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
         <section>
           <div className="flex items-center gap-2 mb-2">
             <div className={`w-2 h-2 rounded-full ${todayStops.length > 0 ? 'bg-pool-500' : 'bg-gray-300'}`} />
-            <h3 className={`text-xs font-bold uppercase tracking-wide ${todayStops.length > 0 ? 'text-gray-700' : 'text-gray-400'}`}>
+            <h3 className={`text-xs font-bold uppercase tracking-wide ${todayStops.length > 0 ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
               Today's Route {todayStops.length > 0 ? `(${todayStops.length})` : ''}
             </h3>
           </div>
@@ -835,11 +841,11 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
               })}
             </div>
           ) : (
-            <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-2.5">
-              <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center gap-2.5">
+              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <p className="text-sm text-gray-500">No stops scheduled for today</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">No stops scheduled for today</p>
             </div>
           )}
         </section>
@@ -874,9 +880,9 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
 // ─── Overdue card ─────────────────────────────
 function OverdueCard({ stop, onService, onClick }) {
   return (
-    <div className="bg-white rounded-2xl border border-red-200 shadow-card p-3.5" style={{ borderLeft: '4px solid #ef4444' }}>
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-red-200 shadow-card p-3.5" style={{ borderLeft: '4px solid #ef4444' }}>
       <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 font-bold text-xs flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold text-xs flex items-center justify-center shrink-0">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -884,15 +890,15 @@ function OverdueCard({ stop, onService, onClick }) {
         <div className="flex-1 min-w-0" onClick={onClick} role="button" tabIndex={0}>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 truncate">{stop.client_name || 'Pool Service'}</p>
-              {stop.address && <p className="text-xs text-gray-500 mt-0.5 truncate">{stop.address}</p>}
+              <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{stop.client_name || 'Pool Service'}</p>
+              {stop.address && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{stop.address}</p>}
             </div>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap ${stop.daysOverdue === 0 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap ${stop.daysOverdue === 0 ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'}`}>
               {stop.daysOverdue === 0 ? 'Due today' : `${stop.daysOverdue}d overdue`}
             </span>
           </div>
           {stop.phone && (
-            <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 font-medium mt-1">
+            <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 dark:text-pool-400 font-medium mt-1">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
               </svg>
@@ -919,17 +925,17 @@ function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, 
   return (
     <div className="space-y-4">
       {/* Week navigator */}
-      <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-card p-3">
-        <button onClick={onPrev} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+      <div className="flex items-center justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card p-3">
+        <button onClick={onPrev} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
+          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         </button>
         <div className="text-center">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Week</p>
-          <p className="text-sm font-bold text-gray-900">{fmt(weekStart)} – {fmt(weekEnd)}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">{totalStops} stop{totalStops === 1 ? '' : 's'}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">Week</p>
+          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmt(weekStart)} – {fmt(weekEnd)}</p>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{totalStops} stop{totalStops === 1 ? '' : 's'}</p>
         </div>
-        <button onClick={onNext} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+        <button onClick={onNext} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
+          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>
 
@@ -948,8 +954,8 @@ function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, 
                 isSelected
                   ? 'bg-gradient-brand text-white border-transparent shadow-card'
                   : isToday
-                    ? 'bg-pool-50 border-pool-200 text-pool-700'
-                    : 'bg-white border-gray-100 text-gray-700'
+                    ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200 text-pool-700'
+                    : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300'
               )}
             >
               <span className="text-[10px] font-bold uppercase opacity-80">{dayShort}</span>
@@ -971,7 +977,7 @@ function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, 
       <div className="space-y-4">
         {groups.filter(g => g.date >= new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())).map((g, gi) => (
           <section key={gi}>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
               {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
             </h3>
             {g.stops.length > 0 ? (
@@ -981,7 +987,7 @@ function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, 
                 ))}
               </div>
             ) : (
-              <p className="text-xs italic text-gray-400 pl-0.5">No services</p>
+              <p className="text-xs italic text-gray-400 dark:text-gray-500 pl-0.5">No services</p>
             )}
           </section>
         ))}
@@ -1008,10 +1014,10 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
       {/* Range header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {page === 0 ? 'Next 5 jobs' : `Jobs ${page * 5 + 1}–${page * 5 + 5}`}
           </p>
-          <p className="text-sm font-semibold text-gray-900">{rangeLabel}</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{rangeLabel}</p>
         </div>
       </div>
 
@@ -1024,11 +1030,11 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
       ) : (
         groups.map((g, gi) => (
           <section key={gi}>
-            <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+            <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
               {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
             </h3>
             {g.stops.length === 0 ? (
-              <p className="text-xs text-gray-400 italic pl-1">No jobs or services</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 italic pl-1">No jobs or services</p>
             ) : (
               <div className="space-y-2">
                 {g.stops.map((stop, idx) => (
@@ -1048,8 +1054,8 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
           className={cn(
             'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors min-h-tap',
             page === 0
-              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-card'
+              ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+              : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 shadow-card'
           )}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
@@ -1061,8 +1067,8 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
           className={cn(
             'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors min-h-tap',
             !hasMore
-              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-card'
+              ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+              : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 shadow-card'
           )}
         >
           Next
@@ -1107,17 +1113,17 @@ function MapView({ pools, onSelect, staffList }) {
   }
 
   function statusLabel(pool) {
-    if (!pool.next_due_at) return { text: 'No schedule', color: 'text-gray-400' }
+    if (!pool.next_due_at) return { text: 'No schedule', color: 'text-gray-400 dark:text-gray-500' }
     const due = new Date(pool.next_due_at)
     const today = new Date(); today.setHours(0,0,0,0)
     if (due < today) {
       const dueDate = new Date(due); dueDate.setHours(0, 0, 0, 0)
       const days = Math.round((today - dueDate) / (1000 * 60 * 60 * 24))
-      if (days <= 0) return { text: 'Due today', color: 'text-green-600' }
-      return { text: `${days}d overdue`, color: 'text-red-600' }
+      if (days <= 0) return { text: 'Due today', color: 'text-green-600 dark:text-green-400' }
+      return { text: `${days}d overdue`, color: 'text-red-600 dark:text-red-400' }
     }
-    if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600' }
-    return { text: `Next: ${due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`, color: 'text-pool-600' }
+    if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600 dark:text-green-400' }
+    return { text: `Next: ${due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`, color: 'text-pool-600 dark:text-pool-400' }
   }
 
   function poolToMapStop(p) {
@@ -1146,14 +1152,14 @@ function MapView({ pools, onSelect, staffList }) {
   return (
     <div className="space-y-3">
       {/* Legend */}
-      <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
+      <div className="flex items-center justify-center gap-4 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Overdue</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Due Today</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pool-500" />Upcoming</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400" />Unscheduled</span>
       </div>
 
-      <div className="h-[520px] rounded-2xl overflow-hidden border border-gray-100 shadow-card">
+      <div className="h-[520px] rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-card">
         <MapContainer center={center} zoom={11} style={{ height: '100%', width: '100%' }}>
           <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
           <FitBounds stops={withCoords.map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }))} />
@@ -1239,7 +1245,7 @@ function MapView({ pools, onSelect, staffList }) {
         </MapContainer>
       </div>
 
-      <p className="text-xs text-gray-400 text-center">
+      <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
         {withCoords.length} pool{withCoords.length !== 1 ? 's' : ''} on map
         {pools.length > withCoords.length && (
           <span className="text-amber-500 ml-1">
@@ -1259,13 +1265,13 @@ function TechBadge({ name, photo }) {
   return (
     <div className="flex items-center gap-1.5 shrink-0">
       {photo ? (
-        <img src={photo} alt={name} className="w-6 h-6 rounded-full object-cover border border-gray-200" />
+        <img src={photo} alt={name} className="w-6 h-6 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
       ) : (
         <div className="w-6 h-6 rounded-full bg-pool-100 text-pool-700 flex items-center justify-center text-[10px] font-bold border border-pool-200">
           {initials}
         </div>
       )}
-      <span className="text-[11px] text-gray-500 font-medium">{firstName}</span>
+      <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{firstName}</span>
     </div>
   )
 }
@@ -1278,32 +1284,32 @@ function StopCard({ stop, number, onClick, compact = false }) {
     return (
       <button
         onClick={onClick}
-        className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-card px-3.5 py-2.5 hover:shadow-card-hover transition-shadow"
+        className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-card px-3.5 py-2.5 hover:shadow-card-hover transition-shadow"
         style={{ borderLeft: `4px solid ${color}` }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-full bg-pool-50 text-pool-700 font-bold text-xs flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 font-bold text-xs flex items-center justify-center shrink-0">
             {number}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900 truncate">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                 {stop.title}
-                {stop.client_name && <span className="text-gray-400 font-normal"> · {stop.client_name}</span>}
+                {stop.client_name && <span className="text-gray-400 dark:text-gray-500 font-normal"> · {stop.client_name}</span>}
               </p>
               <div className="flex items-center gap-2 shrink-0">
                 <TechBadge name={stop.tech_name} photo={stop.tech_photo} />
                 {stop.time_display && (
-                  <span className="text-xs text-gray-500">{stop.time_display.split(' – ')[0]}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{stop.time_display.split(' – ')[0]}</span>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-3 mt-0.5">
               {stop.address && (
-                <p className="text-xs text-pool-600 truncate">{stop.address}</p>
+                <p className="text-xs text-pool-600 dark:text-pool-400 truncate">{stop.address}</p>
               )}
               {stop.phone && (
-                <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-[11px] text-pool-600 font-medium shrink-0">
+                <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-[11px] text-pool-600 dark:text-pool-400 font-medium shrink-0">
                   <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
@@ -1320,18 +1326,18 @@ function StopCard({ stop, number, onClick, compact = false }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-card p-3.5 hover:shadow-card-hover transition-shadow"
+      className="w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card p-3.5 hover:shadow-card-hover transition-shadow"
       style={{ borderLeft: `4px solid ${color}` }}
     >
       <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-full bg-pool-50 text-pool-700 font-bold text-sm flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 font-bold text-sm flex items-center justify-center shrink-0">
           {number}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 truncate">{stop.title}</p>
-              {stop.client_name && <p className="text-xs text-gray-500 mt-0.5">{stop.client_name}</p>}
+              <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{stop.title}</p>
+              {stop.client_name && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stop.client_name}</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <TechBadge name={stop.tech_name} photo={stop.tech_photo} />
@@ -1341,11 +1347,11 @@ function StopCard({ stop, number, onClick, compact = false }) {
             </div>
           </div>
           {stop.address && (
-            <p className="text-xs text-pool-600 mt-1 truncate">{stop.address}</p>
+            <p className="text-xs text-pool-600 dark:text-pool-400 mt-1 truncate">{stop.address}</p>
           )}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {stop.time_display && (
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -1353,7 +1359,7 @@ function StopCard({ stop, number, onClick, compact = false }) {
               </div>
             )}
             {stop.phone && (
-              <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 font-medium">
+              <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 dark:text-pool-400 font-medium">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                 </svg>
@@ -1441,21 +1447,21 @@ function CalendarView({ business, onClose }) {
   return (
     <>
       <div className="flex items-center justify-between mb-2">
-        <button onClick={onClose} className="text-sm font-semibold text-pool-600">← Back to Schedule</button>
+        <button onClick={onClose} className="text-sm font-semibold text-pool-600 dark:text-pool-400">← Back to Schedule</button>
       </div>
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
+          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <h2 className="text-lg font-bold text-gray-900">{MONTH_NAMES[month]} {year}</h2>
-        <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100">
-          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{MONTH_NAMES[month]} {year}</h2>
+        <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
+          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>
       <div className="grid grid-cols-7 mb-1">
-        {DAY_NAMES.map(d => <div key={d} className="text-center text-[11px] font-semibold text-gray-400 uppercase py-1">{d}</div>)}
+        {DAY_NAMES.map(d => <div key={d} className="text-center text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase py-1">{d}</div>)}
       </div>
-      <div className="bg-white rounded-2xl shadow-card overflow-hidden mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card overflow-hidden mb-4">
         {weeks.map((w, wi) => (
           <div key={wi} className="grid grid-cols-7 border-b border-gray-50 last:border-0">
             {w.map((day, di) => {
@@ -1465,15 +1471,15 @@ function CalendarView({ business, onClose }) {
                   onClick={() => day && setSelectedDate(new Date(year, month, day))}
                   className={cn(
                     'relative flex flex-col items-center py-2 min-h-[52px] transition-all',
-                    day ? 'hover:bg-pool-50/50 cursor-pointer' : 'cursor-default',
-                    isSelected(day) && 'bg-pool-50',
-                    isToday(day) && !isSelected(day) && 'bg-amber-50/50'
+                    day ? 'hover:bg-pool-50/50 dark:hover:bg-pool-950/30 cursor-pointer' : 'cursor-default',
+                    isSelected(day) && 'bg-pool-50 dark:bg-pool-950/40',
+                    isToday(day) && !isSelected(day) && 'bg-amber-50 dark:bg-amber-950/30'
                   )}>
                   {day && (
                     <>
                       <span className={cn('text-sm w-7 h-7 flex items-center justify-center rounded-full',
                         isToday(day) ? 'bg-pool-500 text-white font-bold' :
-                        isSelected(day) ? 'bg-pool-100 text-pool-700 font-bold' : 'text-gray-700')}>
+                        isSelected(day) ? 'bg-pool-100 text-pool-700 font-bold' : 'text-gray-700 dark:text-gray-300')}>
                         {day}
                       </span>
                       {events.length > 0 && (
@@ -1481,7 +1487,7 @@ function CalendarView({ business, onClose }) {
                           {events.slice(0, 3).map((e, i) => (
                             <div key={i} className="w-1.5 h-1.5 rounded-full bg-pool-500" />
                           ))}
-                          {events.length > 3 && <span className="text-[8px] text-gray-400">+{events.length - 3}</span>}
+                          {events.length > 3 && <span className="text-[8px] text-gray-400 dark:text-gray-500">+{events.length - 3}</span>}
                         </div>
                       )}
                     </>
@@ -1493,9 +1499,9 @@ function CalendarView({ business, onClose }) {
         ))}
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-gray-500 mb-2">{formatDateLong(selectedDate)}</h3>
+        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">{formatDateLong(selectedDate)}</h3>
         {selectedEvents.length === 0 ? (
-          <p className="text-xs text-gray-400 py-4 text-center">No jobs or services scheduled</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 py-4 text-center">No jobs or services scheduled</p>
         ) : (
           <div className="space-y-1.5">
             {selectedEvents.map((event, i) => (
@@ -1503,8 +1509,8 @@ function CalendarView({ business, onClose }) {
                 <div className="flex items-center gap-3">
                   <div className="w-2.5 h-2.5 rounded-full bg-pool-500 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{event.label}</p>
-                    <p className="text-[11px] text-gray-400">{event.type === 'job' ? 'Job' : 'Service Due'}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{event.label}</p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500">{event.type === 'job' ? 'Job' : 'Service Due'}</p>
                   </div>
                 </div>
               </Card>
@@ -1830,7 +1836,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
           <div key={s} className={cn('flex-1 h-1 rounded-full', s <= step ? 'bg-pool-500' : 'bg-gray-200')} />
         ))}
       </div>
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{stepTitles[step - 1]}</p>
+      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">{stepTitles[step - 1]}</p>
 
       {/* Step 1: Client */}
       {step === 1 && (
@@ -1838,7 +1844,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
           {!showNewClient ? (
             <>
               <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Client</label>
                 <input
                   type="text"
                   value={clientId ? (selectedClient?.name || '') : clientSearch}
@@ -1854,26 +1860,26 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                 />
                 {clientId && (
                   <button type="button" onClick={() => { setClientId(''); setClientSearch(''); setPoolId(''); setClientDropdownOpen(true) }}
-                    className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600">
+                    className="absolute right-3 top-[34px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 )}
                 {clientDropdownOpen && !clientId && (
-                  <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-elevated max-h-48 overflow-y-auto">
+                  <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-elevated max-h-48 overflow-y-auto">
                     {clients
                       .filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()))
                       .map(c => (
                         <button key={c.id} type="button"
                           onClick={() => { setClientId(c.id); setClientSearch(''); setPoolId(''); setClientDropdownOpen(false) }}
-                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-pool-50 transition-colors border-b border-gray-50 last:border-0">
-                          <p className="font-medium text-gray-900">{c.name}</p>
-                          {c.address && <p className="text-xs text-gray-400 truncate">{c.address}</p>}
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors border-b border-gray-50 last:border-0">
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{c.name}</p>
+                          {c.address && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{c.address}</p>}
                         </button>
                       ))}
                     {clients.filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
-                      <p className="px-3 py-3 text-sm text-gray-400">No clients found</p>
+                      <p className="px-3 py-3 text-sm text-gray-400 dark:text-gray-500">No clients found</p>
                     )}
                   </div>
                 )}
@@ -1881,9 +1887,9 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
 
               {/* Selected client contact info */}
               {selectedClient && !editingClient && (
-                <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-gray-900">{selectedClient.name}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selectedClient.name}</p>
                     <button type="button" onClick={() => {
                       setEditClientForm({
                         name: selectedClient.name || '',
@@ -1899,24 +1905,24 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                     </button>
                   </div>
                   {selectedClient.email && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
                       {selectedClient.email}
                     </div>
                   )}
                   {selectedClient.phone && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
                       {selectedClient.phone}
                     </div>
                   )}
                   {selectedClient.address && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
@@ -1926,10 +1932,10 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                 </div>
               )}
               {selectedClient && editingClient && (
-                <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40">
+                <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/40/40">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">Edit Client</span>
-                    <button type="button" onClick={() => setEditingClient(false)} className="text-gray-400 hover:text-gray-600">
+                    <button type="button" onClick={() => setEditingClient(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
@@ -1945,7 +1951,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                   />
                   <div className="flex gap-3">
                     <button type="button" onClick={() => setEditingClient(false)}
-                      className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-sm font-semibold">
+                      className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold">
                       Cancel
                     </button>
                     <button type="button" onClick={handleSaveClientEdit} disabled={!editClientForm.name.trim() || editClientSaving}
@@ -1957,15 +1963,15 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
               )}
 
               <button type="button" onClick={() => setShowNewClient(true)}
-                className="text-xs font-medium text-pool-600 hover:text-pool-700">
+                className="text-xs font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700">
                 + Add new client
               </button>
             </>
           ) : (
-            <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40">
+            <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/40/40">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Client</span>
-                <button type="button" onClick={() => setShowNewClient(false)} className="text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => setShowNewClient(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -2000,22 +2006,22 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
             <div className="space-y-2">
               {clientPools.map(p => (
                 <button key={p.id} type="button" onClick={() => setPoolId(p.id)}
-                  className={cn('w-full text-left p-3 rounded-xl border-2 transition-all', poolId === p.id ? 'border-pool-500 bg-pool-50' : 'border-gray-200 bg-white hover:border-gray-300')}>
-                  <p className="text-sm font-medium text-gray-900 truncate">{p.address}</p>
+                  className={cn('w-full text-left p-3 rounded-xl border-2 transition-all', poolId === p.id ? 'border-pool-500 bg-pool-50' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300')}>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.address}</p>
                 </button>
               ))}
             </div>
           ) : null}
           {!showNewPool ? (
             <button type="button" onClick={() => setShowNewPool(true)}
-              className="text-xs font-medium text-pool-600 hover:text-pool-700">
+              className="text-xs font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700">
               + Add new pool
             </button>
           ) : (
-            <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50/40">
+            <div className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/40/40">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-pool-700 uppercase tracking-wide">New Pool</span>
-                <button type="button" onClick={() => { setShowNewPool(false); setNewPoolForm(emptyPool) }} className="text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => { setShowNewPool(false); setNewPoolForm(emptyPool) }} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -2027,7 +2033,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
             </div>
           )}
           <div className="flex justify-between pt-2">
-            <button type="button" onClick={() => setStep(1)} className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold min-h-tap">Back</button>
+            <button type="button" onClick={() => setStep(1)} className="px-5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold min-h-tap">Back</button>
             <button type="button" onClick={() => setStep(3)} disabled={!poolId}
               className="px-5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50 min-h-tap">
               Next
@@ -2051,8 +2057,8 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
             onChange={e => setFirstDate(e.target.value)} />
 
           {/* Duration */}
-          <div className="border-t border-gray-100 pt-3">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Duration</label>
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Duration</label>
             <div className="space-y-2">
               {[
                 { value: 'ongoing', label: 'Ongoing', desc: 'Continues until you cancel it' },
@@ -2061,9 +2067,9 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
               ].map(opt => (
                 <button key={opt.value} type="button" onClick={() => setDurationType(opt.value)}
                   className={cn('w-full text-left p-3 rounded-xl border-2 transition-all',
-                    durationType === opt.value ? 'border-pool-500 bg-pool-50' : 'border-gray-200 bg-white hover:border-gray-300')}>
-                  <p className="text-sm font-semibold text-gray-900">{opt.label}</p>
-                  <p className="text-xs text-gray-500">{opt.desc}</p>
+                    durationType === opt.value ? 'border-pool-500 bg-pool-50' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300')}>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{opt.label}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{opt.desc}</p>
                 </button>
               ))}
             </div>
@@ -2083,7 +2089,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                         d.setMonth(d.getMonth() + preset.months)
                         setEndDate(d.toISOString().split('T')[0])
                       }}
-                      className="flex-1 py-2 px-2 rounded-lg bg-gray-100 text-xs font-semibold text-gray-700 hover:bg-gray-200 active:scale-95 transition-all min-h-[36px]"
+                      className="flex-1 py-2 px-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-200 active:scale-95 transition-all min-h-[36px]"
                     >
                       {preset.label}
                     </button>
@@ -2097,8 +2103,8 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                 <Input label="Number of Visits" type="number" min="1" value={totalVisits}
                   onChange={e => setTotalVisits(e.target.value)} placeholder="e.g. 12" />
                 {estimatedEndDate && (
-                  <p className="text-xs text-gray-500">
-                    Approx. finishes <span className="font-semibold text-gray-700">{estimatedEndDate}</span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Approx. finishes <span className="font-semibold text-gray-700 dark:text-gray-300">{estimatedEndDate}</span>
                   </p>
                 )}
               </div>
@@ -2126,13 +2132,13 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
                   ]}
                 />
                 {showAddTech && (
-                  <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
-                    <h4 className="text-sm font-semibold text-gray-700">New Technician</h4>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">New Technician</h4>
                     <Input label="Name" value={newTechForm.name} onChange={e => setNewTechForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" />
                     <Input label="Email" type="email" value={newTechForm.email} onChange={e => setNewTechForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" />
                     <Input label="Phone" type="tel" value={newTechForm.phone} onChange={e => setNewTechForm(f => ({ ...f, phone: e.target.value }))} placeholder="04XX XXX XXX" />
                     <div className="flex gap-3">
-                      <button type="button" onClick={() => setShowAddTech(false)} className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-sm font-semibold">Cancel</button>
+                      <button type="button" onClick={() => setShowAddTech(false)} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold">Cancel</button>
                       <button type="button" onClick={handleAddTechInline} disabled={!newTechForm.name.trim() || newTechSaving}
                         className="flex-1 py-2.5 rounded-lg bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50">
                         {newTechSaving ? 'Saving...' : 'Add'}
@@ -2146,7 +2152,7 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
           <TextArea label="Notes" value={notes} onChange={e => setNotes(e.target.value)}
             placeholder="e.g. Back gate code 1234" rows={2} />
           <div className="flex justify-between pt-2">
-            <button type="button" onClick={() => setStep(2)} className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold min-h-tap">Back</button>
+            <button type="button" onClick={() => setStep(2)} className="px-5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold min-h-tap">Back</button>
             <button type="button" onClick={() => setStep(4)}
               className="px-5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold min-h-tap">
               Review
@@ -2158,42 +2164,42 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
       {/* Step 4: Confirm */}
       {step === 4 && (
         <div className="space-y-4">
-          <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-2.5">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Client</span>
-              <span className="font-semibold text-gray-900">{selectedClient?.name}</span>
+              <span className="text-gray-500 dark:text-gray-400">Client</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedClient?.name}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Pool</span>
-              <span className="font-semibold text-gray-900 text-right truncate max-w-[60%]">{selectedPool?.address}</span>
+              <span className="text-gray-500 dark:text-gray-400">Pool</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100 text-right truncate max-w-[60%]">{selectedPool?.address}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Frequency</span>
-              <span className="font-semibold text-gray-900">{freqLabel}</span>
+              <span className="text-gray-500 dark:text-gray-400">Frequency</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100">{freqLabel}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">First Service</span>
-              <span className="font-semibold text-gray-900">{firstDate}</span>
+              <span className="text-gray-500 dark:text-gray-400">First Service</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100">{firstDate}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Duration</span>
-              <span className="font-semibold text-gray-900">{durationLabel}</span>
+              <span className="text-gray-500 dark:text-gray-400">Duration</span>
+              <span className="font-semibold text-gray-900 dark:text-gray-100">{durationLabel}</span>
             </div>
             {selectedTech && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Technician</span>
-                <span className="font-semibold text-gray-900">{selectedTech.name}</span>
+                <span className="text-gray-500 dark:text-gray-400">Technician</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedTech.name}</span>
               </div>
             )}
             {notes && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Notes</span>
-                <span className="text-gray-700 text-right max-w-[60%]">{notes}</span>
+                <span className="text-gray-500 dark:text-gray-400">Notes</span>
+                <span className="text-gray-700 dark:text-gray-300 text-right max-w-[60%]">{notes}</span>
               </div>
             )}
           </div>
           <div className="flex justify-between pt-2">
-            <button type="button" onClick={() => setStep(3)} className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold min-h-tap">Back</button>
+            <button type="button" onClick={() => setStep(3)} className="px-5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold min-h-tap">Back</button>
             <button type="button" onClick={handleSubmit} disabled={saving}
               className="px-5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold disabled:opacity-50 min-h-tap">
               {saving ? 'Creating...' : 'Create Recurring Service'}
@@ -2208,10 +2214,10 @@ function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
 // ─── Misc ─────────────────────────────────────
 function LoadingPage() {
   return (
-    <>
-      <Header title="Schedule" />
-      <PageWrapper><LoadingSpinner /></PageWrapper>
-    </>
+    <PageWrapper>
+      <PageHero title="Schedule" />
+      <LoadingSpinner />
+    </PageWrapper>
   )
 }
 function LoadingSpinner() {

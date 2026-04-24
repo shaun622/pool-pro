@@ -319,8 +319,8 @@ export default function RecurringJobs() {
         title="Recurring Jobs"
         backTo="/work-orders"
         right={
-          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors">
-            <svg className="w-6 h-6 text-pool-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors">
+            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -351,30 +351,30 @@ export default function RecurringJobs() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{p.title}</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.title}</p>
                         <Badge variant="primary" className="shrink-0">
                           {RECURRENCE_LABEL[p.recurrence_rule] || p.recurrence_rule}
                         </Badge>
                         <Badge variant={st.variant} className="shrink-0 text-[10px]">{st.label}</Badge>
                       </div>
-                      <p className="text-xs text-gray-500">{p.clients?.name}</p>
-                      {p.pools?.address && <p className="text-xs text-gray-400 truncate">{p.pools.address}</p>}
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{p.clients?.name}</p>
+                      {p.pools?.address && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{p.pools.address}</p>}
                       <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                        <span className="text-[11px] text-gray-500 font-medium">{durationLabel(p)}</span>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{durationLabel(p)}</span>
                         {p.duration_type === 'num_visits' && p.total_visits && (
                           <div className="flex-1 max-w-[80px] h-1.5 bg-gray-200 rounded-full overflow-hidden">
                             <div className="h-full bg-pool-500 rounded-full" style={{ width: `${Math.min(100, ((p.completed_visits || 0) / p.total_visits) * 100)}%` }} />
                           </div>
                         )}
                         {p.staff_members?.name && (
-                          <span className="text-[11px] text-gray-400">{p.staff_members.name}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">{p.staff_members.name}</span>
                         )}
-                        {p.price && <span className="text-[11px] text-pool-600 font-medium">${Number(p.price).toFixed(0)}</span>}
+                        {p.price && <span className="text-[11px] text-pool-600 dark:text-pool-400 font-medium">${Number(p.price).toFixed(0)}</span>}
                       </div>
                     </div>
                     <button
                       onClick={e => { e.stopPropagation(); generateNow(p) }}
-                      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 transition-colors shrink-0"
+                      className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors shrink-0"
                       title="Generate job now"
                     >
                       <svg className="w-5 h-5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -388,7 +388,7 @@ export default function RecurringJobs() {
 
             {completedProfiles.length > 0 && (
               <>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-6 mb-2">
+                <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mt-6 mb-2">
                   Completed / Inactive
                 </h3>
                 {completedProfiles.map(p => {
@@ -398,11 +398,11 @@ export default function RecurringJobs() {
                       <div className="flex items-start gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{p.title}</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.title}</p>
                             <Badge variant={st.variant} className="shrink-0 text-[10px]">{st.label}</Badge>
                           </div>
-                          <p className="text-xs text-gray-500">{p.clients?.name}</p>
-                          <span className="text-[11px] text-gray-500">{durationLabel(p)}</span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{p.clients?.name}</p>
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400">{durationLabel(p)}</span>
                         </div>
                       </div>
                     </Card>
@@ -426,7 +426,7 @@ export default function RecurringJobs() {
             />
             {!showNewClient ? (
               <button type="button" onClick={() => setShowNewClient(true)}
-                className="text-xs text-pool-600 font-semibold mt-1.5 hover:text-pool-700">
+                className="text-xs text-pool-600 dark:text-pool-400 font-semibold mt-1.5 hover:text-pool-700">
                 + Create new client
               </button>
             ) : (
@@ -441,7 +441,7 @@ export default function RecurringJobs() {
                 <Button type="button" onClick={handleQuickCreateClient} loading={newClientSaving}
                   className="text-xs px-3 shrink-0">Add</Button>
                 <button type="button" onClick={() => { setShowNewClient(false); setNewClientName('') }}
-                  className="text-xs text-gray-400 px-2 shrink-0 hover:text-gray-600">Cancel</button>
+                  className="text-xs text-gray-400 dark:text-gray-500 px-2 shrink-0 hover:text-gray-600 dark:text-gray-400">Cancel</button>
               </div>
             )}
           </div>
@@ -528,8 +528,8 @@ export default function RecurringJobs() {
           </div>
 
           {editing && (
-            <div className="border-t border-gray-100 pt-3 mt-2 space-y-2">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</p>
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-2 space-y-2">
+              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Actions</p>
               <div className="flex gap-2 flex-wrap">
                 {(!editing.status || editing.status === 'active') && (
                   <Button type="button" variant="secondary" onClick={() => { handleStatusChange(editing.id, 'paused'); setModalOpen(false) }} className="text-xs px-3">

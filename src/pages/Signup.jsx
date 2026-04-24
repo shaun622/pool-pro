@@ -46,7 +46,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pool-50 via-white to-pool-100 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pool-50 via-white to-pool-100 dark:from-gray-950 dark:via-gray-900 dark:to-pool-950/40 px-4">
       <div className="w-full max-w-sm animate-fade-in">
         {/* Branding */}
         <div className="text-center mb-10">
@@ -56,18 +56,18 @@ export default function Signup() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold bg-gradient-brand bg-clip-text text-transparent">PoolPro</h1>
-          <p className="text-gray-400 mt-1 text-sm">Create your account</p>
+          <p className="text-gray-400 dark:text-gray-500 mt-1 text-sm">Create your account</p>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600 font-medium animate-scale-in">
+          <div className="mb-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800/40 px-4 py-3 text-sm text-red-600 dark:text-red-300 font-medium animate-scale-in">
             {error}
           </div>
         )}
 
         {/* Form */}
-        <div className="bg-white rounded-2xl shadow-elevated p-6 border border-gray-100">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-elevated p-6 border border-gray-100 dark:border-gray-800">
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
                 label="Email"
@@ -92,7 +92,7 @@ export default function Signup() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 top-[34px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? (
@@ -121,7 +121,7 @@ export default function Signup() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute right-3 top-[34px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   tabIndex={-1}
                 >
                   {showPassword ? (
@@ -148,11 +148,11 @@ export default function Signup() {
           </div>
 
         {/* Login link */}
-        <p className="text-center text-sm text-gray-400 mt-6">
+        <p className="text-center text-sm text-gray-400 dark:text-gray-500 mt-6">
           Already have an account?{' '}
           <Link
             to="/login"
-            className="text-pool-600 font-semibold hover:text-pool-700 min-h-[44px] inline-flex items-center"
+            className="text-pool-600 dark:text-pool-400 font-semibold hover:text-pool-700 min-h-[44px] inline-flex items-center"
           >
             Sign in
           </Link>

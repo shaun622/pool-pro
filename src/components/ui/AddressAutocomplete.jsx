@@ -156,7 +156,7 @@ export default function AddressAutocomplete({
 
   return (
     <div ref={containerRef} className="space-y-1.5 relative">
-      {label && <label className="block text-sm font-medium text-gray-600">{label}</label>}
+      {label && <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">{label}</label>}
       <input
         className={cn('input', className)}
         type="text"
@@ -170,21 +170,21 @@ export default function AddressAutocomplete({
       />
 
       {open && suggestions.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white rounded-xl shadow-elevated border border-gray-100 overflow-hidden max-h-72 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-gray-900 rounded-xl shadow-elevated border border-gray-100 dark:border-gray-800 overflow-hidden max-h-72 overflow-y-auto">
           {suggestions.map((s, i) => (
             <button
               key={i}
               type="button"
               onClick={() => pickSuggestion(s)}
-              className="w-full text-left px-4 py-3 hover:bg-pool-50 transition-colors border-b border-gray-50 last:border-0 flex items-start gap-2.5"
+              className="w-full text-left px-4 py-3 hover:bg-pool-50 dark:hover:bg-pool-950/30 transition-colors border-b border-gray-50 dark:border-gray-800 last:border-0 flex items-start gap-2.5"
             >
               <svg className="w-4 h-4 text-pool-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 truncate">{s.mainText}</p>
-                {s.secondaryText && <p className="text-xs text-gray-500 truncate">{s.secondaryText}</p>}
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{s.mainText}</p>
+                {s.secondaryText && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{s.secondaryText}</p>}
               </div>
             </button>
           ))}
@@ -192,7 +192,7 @@ export default function AddressAutocomplete({
       )}
 
       {loading && (
-        <p className="text-xs text-gray-400">Searching…</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">Searching…</p>
       )}
     </div>
   )
