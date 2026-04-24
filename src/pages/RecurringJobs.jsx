@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from '../components/layout/Header'
+import { Plus } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
+import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { Select, TextArea } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
+import AddRecurringModal from '../components/ui/AddRecurringModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
@@ -60,7 +62,8 @@ export default function RecurringJobs() {
   const [staff, setStaff] = useState([])
   const [jobTypes, setJobTypes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)       // edit modal (legacy)
+  const [addModalOpen, setAddModalOpen] = useState(false)  // new add modal
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
@@ -95,9 +98,8 @@ export default function RecurringJobs() {
     : []
 
   function openAdd() {
-    setEditing(null)
-    setForm(emptyForm)
-    setModalOpen(true)
+    // Use the new clean Add Recurring Service modal (same as Schedule page)
+    setAddModalOpen(true)
   }
 
   function openEdit(profile) {
@@ -302,31 +304,29 @@ export default function RecurringJobs() {
 
   if (loading) {
     return (
-      <>
-        <Header title="Recurring Jobs" backTo="/work-orders" />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
-      </>
+      <PageWrapper>
+        <PageHero title="Recurring" />
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </PageWrapper>
     )
   }
 
+  const activeCount = activeProfiles.length
+  const pausedCount = pausedProfiles.length
+  const heroSubtitle = activeCount === 0 && pausedCount === 0
+    ? 'No recurring services yet'
+    : `${activeCount} active${pausedCount > 0 ? ` · ${pausedCount} paused` : ''}`
+
   return (
     <>
-      <Header
-        title="Recurring Jobs"
-        backTo="/work-orders"
-        right={
-          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors">
-            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-        }
-      />
       <PageWrapper>
+        <PageHero
+          title="Recurring"
+          subtitle={heroSubtitle}
+          action={<Button leftIcon={Plus} onClick={openAdd}>Add Recurring Service</Button>}
+        />
         {activeProfiles.length === 0 && pausedProfiles.length === 0 && completedProfiles.length === 0 ? (
           <EmptyState
             icon={
@@ -414,6 +414,16 @@ export default function RecurringJobs() {
         )}
       </PageWrapper>
 
+      {/* New clean Add modal — same as used on Schedule page */}
+      <AddRecurringModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        business={business}
+        staff={staff}
+        onCreated={() => { fetchAll(); setAddModalOpen(false) }}
+      />
+
+      {/* Legacy edit modal — only used for editing existing profiles */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Recurring Job' : 'New Recurring Job'}>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
