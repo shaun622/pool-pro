@@ -8,10 +8,12 @@ import Input, { TextArea, Select } from '../components/ui/Input'
 import CustomSelect from '../components/ui/CustomSelect'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, calculateGST, cn } from '../lib/utils'
+import { useToast } from '../contexts/ToastContext'
 
 const EMPTY_LINE = { description: '', quantity: 1, unit_price: 0, recurring: null }
 
@@ -24,6 +26,7 @@ const FREQUENCY_OPTIONS = [
 ]
 
 export default function QuoteBuilder() {
+  const toast = useToast()
   const { business } = useBusiness()
   const { clients, createClient } = useClients()
   const navigate = useNavigate()
@@ -38,6 +41,7 @@ export default function QuoteBuilder() {
   const [terms, setTerms] = useState('')
   const [pricingItems, setPricingItems] = useState([])
   const [saving, setSaving] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(isEditing)
   const [quoteStatus, setQuoteStatus] = useState('draft')
@@ -85,7 +89,7 @@ export default function QuoteBuilder() {
       setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
     } catch (err) {
       console.error('Error adding technician:', err)
-      alert(err.message || 'Failed to add technician')
+      toast.error(err.message || 'Failed to add technician')
     } finally {
       setNewTechSaving(false)
     }
@@ -401,7 +405,7 @@ export default function QuoteBuilder() {
       navigate('/work-orders')
     } catch (err) {
       console.error('Error converting to work order:', err)
-      alert(err.message || 'Failed to create work order')
+      toast.error(err.message || 'Failed to create work order')
     } finally {
       setConverting(false)
     }
@@ -433,9 +437,9 @@ export default function QuoteBuilder() {
   }
 
   async function deleteQuote() {
-    if (!id || !window.confirm('Delete this quote? This cannot be undone.')) return
+    if (!id) return
     const { error } = await supabase.from('quotes').delete().eq('id', id)
-    if (error) { console.error('Error deleting quote:', error); return }
+    if (error) { console.error('Error deleting quote:', error); throw error }
     navigate('/work-orders?tab=quotes', { replace: true })
   }
 
@@ -793,7 +797,7 @@ export default function QuoteBuilder() {
           {/* Delete quote */}
           {isEditing && (
             <button
-              onClick={deleteQuote}
+              onClick={() => setConfirmDeleteOpen(true)}
               className="w-full mt-6 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors min-h-tap"
             >
               Delete Quote
@@ -936,6 +940,16 @@ export default function QuoteBuilder() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title="Delete this quote?"
+        description="This cannot be undone."
+        destructive
+        confirmLabel="Delete"
+        onConfirm={deleteQuote}
+      />
     </>
   )
 }

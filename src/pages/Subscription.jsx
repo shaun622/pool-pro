@@ -7,6 +7,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import { useBusiness } from '../hooks/useBusiness'
 import { cn } from '../lib/utils'
+import { useToast } from '../contexts/ToastContext'
 
 const PLANS = [
   {
@@ -101,6 +102,7 @@ function FeatureCheck({ enabled }) {
 }
 
 export default function Subscription() {
+  const toast = useToast()
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
   const [subscribing, setSubscribing] = useState(null)
@@ -123,7 +125,7 @@ export default function Subscription() {
     // Placeholder for Stripe integration
     setTimeout(() => {
       setSubscribing(null)
-      alert(`Stripe integration required. Would subscribe to ${planId} plan.`)
+      toast.info(`Stripe integration required. Would subscribe to ${planId} plan.`)
     }, 1000)
   }
 

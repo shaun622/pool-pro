@@ -4,7 +4,9 @@ import { useBusiness } from '../../hooks/useBusiness'
 import Button from './Button'
 import Card from './Card'
 import Badge from './Badge'
+import ConfirmModal from './ConfirmModal'
 import { cn, formatDate } from '../../lib/utils'
+import { useToast } from '../../contexts/ToastContext'
 
 const CATEGORY_LABELS = {
   certificate: 'Certificate',
@@ -33,8 +35,10 @@ const FILE_ICONS = {
 }
 
 export default function DocumentUploader({ clientId, poolId, jobId, documents = [], onUpdate }) {
+  const toast = useToast()
   const { business } = useBusiness()
   const [uploading, setUploading] = useState(false)
+  const [docToDelete, setDocToDelete] = useState(null)
   const fileRef = useRef(null)
 
   async function handleUpload(e) {
@@ -67,7 +71,7 @@ export default function DocumentUploader({ clientId, poolId, jobId, documents = 
       onUpdate?.()
     } catch (err) {
       console.error('Upload error:', err)
-      alert('Failed to upload: ' + (err.message || 'Unknown error'))
+      toast.error('Failed to upload: ' + (err.message || 'Unknown error'))
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -81,14 +85,15 @@ export default function DocumentUploader({ clientId, poolId, jobId, documents = 
     return 'other'
   }
 
-  async function handleDelete(doc) {
-    if (!confirm(`Delete ${doc.name}?`)) return
+  async function performDelete() {
+    if (!docToDelete) return
     try {
-      await supabase.storage.from('documents').remove([doc.storage_path])
-      await supabase.from('documents').delete().eq('id', doc.id)
+      await supabase.storage.from('documents').remove([docToDelete.storage_path])
+      await supabase.from('documents').delete().eq('id', docToDelete.id)
       onUpdate?.()
     } catch (err) {
       console.error('Delete error:', err)
+      throw err
     }
   }
 
@@ -166,7 +171,7 @@ export default function DocumentUploader({ clientId, poolId, jobId, documents = 
                 </div>
               </div>
               <button
-                onClick={() => handleDelete(doc)}
+                onClick={() => setDocToDelete(doc)}
                 className="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 shrink-0 min-h-tap min-w-tap flex items-center justify-center"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -177,6 +182,16 @@ export default function DocumentUploader({ clientId, poolId, jobId, documents = 
           ))}
         </div>
       )}
+
+      <ConfirmModal
+        open={!!docToDelete}
+        onClose={() => setDocToDelete(null)}
+        title={`Delete ${docToDelete?.name || 'document'}?`}
+        description="This permanently removes the file from storage."
+        destructive
+        confirmLabel="Delete"
+        onConfirm={performDelete}
+      />
     </div>
   )
 }

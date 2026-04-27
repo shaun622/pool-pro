@@ -9,10 +9,12 @@ import Input, { Select, TextArea } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
+import { useToast } from '../contexts/ToastContext'
 
 const RECURRENCE_OPTIONS = [
   { value: 'weekly', label: 'Weekly' },
@@ -54,6 +56,7 @@ const emptyForm = {
 }
 
 export default function RecurringJobs() {
+  const toast = useToast()
   const { business } = useBusiness()
   const navigate = useNavigate()
   const [profiles, setProfiles] = useState([])
@@ -65,6 +68,7 @@ export default function RecurringJobs() {
   const [modalOpen, setModalOpen] = useState(false)       // edit modal (legacy)
   const [addModalOpen, setAddModalOpen] = useState(false)  // new add modal
   const [editing, setEditing] = useState(null)
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   // Inline create client
@@ -134,7 +138,7 @@ export default function RecurringJobs() {
       setNewClientName('')
       setShowNewClient(false)
     } catch (err) {
-      alert(err.message || 'Failed to create client')
+      toast.error(err.message || 'Failed to create client')
     } finally {
       setNewClientSaving(false)
     }
@@ -190,17 +194,23 @@ export default function RecurringJobs() {
       setModalOpen(false)
       fetchAll()
     } catch (err) {
-      alert(err.message || 'Failed to save')
+      toast.error(err.message || 'Failed to save')
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDeactivate() {
-    if (!editing || !confirm('Deactivate this recurring job? It will stop generating new jobs.')) return
+    if (!editing) return
     await supabase.from('recurring_job_profiles').update({ is_active: false }).eq('id', editing.id)
     setModalOpen(false)
     fetchAll()
+  }
+
+  async function handleCancelService() {
+    if (!editing) return
+    await handleStatusChange(editing.id, 'cancelled')
+    setModalOpen(false)
   }
 
   async function generateNow(profile) {
@@ -241,10 +251,10 @@ export default function RecurringJobs() {
         next_generation_at: nextGen.toISOString(),
       }).eq('id', profile.id)
 
-      alert('Job created!')
+      toast.success('Job created!')
       fetchAll()
     } catch (err) {
-      alert(err.message || 'Failed to generate job')
+      toast.error(err.message || 'Failed to generate job')
     }
   }
 
@@ -253,7 +263,7 @@ export default function RecurringJobs() {
       await supabase.from('recurring_job_profiles').update({ status: newStatus }).eq('id', profileId)
       fetchAll()
     } catch (err) {
-      alert(err.message || 'Failed to update status')
+      toast.error(err.message || 'Failed to update status')
     }
   }
 
@@ -557,12 +567,7 @@ export default function RecurringJobs() {
                   </Button>
                 )}
                 {editing.status !== 'cancelled' && (
-                  <Button type="button" variant="danger" onClick={() => {
-                    if (confirm('Cancel this recurring service permanently?')) {
-                      handleStatusChange(editing.id, 'cancelled')
-                      setModalOpen(false)
-                    }
-                  }} className="text-xs px-3">
+                  <Button type="button" variant="danger" onClick={() => setConfirmCancelOpen(true)} className="text-xs px-3">
                     Cancel Service
                   </Button>
                 )}
@@ -571,6 +576,16 @@ export default function RecurringJobs() {
           )}
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={confirmCancelOpen}
+        onClose={() => setConfirmCancelOpen(false)}
+        title="Cancel this recurring service?"
+        description="This will stop generating new jobs from now. Existing scheduled jobs are not removed."
+        destructive
+        confirmLabel="Cancel Service"
+        onConfirm={handleCancelService}
+      />
     </>
   )
 }

@@ -9,6 +9,7 @@ import NewPoolModal from './NewPoolModal'
 import NewTechnicianModal from './NewTechnicianModal'
 import { supabase } from '../../lib/supabase'
 import { cn } from '../../lib/utils'
+import { useToast } from '../../contexts/ToastContext'
 
 const RECURRENCE_OPTIONS = [
   { value: 'weekly', label: 'Weekly' },
@@ -31,6 +32,7 @@ const DAY_OPTIONS = [
 ]
 
 export default function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
+  const toast = useToast()
   // Loaded data
   const [clients, setClients] = useState([])
   const [clientPools, setClientPools] = useState([])
@@ -132,7 +134,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
       setClients(prev => prev.map(c => c.id === clientId ? { ...c, ...updates } : c))
       setEditingClient(false)
     } catch (err) {
-      alert(err?.message || 'Failed to update client')
+      toast.error(err?.message || 'Failed to update client')
     } finally { setEditClientSaving(false) }
   }
 
@@ -173,7 +175,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
       reset()
     } catch (err) {
       console.error('Error creating recurring service:', err)
-      alert(err?.message || 'Failed to create recurring service')
+      toast.error(err?.message || 'Failed to create recurring service')
     } finally { setSaving(false) }
   }
 

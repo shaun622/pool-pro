@@ -9,6 +9,7 @@ import Input, { Select } from '../../components/ui/Input'
 import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { cn } from '../../lib/utils'
+import { useToast } from '../../contexts/ToastContext'
 
 const AUSTRALIAN_TIMEZONES = [
   { value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },
@@ -21,6 +22,7 @@ const AUSTRALIAN_TIMEZONES = [
 ]
 
 export default function BusinessDetails() {
+  const toast = useToast()
   const { business, loading: bizLoading, updateBusiness } = useBusiness()
   const navigate = useNavigate()
 
@@ -67,8 +69,8 @@ export default function BusinessDetails() {
   async function handleLogoUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) { alert('Please select an image file'); return }
-    if (file.size > 2 * 1024 * 1024) { alert('Logo must be under 2MB'); return }
+    if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2MB'); return }
     setUploading(true)
     try {
       const resized = await resizeImage(file, 400, 200)
@@ -85,7 +87,7 @@ export default function BusinessDetails() {
       updateField('logo_url', logoUrl)
     } catch (err) {
       console.error('Logo upload error:', err)
-      alert('Failed to upload logo: ' + (err.message || 'Unknown error'))
+      toast.error('Failed to upload logo: ' + (err.message || 'Unknown error'))
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''

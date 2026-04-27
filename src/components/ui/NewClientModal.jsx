@@ -6,6 +6,7 @@ import Input from './Input'
 import AddressAutocomplete from './AddressAutocomplete'
 import { supabase } from '../../lib/supabase'
 import { useBusiness } from '../../hooks/useBusiness'
+import { useToast } from '../../contexts/ToastContext'
 
 const EMPTY = { name: '', email: '', phone: '', address: '' }
 
@@ -20,6 +21,7 @@ const EMPTY = { name: '', email: '', phone: '', address: '' }
  */
 export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, prefill }) {
   const { business } = useBusiness()
+  const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
 
@@ -43,7 +45,7 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
       onClose?.()
     } catch (err) {
       console.error('Create client error:', err)
-      alert(err?.message || 'Failed to create client')
+      toast.error(err?.message || 'Failed to create client')
     } finally {
       setSaving(false)
     }

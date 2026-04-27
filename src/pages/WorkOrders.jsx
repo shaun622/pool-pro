@@ -15,6 +15,7 @@ import StopDetailModal from '../components/ui/StopDetailModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
+import { useToast } from '../contexts/ToastContext'
 
 const QUOTE_STATUS_BADGE = {
   draft: 'default',
@@ -84,6 +85,7 @@ function jobToStop(j) {
 }
 
 export default function WorkOrders() {
+  const toast = useToast()
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
   const location = useLocation()
@@ -154,7 +156,7 @@ export default function WorkOrders() {
       setShowNewPool(true)
     } catch (err) {
       console.error('Error creating client inline:', err)
-      alert(err?.message || 'Failed to create client')
+      toast.error(err?.message || 'Failed to create client')
     } finally {
       setNewClientSaving(false)
     }
@@ -283,7 +285,7 @@ export default function WorkOrders() {
       setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
     } catch (err) {
       console.error('Error adding technician:', err)
-      alert(err.message || 'Failed to add technician')
+      toast.error(err.message || 'Failed to add technician')
     } finally {
       setNewTechSaving(false)
     }
@@ -306,7 +308,7 @@ export default function WorkOrders() {
       setShowNewPool(false)
     } catch (err) {
       console.error('Error creating pool:', err)
-      alert(err?.message || 'Failed to create pool')
+      toast.error(err?.message || 'Failed to create pool')
     } finally {
       setNewPoolSaving(false)
     }
@@ -538,7 +540,7 @@ export default function WorkOrders() {
             </div>
           ) : (
             <div
-              className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/40/40 animate-fade-in"
+              className="space-y-3 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/30 animate-fade-in"
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateClientInline() } }}
             >
               <div className="flex items-center justify-between">
@@ -613,7 +615,7 @@ export default function WorkOrders() {
                 </button>
               ) : (
                 <div
-                  className="mt-2 space-y-4 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/40/40 animate-fade-in"
+                  className="mt-2 space-y-4 p-3 rounded-lg border border-pool-200 bg-pool-50 dark:bg-pool-950/30 animate-fade-in"
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault() } }}
                 >
                   <div className="flex items-center justify-between">

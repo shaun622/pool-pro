@@ -5,11 +5,13 @@ import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
+import { useToast } from '../contexts/ToastContext'
 
 const CATEGORIES = [
   { value: '', label: 'No category' },
@@ -61,6 +63,7 @@ const SUGGESTED_CHEMICALS = [
 const emptyProduct = { name: '', category: '', default_unit: 'L', suggested_dose: '', notes: '' }
 
 export default function ChemicalLibrary() {
+  const toast = useToast()
   const { business } = useBusiness()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -69,6 +72,7 @@ export default function ChemicalLibrary() {
   const [form, setForm] = useState(emptyProduct)
   const [saving, setSaving] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(true)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   useEffect(() => {
     if (business?.id) fetchProducts()
@@ -140,7 +144,7 @@ export default function ChemicalLibrary() {
       fetchProducts()
     } catch (err) {
       console.error('Error saving product:', err)
-      alert(err.message || 'Failed to save')
+      toast.error(err.message || 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -148,13 +152,13 @@ export default function ChemicalLibrary() {
 
   async function handleDelete() {
     if (!editingProduct) return
-    if (!confirm('Delete this chemical?')) return
     try {
       await supabase.from('chemical_products').delete().eq('id', editingProduct.id)
       setModalOpen(false)
       fetchProducts()
     } catch (err) {
       console.error('Error deleting:', err)
+      throw err
     }
   }
 
@@ -374,7 +378,7 @@ export default function ChemicalLibrary() {
           />
           <div className="flex gap-3 pt-2">
             {editingProduct && (
-              <Button type="button" variant="danger" onClick={handleDelete} className="px-4">
+              <Button type="button" variant="danger" onClick={() => setConfirmDeleteOpen(true)} className="px-4">
                 Delete
               </Button>
             )}
@@ -387,6 +391,16 @@ export default function ChemicalLibrary() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title="Delete this chemical?"
+        description="This will remove it from your library. Existing service records keep their saved values."
+        destructive
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+      />
     </>
   )
 }

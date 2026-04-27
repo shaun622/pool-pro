@@ -11,6 +11,7 @@ import StaffCard, { ROLE_LABELS } from '../components/ui/StaffCard'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
 import { cn } from '../lib/utils'
+import { useToast } from '../contexts/ToastContext'
 
 const ROLE_OPTIONS = [
   { value: 'tech', label: 'Technician' },
@@ -27,6 +28,7 @@ const emptyForm = {
 }
 
 export default function Staff() {
+  const toast = useToast()
   const { business } = useBusiness()
   const { staff, loading, staffLimit, canAddStaff, createStaff, updateStaff, deleteStaff, uploadPhoto } = useStaff()
 
@@ -41,7 +43,7 @@ export default function Staff() {
 
   function openAdd() {
     if (!canAddStaff) {
-      alert(`Your ${business?.plan || 'trial'} plan allows up to ${staffLimit} staff member${staffLimit !== 1 ? 's' : ''}. Upgrade to add more.`)
+      toast.error(`Your ${business?.plan || 'trial'} plan allows up to ${staffLimit} staff member${staffLimit !== 1 ? 's' : ''}. Upgrade to add more.`)
       return
     }
     setEditing(null)
@@ -108,7 +110,7 @@ export default function Staff() {
     if (!form.name.trim()) return
     const needsAuthSetup = form.email && form.password && (!editing || !editing.user_id)
     if (needsAuthSetup && form.password.length < 6) {
-      alert('Password must be at least 6 characters.')
+      toast.error('Password must be at least 6 characters.')
       return
     }
     setSaving(true)
@@ -154,7 +156,7 @@ export default function Staff() {
       setShowModal(false)
     } catch (err) {
       console.error('Error saving staff:', err)
-      alert('Failed to save. Please try again.')
+      toast.error('Failed to save. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -168,7 +170,7 @@ export default function Staff() {
       setShowModal(false)
     } catch (err) {
       console.error('Error deleting staff:', err)
-      alert('Failed to delete.')
+      toast.error('Failed to delete.')
     } finally {
       setDeleting(false)
     }

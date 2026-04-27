@@ -17,6 +17,7 @@ import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { supabase } from '../lib/supabase'
 import { geocodeAddress } from '../lib/mapbox'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
+import { useToast } from '../contexts/ToastContext'
 import {
   formatDate,
   getOverdueStatus,
@@ -29,6 +30,7 @@ import {
 } from '../lib/utils'
 
 export default function ClientDetail() {
+  const toast = useToast()
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -155,7 +157,7 @@ export default function ClientDetail() {
       setEditOpen(false)
     } catch (err) {
       console.error('Error updating client:', err)
-      alert(err?.message || 'Failed to save changes')
+      toast.error(err?.message || 'Failed to save changes')
     } finally {
       setEditSaving(false)
     }
@@ -198,7 +200,7 @@ export default function ClientDetail() {
       setPoolToDelete(null)
     } catch (err) {
       console.error('Error deleting pool:', err)
-      alert(err?.message || 'Failed to remove pool')
+      toast.error(err?.message || 'Failed to remove pool')
     } finally {
       setPoolDeleting(false)
     }

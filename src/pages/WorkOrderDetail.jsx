@@ -9,9 +9,11 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input, { Select, TextArea } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
+import { useToast } from '../contexts/ToastContext'
 
 // Numbered pin factory (matches StopDetailModal)
 function pinIcon(color = '#0CA5EB') {
@@ -49,12 +51,14 @@ const STATUS_OPTIONS = [
 ]
 
 export default function JobDetail() {
+  const toast = useToast()
   const { id } = useParams()
   const navigate = useNavigate()
   const [job, setJob] = useState(null)
   const [quote, setQuote] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
@@ -179,7 +183,7 @@ export default function JobDetail() {
       setNewTechForm({ name: '', email: '', phone: '', role: 'tech' })
     } catch (err) {
       console.error('Error adding technician:', err)
-      alert(err.message || 'Failed to add technician')
+      toast.error(err.message || 'Failed to add technician')
     } finally {
       setNewTechSaving(false)
     }
@@ -213,14 +217,9 @@ export default function JobDetail() {
   }
 
   async function deleteJob() {
-    if (!window.confirm('Are you sure you want to delete this job?')) return
-    try {
-      const { error } = await supabase.from('jobs').delete().eq('id', id)
-      if (error) throw error
-      navigate('/work-orders', { replace: true })
-    } catch (err) {
-      console.error('Error deleting job:', err)
-    }
+    const { error } = await supabase.from('jobs').delete().eq('id', id)
+    if (error) { console.error('Error deleting job:', error); throw error }
+    navigate('/work-orders', { replace: true })
   }
 
   const headerAction = job ? (
@@ -572,7 +571,7 @@ export default function JobDetail() {
 
         {/* Delete */}
         <div className="mt-6 mb-4">
-          <button onClick={deleteJob}
+          <button onClick={() => setConfirmDeleteOpen(true)}
             className="w-full py-3 text-sm font-medium text-red-500 hover:text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-colors">
             Delete Job
           </button>
@@ -677,6 +676,16 @@ export default function JobDetail() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title="Delete this job?"
+        description="This cannot be undone."
+        destructive
+        confirmLabel="Delete"
+        onConfirm={deleteJob}
+      />
     </>
   )
 }

@@ -5,11 +5,13 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input, { Select } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
+import ConfirmModal from '../../components/ui/ConfirmModal'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { formatDate, cn } from '../../lib/utils'
+import { useToast } from '../../contexts/ToastContext'
 
 const TRIGGER_EVENTS = [
   { value: 'service_completed', label: 'Service Completed' },
@@ -66,6 +68,7 @@ const emptyForm = {
 }
 
 export default function Automations() {
+  const toast = useToast()
   const { business } = useBusiness()
   const [rules, setRules] = useState([])
   const [templates, setTemplates] = useState([])
@@ -74,6 +77,7 @@ export default function Automations() {
   const [modalOpen, setModalOpen] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
@@ -136,7 +140,7 @@ export default function Automations() {
       setModalOpen(false)
       fetchAll()
     } catch (err) {
-      alert(err.message || 'Failed to save')
+      toast.error(err.message || 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -148,7 +152,7 @@ export default function Automations() {
   }
 
   async function handleDelete() {
-    if (!editing || !confirm('Delete this automation?')) return
+    if (!editing) return
     await supabase.from('automation_rules').delete().eq('id', editing.id)
     setModalOpen(false)
     fetchAll()
@@ -351,13 +355,22 @@ export default function Automations() {
           )}
           <div className="flex gap-3 pt-2">
             {editing && (
-              <Button type="button" variant="danger" onClick={handleDelete} className="px-4">Delete</Button>
+              <Button type="button" variant="danger" onClick={() => setConfirmDeleteOpen(true)} className="px-4">Delete</Button>
             )}
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)} className="flex-1">Cancel</Button>
             <Button type="submit" className="flex-1" loading={saving}>{editing ? 'Save' : 'Create'}</Button>
           </div>
         </form>
       </Modal>
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title="Delete this automation?"
+        description="This cannot be undone."
+        destructive
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+      />
     </>
   )
 }

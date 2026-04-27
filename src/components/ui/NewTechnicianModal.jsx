@@ -5,6 +5,7 @@ import Button from './Button'
 import Input, { Select } from './Input'
 import { supabase } from '../../lib/supabase'
 import { useBusiness } from '../../hooks/useBusiness'
+import { useToast } from '../../contexts/ToastContext'
 
 const ROLE_OPTIONS = [
   { value: 'tech', label: 'Technician' },
@@ -23,6 +24,7 @@ const EMPTY = { name: '', email: '', phone: '', role: 'tech' }
  */
 export default function NewTechnicianModal({ open, onClose, onCreated, zLayer = 60 }) {
   const { business } = useBusiness()
+  const toast = useToast()
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
 
@@ -47,7 +49,7 @@ export default function NewTechnicianModal({ open, onClose, onCreated, zLayer = 
       onClose?.()
     } catch (err) {
       console.error('Create technician error:', err)
-      alert(err?.message || 'Failed to create technician')
+      toast.error(err?.message || 'Failed to create technician')
     } finally {
       setSaving(false)
     }

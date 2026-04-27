@@ -7,6 +7,18 @@
       "runtimeArgs": ["vite", "--host"],
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "proline-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/USER/Claude Projects/ProLine CHCH/App/node_modules/vite/bin/vite.js",
+        "C:/Users/USER/Claude Projects/ProLine CHCH/App",
+        "--host",
+        "--port", "5174"
+      ],
+      "port": 5174,
+      "autoPort": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { useService } from '../hooks/useService'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import Badge from '../components/ui/Badge'
+import { useToast } from '../contexts/ToastContext'
 import {
   getChemicalStatus,
   statusDot,
@@ -39,6 +40,7 @@ const ALL_READING_FIELDS = [
 const UNIT_OPTIONS = CHEMICAL_UNITS.map(u => ({ value: u, label: u }))
 
 export default function NewService() {
+  const toast = useToast()
   const { id: poolId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -291,7 +293,7 @@ export default function NewService() {
       findNextStop()
     } catch (err) {
       console.error('Error completing service:', err)
-      alert('Failed to complete service: ' + (err?.message || JSON.stringify(err)))
+      toast.error('Failed to complete service: ' + (err?.message || JSON.stringify(err)))
     } finally {
       setSubmitting(false)
     }

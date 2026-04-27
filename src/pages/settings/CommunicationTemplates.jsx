@@ -6,12 +6,14 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input, { TextArea, Select } from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
+import ConfirmModal from '../../components/ui/ConfirmModal'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { PLACEHOLDERS, DEFAULT_TEMPLATES, renderTemplate } from '../../lib/templateEngine'
 import { cn } from '../../lib/utils'
+import { useToast } from '../../contexts/ToastContext'
 
 const TRIGGER_TYPES = [
   { value: '', label: 'No trigger (manual)' },
@@ -55,11 +57,13 @@ const emptyTemplate = {
 }
 
 export default function CommunicationTemplates() {
+  const toast = useToast()
   const { business } = useBusiness()
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [form, setForm] = useState(emptyTemplate)
   const [saving, setSaving] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -122,14 +126,14 @@ export default function CommunicationTemplates() {
       setModalOpen(false)
       fetchTemplates()
     } catch (err) {
-      alert(err.message || 'Failed to save')
+      toast.error(err.message || 'Failed to save')
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!editing || !confirm('Delete this template?')) return
+    if (!editing) return
     await supabase.from('communication_templates').delete().eq('id', editing.id)
     setModalOpen(false)
     fetchTemplates()
@@ -367,13 +371,22 @@ export default function CommunicationTemplates() {
 
           <div className="flex gap-3 pt-2">
             {editing && (
-              <Button type="button" variant="danger" onClick={handleDelete} className="px-4">Delete</Button>
+              <Button type="button" variant="danger" onClick={() => setConfirmDeleteOpen(true)} className="px-4">Delete</Button>
             )}
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)} className="flex-1">Cancel</Button>
             <Button type="submit" className="flex-1" loading={saving}>{editing ? 'Save' : 'Create'}</Button>
           </div>
         </form>
       </Modal>
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title="Delete this template?"
+        description="This cannot be undone."
+        destructive
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+      />
     </>
   )
 }

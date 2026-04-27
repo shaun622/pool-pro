@@ -5,6 +5,7 @@ import Button from './Button'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../PoolFormFields'
 import { supabase } from '../../lib/supabase'
 import { useBusiness } from '../../hooks/useBusiness'
+import { useToast } from '../../contexts/ToastContext'
 
 /**
  * Quick "Add new pool" modal — used as a nested modal from other create flows.
@@ -18,6 +19,7 @@ import { useBusiness } from '../../hooks/useBusiness'
  */
 export default function NewPoolModal({ open, onClose, clientId, clientAddress, onCreated, zLayer = 60 }) {
   const { business } = useBusiness()
+  const toast = useToast()
   const [poolForm, setPoolForm] = useState(emptyPool)
   const [saving, setSaving] = useState(false)
 
@@ -40,7 +42,7 @@ export default function NewPoolModal({ open, onClose, clientId, clientAddress, o
       onClose?.()
     } catch (err) {
       console.error('Create pool error:', err)
-      alert(err?.message || 'Failed to create pool')
+      toast.error(err?.message || 'Failed to create pool')
     } finally {
       setSaving(false)
     }

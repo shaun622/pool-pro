@@ -11,6 +11,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import { supabase } from '../../lib/supabase'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, geocodeAddress } from '../../lib/mapbox'
 import { FREQUENCY_LABELS, SCHEDULE_FREQUENCIES, cn } from '../../lib/utils'
+import { useToast } from '../../contexts/ToastContext'
 
 // Numbered pin factory
 function numberedIcon(n, color = '#0CA5EB') {
@@ -46,6 +47,7 @@ const STATUS_VARIANTS = {
 }
 
 export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated, staffList = [] }) {
+  const toast = useToast()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [quickEdit, setQuickEdit] = useState(false)
@@ -337,7 +339,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       onUpdated?.()
     } catch (err) {
       console.error('Save error:', err?.message, err?.details, err?.hint, err)
-      alert(err.message || 'Failed to save')
+      toast.error(err.message || 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -423,7 +425,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       onUpdated?.()
     } catch (err) {
       console.error('Quick save error:', err)
-      alert(err.message || 'Failed to save')
+      toast.error(err.message || 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -528,7 +530,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       onUpdated?.()
     } catch (err) {
       console.error('Delete single error:', err)
-      alert(err.message || 'Failed to delete service')
+      toast.error(err.message || 'Failed to delete service')
     } finally {
       setDeleting(false)
     }
@@ -560,7 +562,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       onUpdated?.()
     } catch (err) {
       console.error('Delete all future error:', err)
-      alert(err.message || 'Failed to cancel recurring service')
+      toast.error(err.message || 'Failed to cancel recurring service')
     } finally {
       setDeleting(false)
     }
@@ -584,7 +586,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       onUpdated?.()
     } catch (err) {
       console.error('Delete error:', err)
-      alert(err.message || 'Failed to delete')
+      toast.error(err.message || 'Failed to delete')
     } finally {
       setDeleting(false)
     }

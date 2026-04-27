@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { BusinessProvider, useBusiness } from './hooks/useBusiness'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { ToastProvider } from './contexts/ToastContext'
 import AppShell from './components/layout/AppShell'
 import TechShell from './components/layout/TechShell'
 
@@ -98,6 +99,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
+      <ToastProvider>
       <AuthProvider>
         <BusinessProvider>
           <Suspense fallback={<Loading />}>
@@ -167,6 +169,7 @@ export default function App() {
           </Suspense>
         </BusinessProvider>
       </AuthProvider>
+      </ToastProvider>
       </ThemeProvider>
     </BrowserRouter>
   )
