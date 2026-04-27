@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Briefcase, Calendar, Clock, FileText, MapPin, Plus, User, X } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -422,7 +422,7 @@ export default function WorkOrders() {
 
         {filteredJobs.length === 0 ? (
           <EmptyState
-            icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.193 23.193 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+            icon={<Briefcase className="w-8 h-8" strokeWidth={2} />}
             title="No work orders"
             description="Create a work order to track one-off repairs and extra work"
           />
@@ -437,9 +437,7 @@ export default function WorkOrders() {
         {/* FAB */}
         <button onClick={() => setJobModalOpen(true)}
           className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20">
-          <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus className="w-7 h-7" strokeWidth={2.5} />
         </button>
         </div>
         ) : (
@@ -467,7 +465,7 @@ export default function WorkOrders() {
             </div>
           ) : filteredQuotes.length === 0 ? (
             <EmptyState
-              icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+              icon={<FileText className="w-8 h-8" strokeWidth={2} />}
               title="No quotes yet"
               description="Create your first quote"
               action="Create Quote"
@@ -504,9 +502,7 @@ export default function WorkOrders() {
           {/* FAB for new quote */}
           <button onClick={() => navigate('/quotes/new')}
             className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20">
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-7 h-7" strokeWidth={2.5} />
           </button>
         </div>
         )}
@@ -548,9 +544,7 @@ export default function WorkOrders() {
                 <button type="button"
                   onClick={() => { setShowNewClient(false); setNewClientForm({ name: '', email: '', phone: '', address: '', notes: '' }) }}
                   className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-4 h-4" strokeWidth={2} />
                 </button>
               </div>
               <Input
@@ -623,9 +617,7 @@ export default function WorkOrders() {
                     <button type="button"
                       onClick={() => { setShowNewPool(false); setNewPoolForm(emptyPool) }}
                       className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-gray-400">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <X className="w-4 h-4" strokeWidth={2} />
                     </button>
                   </div>
                   <PoolFormFields
@@ -784,9 +776,7 @@ function JobListCard({ job, onClick }) {
     >
       {/* Left date badge */}
       <div className={`flex flex-col items-center justify-center px-4 py-3 shrink-0 w-[72px] ${dateBadge ? 'bg-gradient-brand text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'}`}>
-        <svg className="w-5 h-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
+        <Calendar className="w-5 h-5 mb-0.5" strokeWidth={2} />
         {dateBadge ? (
           <span className="text-xs font-bold leading-tight">{dateBadge.day} {dateBadge.month}</span>
         ) : (
@@ -809,9 +799,7 @@ function JobListCard({ job, onClick }) {
         {/* Client */}
         {job.clients?.name && (
           <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 mb-1">
-            <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
+            <User className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" strokeWidth={2} />
             <span className="truncate">{job.clients.name}</span>
           </div>
         )}
@@ -819,10 +807,7 @@ function JobListCard({ job, onClick }) {
         {/* Address */}
         {job.pools?.address && (
           <div className="flex items-center gap-1.5 text-xs text-pool-600 dark:text-pool-400 mb-1">
-            <svg className="w-3.5 h-3.5 text-pool-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+            <MapPin className="w-3.5 h-3.5 text-pool-500 shrink-0" strokeWidth={2} />
             <span className="truncate">{job.pools.address}</span>
           </div>
         )}
@@ -830,9 +815,7 @@ function JobListCard({ job, onClick }) {
         {/* Time · duration */}
         {timeDisplay && (
           <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-            <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" strokeWidth={2} />
             <span>{timeDisplay}</span>
             <span className="text-gray-300 dark:text-gray-600">·</span>
             <span>{duration}m</span>

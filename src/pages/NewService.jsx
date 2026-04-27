@@ -10,6 +10,7 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import Badge from '../components/ui/Badge'
 import { useToast } from '../contexts/ToastContext'
+import { Check, Mail, Phone, Plus, X } from 'lucide-react'
 import {
   getChemicalStatus,
   statusDot,
@@ -378,17 +379,13 @@ export default function NewService() {
               <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-pool-200/50">
                 {client?.phone && (
                   <a href={`tel:${client.phone}`} className="flex items-center gap-2 text-sm text-pool-600 dark:text-pool-400 font-medium">
-                    <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
+                    <Phone className="w-3.5 h-3.5 text-pool-400 shrink-0" strokeWidth={2} />
                     {client.phone}
                   </a>
                 )}
                 {client?.email && (
                   <a href={`mailto:${client.email}`} className="flex items-center gap-2 text-sm text-pool-600 dark:text-pool-400 font-medium">
-                    <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+                    <Mail className="w-3.5 h-3.5 text-pool-400 shrink-0" strokeWidth={2} />
                     {client.email}
                   </a>
                 )}
@@ -457,9 +454,7 @@ export default function NewService() {
                       }}
                       className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors mt-5"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <X className="w-4 h-4" strokeWidth={2} />
                     </button>
                   )}
                 </div>
@@ -670,9 +665,7 @@ export default function NewService() {
                       task.completed ? 'border-green-500 bg-green-500' : 'border-gray-300 dark:border-gray-600'
                     )}>
                       {task.completed && (
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-3 h-3 text-white" strokeWidth={2} />
                       )}
                     </span>
                     <span className="text-sm font-medium">{task.name}</span>
@@ -681,9 +674,7 @@ export default function NewService() {
                     onClick={() => setTasks(prev => prev.filter((_, idx) => idx !== i))}
                     className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <X className="w-4 h-4" strokeWidth={2} />
                   </button>
                 </div>
               ))}
@@ -800,9 +791,7 @@ export default function NewService() {
                             className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 active:bg-gray-100 dark:bg-gray-800 transition-colors border-b border-gray-50 last:border-0"
                           >
                             <div className="w-7 h-7 rounded-lg bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
-                              <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                              </svg>
+                              <Plus className="w-3.5 h-3.5 text-pool-500" strokeWidth={2.5} />
                             </div>
                             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.name}</span>
                             <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">{p.default_unit || 'L'}</span>
@@ -822,9 +811,7 @@ export default function NewService() {
                             className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 active:bg-gray-100 dark:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
                           >
                             <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
-                              <svg className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                              </svg>
+                              <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
                             </div>
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Add "<span className="text-gray-900 dark:text-gray-100">{chemSearch.trim()}</span>"</span>
                           </button>
@@ -844,9 +831,7 @@ export default function NewService() {
                   className="absolute top-2 right-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-400 hover:text-red-600 dark:text-red-400"
                   aria-label="Remove"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-5 h-5" strokeWidth={2} />
                 </button>
                 <div className="space-y-3 pr-8">
                   <Input
@@ -911,17 +896,13 @@ export default function NewService() {
               <div className="flex flex-col gap-1 mt-3 pt-3 border-t border-pool-200/50">
                 {client?.phone && (
                   <div className="flex items-center gap-2 text-sm">
-                    <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
+                    <Phone className="w-3.5 h-3.5 text-pool-400 shrink-0" strokeWidth={2} />
                     <a href={`tel:${client.phone}`} className="text-pool-600 dark:text-pool-400 font-medium">{client.phone}</a>
                   </div>
                 )}
                 {client?.email && (
                   <div className="flex items-center gap-2 text-sm">
-                    <svg className="w-3.5 h-3.5 text-pool-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+                    <Mail className="w-3.5 h-3.5 text-pool-400 shrink-0" strokeWidth={2} />
                     <a href={`mailto:${client.email}`} className="text-pool-600 dark:text-pool-400 font-medium break-all">{client.email}</a>
                   </div>
                 )}
@@ -1008,13 +989,9 @@ export default function NewService() {
                 {tasks.map(task => (
                   <div key={task.name} className="flex items-center gap-2 text-sm">
                     {task.completed ? (
-                      <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="w-4 h-4 text-green-500 shrink-0" strokeWidth={2} />
                     ) : (
-                      <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <X className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" strokeWidth={2} />
                     )}
                     <span className={task.completed ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}>
                       {task.name}
@@ -1084,9 +1061,7 @@ export default function NewService() {
         {completed && (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-8 h-8 text-green-600 dark:text-green-400" strokeWidth={2} />
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Service Complete</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{pool?.address}</p>

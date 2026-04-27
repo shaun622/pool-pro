@@ -18,7 +18,7 @@ import NewClientModal from '../components/ui/NewClientModal'
 import NewPoolModal from '../components/ui/NewPoolModal'
 import NewTechnicianModal from '../components/ui/NewTechnicianModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
-import { Search, X, Pencil, User, Droplet, Calendar as CalendarIcon, Repeat, Clock, MapPin, Phone, Mail, Plus } from 'lucide-react'
+import { Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, Clock, Droplet, Mail, MapPin, Pencil, Phone, Plus, Repeat, Search, User, X } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -170,9 +170,7 @@ export default function Route() {
               title="Calendar"
               aria-label="Toggle calendar"
             >
-              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-              </svg>
+              <Calendar className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={1.5} />
             </button>
           }
         />
@@ -668,7 +666,7 @@ function ScheduleView({ business, view, setView }) {
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 p-3 mb-4">
         <div className="flex items-center justify-between">
           <button onClick={prevDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
           </button>
           <div className="text-center">
             <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
@@ -681,7 +679,7 @@ function ScheduleView({ business, view, setView }) {
             )}
           </div>
           <button onClick={nextDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -713,9 +711,7 @@ function ScheduleView({ business, view, setView }) {
           onClick={() => setRecurModalOpen(true)}
           className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-brand text-white shadow-md shadow-pool-500/20 text-sm font-semibold hover:shadow-lg active:scale-[0.98] transition-all min-h-tap"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus className="w-5 h-5" strokeWidth={2} />
           Add Recurring Service
         </button>
       </div>
@@ -724,9 +720,7 @@ function ScheduleView({ business, view, setView }) {
       {routeInfo && stopsForDate.length > 1 && (
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 mb-4 shadow-card border border-gray-100 dark:border-gray-800 flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
-            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
+            <Map className="w-6 h-6 text-pool-600 dark:text-pool-400" strokeWidth={1.8} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Total Route</p>
@@ -820,9 +814,7 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
             </div>
           ) : (
             <div className="bg-green-50 dark:bg-green-950/30 rounded-xl border border-green-100 px-4 py-3 flex items-center gap-2.5">
-              <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-4 h-4 text-green-500 shrink-0" strokeWidth={2} />
               <p className="text-sm text-green-700">No overdue pools</p>
             </div>
           )}
@@ -847,9 +839,7 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
             </div>
           ) : (
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center gap-2.5">
-              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" strokeWidth={1.5} />
               <p className="text-sm text-gray-500 dark:text-gray-400">No stops scheduled for today</p>
             </div>
           )}
@@ -862,7 +852,7 @@ function ListView({ stops, onSelect, navigate, isViewingToday }) {
   if (!stops.length) {
     return (
       <EmptyState
-        icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+        icon={<Calendar className="w-10 h-10" strokeWidth={1.5} />}
         title="Nothing scheduled"
         description="No jobs or services scheduled for this day"
       />
@@ -904,9 +894,7 @@ function OverdueCard({ stop, onService, onClick }) {
           </div>
           {stop.phone && (
             <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 dark:text-pool-400 font-medium mt-1">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
+              <Phone className="w-3 h-3" strokeWidth={2} />
               {stop.phone}
             </a>
           )}
@@ -932,7 +920,7 @@ function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, 
       {/* Week navigator */}
       <div className="flex items-center justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card p-3">
         <button onClick={onPrev} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
         </button>
         <div className="text-center">
           <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">Week</p>
@@ -940,7 +928,7 @@ function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, 
           <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{totalStops} stop{totalStops === 1 ? '' : 's'}</p>
         </div>
         <button onClick={onNext} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
         </button>
       </div>
 
@@ -1028,7 +1016,7 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
 
       {!hasAnyStops ? (
         <EmptyState
-          icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+          icon={<Calendar className="w-10 h-10" strokeWidth={1.5} />}
           title="Nothing coming up"
           description="No jobs or recurring services in this range"
         />
@@ -1063,7 +1051,7 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
               : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 shadow-card'
           )}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          <ChevronLeft className="w-4 h-4" strokeWidth={2} />
           Previous
         </button>
         <button
@@ -1077,7 +1065,7 @@ function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
           )}
         >
           Next
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          <ChevronRight className="w-4 h-4" strokeWidth={2} />
         </button>
       </div>
     </div>
@@ -1091,7 +1079,7 @@ function MapView({ pools, onSelect, staffList }) {
   if (!MAPBOX_TILE_URL) {
     return (
       <EmptyState
-        icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>}
+        icon={<Map className="w-10 h-10" strokeWidth={1.5} />}
         title="Map not configured"
         description="Add VITE_MAPBOX_TOKEN to your environment"
       />
@@ -1101,7 +1089,7 @@ function MapView({ pools, onSelect, staffList }) {
   if (!withCoords.length) {
     return (
       <EmptyState
-        icon={<svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>}
+        icon={<Map className="w-10 h-10" strokeWidth={1.5} />}
         title="No pool locations"
         description="Pools need a geocoded address to appear on the map"
       />
@@ -1208,7 +1196,7 @@ function MapView({ pools, onSelect, staffList }) {
                     {/* Phone */}
                     {pool.clients?.phone && (
                       <a href={`tel:${pool.clients.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#0CA5EB', fontWeight: 600, textDecoration: 'none', marginBottom: '4px' }}>
-                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                        <Phone className="w-5 h-5" strokeWidth={2} />
                         {pool.clients.phone}
                       </a>
                     )}
@@ -1240,7 +1228,7 @@ function MapView({ pools, onSelect, staffList }) {
                       }}
                     >
                       View Details
-                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                      <ChevronRight className="w-5 h-5" strokeWidth={2} />
                     </button>
                   </div>
                 </Popup>
@@ -1315,9 +1303,7 @@ function StopCard({ stop, number, onClick, compact = false }) {
               )}
               {stop.phone && (
                 <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-[11px] text-pool-600 dark:text-pool-400 font-medium shrink-0">
-                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
+                  <Phone className="w-2.5 h-2.5" strokeWidth={2} />
                   {stop.phone}
                 </a>
               )}
@@ -1357,17 +1343,13 @@ function StopCard({ stop, number, onClick, compact = false }) {
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {stop.time_display && (
               <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Clock className="w-3 h-3" strokeWidth={2} />
                 <span>{stop.time_display}</span>
               </div>
             )}
             {stop.phone && (
               <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 dark:text-pool-400 font-medium">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
+                <Phone className="w-3 h-3" strokeWidth={2} />
                 {stop.phone}
               </a>
             )}
@@ -1456,11 +1438,11 @@ function CalendarView({ business, onClose }) {
       </div>
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
         </button>
         <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{MONTH_NAMES[month]} {year}</h2>
         <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
         </button>
       </div>
       <div className="grid grid-cols-7 mb-1">

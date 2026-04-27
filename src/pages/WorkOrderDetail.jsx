@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
 import { useToast } from '../contexts/ToastContext'
+import { Calendar, Check, ChevronRight, Clock, FileText, Mail, Pencil, Phone } from 'lucide-react'
 
 // Numbered pin factory (matches StopDetailModal)
 function pinIcon(color = '#0CA5EB') {
@@ -225,9 +226,7 @@ export default function JobDetail() {
   const headerAction = job ? (
     <button onClick={openEditModal}
       className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800/80 transition-colors">
-      <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-      </svg>
+      <Pencil className="w-5 h-5 text-gray-500 dark:text-gray-400" strokeWidth={1.5} />
     </button>
   ) : null
 
@@ -309,17 +308,13 @@ export default function JobDetail() {
           <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
             {job.scheduled_date && (
               <div className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <Calendar className="w-3.5 h-3.5 text-pool-500" strokeWidth={2} />
                 <span className="font-medium text-gray-700 dark:text-gray-300">{formatDate(job.scheduled_date)}</span>
               </div>
             )}
             {timeLabel && (
               <div className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-pool-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Clock className="w-3.5 h-3.5 text-pool-500" strokeWidth={2} />
                 <span className="font-medium text-gray-700 dark:text-gray-300">{timeLabel}</span>
               </div>
             )}
@@ -392,9 +387,7 @@ export default function JobDetail() {
           <div className="mb-4">
             <div className="p-3.5 bg-pool-50 dark:bg-pool-950/40 border border-pool-100 rounded-2xl flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0 shadow-md shadow-pool-500/20">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-pool-900">Job Completed</p>
@@ -414,9 +407,7 @@ export default function JobDetail() {
               }}
               className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white dark:bg-gray-900 border border-pool-200 text-pool-700 text-sm font-semibold hover:bg-pool-50 active:scale-[0.98] transition-all min-h-tap"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+              <FileText className="w-4 h-4" strokeWidth={2} />
               Create Invoice
             </button>
           </div>
@@ -429,9 +420,7 @@ export default function JobDetail() {
             {job.scheduled_date && (
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                  <Calendar className="w-4 h-4 text-pool-600 dark:text-pool-400" strokeWidth={2} />
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 dark:text-gray-500">Scheduled</p>
@@ -458,9 +447,7 @@ export default function JobDetail() {
             {job.notes && (
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+                  <FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" strokeWidth={2} />
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 dark:text-gray-500">Notes</p>
@@ -491,17 +478,13 @@ export default function JobDetail() {
                 {job.clients.phone && (
                   <a href={`tel:${job.clients.phone}`} onClick={e => e.stopPropagation()}
                     className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors">
-                    <svg className="w-4 h-4 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
+                    <Phone className="w-4 h-4 text-pool-600 dark:text-pool-400" strokeWidth={2} />
                   </a>
                 )}
                 {job.clients.email && (
                   <a href={`mailto:${job.clients.email}`} onClick={e => e.stopPropagation()}
                     className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors">
-                    <svg className="w-4 h-4 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+                    <Mail className="w-4 h-4 text-pool-600 dark:text-pool-400" strokeWidth={2} />
                   </a>
                 )}
               </div>
@@ -525,9 +508,7 @@ export default function JobDetail() {
                   <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{job.pools.pool_type}</p>
                 )}
               </div>
-              <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" strokeWidth={2} />
             </div>
           </Card>
         )}
@@ -562,9 +543,7 @@ export default function JobDetail() {
               className="text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 flex items-center gap-1"
             >
               View Quote
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="w-4 h-4" strokeWidth={2} />
             </button>
           </Card>
         )}

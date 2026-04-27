@@ -7,6 +7,7 @@ import ActivityPanel, { ActivityBell } from '../components/ui/ActivityPanel'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
+import { Calendar, Check, ChevronRight } from 'lucide-react'
 
 export default function Dashboard() {
   const { business, loading: bizLoading } = useBusiness()
@@ -270,9 +271,7 @@ export default function Dashboard() {
                         : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
                     )}>
                       {step.done ? (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-4 h-4" strokeWidth={2.5} />
                       ) : (
                         i + 1
                       )}
@@ -289,9 +288,7 @@ export default function Dashboard() {
                         className="text-xs text-pool-600 dark:text-pool-400 font-semibold min-h-tap flex items-center px-2 hover:text-pool-700"
                       >
                         {step.actionLabel}
-                        <svg className="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
+                        <ChevronRight className="w-3 h-3 ml-1" strokeWidth={2.5} />
                       </button>
                     )}
                   </div>
@@ -340,9 +337,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between mb-2">
                   {todaySummary.completed >= todaySummary.total ? (
                     <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600 dark:text-green-400">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="w-4 h-4" strokeWidth={2.5} />
                       All done!
                     </div>
                   ) : (
@@ -366,9 +361,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="flex items-center gap-2.5 py-1">
-                <svg className="w-5 h-5 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <Calendar className="w-5 h-5 text-gray-300 dark:text-gray-600 shrink-0" strokeWidth={1.5} />
                 <p className="text-sm text-gray-500 dark:text-gray-400">No stops scheduled for today</p>
               </div>
             )}
@@ -435,9 +428,7 @@ export default function Dashboard() {
               className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 pt-1 min-h-tap transition-colors"
             >
               View Full Schedule
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
             </button>
           </Card>
         </section>
@@ -452,9 +443,7 @@ export default function Dashboard() {
               {recentActivity.map((record, i) => (
                 <div key={record.id} className="px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
                   <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
-                    <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
