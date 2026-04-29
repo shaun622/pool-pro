@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Home, Calendar, ClipboardList, Users, Settings as SettingsIcon, FileText, Receipt, Repeat, BarChart3 } from 'lucide-react'
 import { ThemeToggleCompact } from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
+import ActivityPanel, { ActivityBell } from '../ui/ActivityPanel'
 import { cn } from '../../lib/utils'
 
 const tabs = [
@@ -19,10 +21,11 @@ const tabs = [
 export default function TopNav() {
   const location = useLocation()
   const navigate = useNavigate()
+  const [activityOpen, setActivityOpen] = useState(false)
 
   return (
     <header
-      className="hidden md:block sticky top-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800/60"
+      className="hidden md:block sticky top-0 z-40 bg-transparent shadow-[0_4px_8px_-6px_rgba(15,17,24,0.08)]"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       {/* ── ROW 1: brand + search + theme ──────────────────── */}
@@ -43,14 +46,15 @@ export default function TopNav() {
         {/* CENTER: global search */}
         <GlobalSearch className="flex-1 max-w-2xl mx-auto" />
 
-        {/* RIGHT: theme toggle */}
+        {/* RIGHT: bell + theme toggle */}
         <div className="flex items-center gap-1 shrink-0">
+          <ActivityBell onClick={() => setActivityOpen(true)} />
           <ThemeToggleCompact />
         </div>
       </div>
 
       {/* ── ROW 2: underline tabs ──────────────────────────── */}
-      <nav className="max-w-7xl mx-auto px-8 flex items-center gap-1 overflow-x-auto scrollbar-none border-t border-gray-100 dark:border-gray-800/60">
+      <nav className="max-w-7xl mx-auto px-8 flex items-center gap-1 overflow-x-auto scrollbar-none border-b border-gray-200/60 dark:border-gray-800/60">
         {tabs.map(({ path, label, Icon }) => {
           const active = path === '/'
             ? location.pathname === '/'
@@ -72,6 +76,8 @@ export default function TopNav() {
           )
         })}
       </nav>
+
+      <ActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
     </header>
   )
 }
