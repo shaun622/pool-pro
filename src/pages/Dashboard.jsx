@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import PageWrapper from '../components/layout/PageWrapper'
+import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
-import ActivityPanel, { ActivityBell } from '../components/ui/ActivityPanel'
+import StatCard from '../components/ui/StatCard'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
-import { Calendar, Check, ChevronRight } from 'lucide-react'
+import {
+  Calendar, Check, ChevronRight, Sparkles,
+  Wallet, AlertTriangle, Briefcase, FileText,
+} from 'lucide-react'
 
 export default function Dashboard() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
   const location = useLocation()
-  const [activityOpen, setActivityOpen] = useState(false)
 
   const [stats, setStats] = useState({
     servicedThisWeek: 0,
@@ -208,43 +211,17 @@ export default function Dashboard() {
   }
 
   return (
-    <>
-      <PageWrapper width="wide">
-        {/* Hero Welcome */}
-        <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-brand p-5 md:p-8 mb-6 shadow-elevated shadow-pool-500/10">
-          {/* Decorative circles */}
-          <div className="absolute -top-8 -right-8 w-32 md:w-56 h-32 md:h-56 rounded-full bg-white/10" />
-          <div className="absolute -bottom-4 -left-4 w-20 md:w-40 h-20 md:h-40 rounded-full bg-white/5" />
-
-          <div className="relative flex items-start justify-between gap-3 md:gap-8 md:items-end">
-            <div className="min-w-0 flex-1">
-              <p className="text-pool-100 text-sm font-medium">{greeting()}</p>
-              <h2 className="text-xl md:text-3xl font-bold text-white mt-0.5 truncate">
-                {business?.name || 'Welcome'}
-              </h2>
-              <p className="text-pool-200 text-sm md:text-base mt-1">
-                {formatDate(new Date())}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Activity bell — visible on all sizes */}
-              <ActivityBell variant="onBrand" onClick={() => setActivityOpen(true)} />
-              {/* Desktop: nav buttons */}
-              <button
-                onClick={() => navigate('/schedule')}
-                className="hidden md:inline-flex px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-white/15 border border-white/25 hover:bg-white/25 backdrop-blur transition-colors"
-              >
-                View Schedule
-              </button>
-              <button
-                onClick={() => navigate('/work-orders')}
-                className="hidden md:inline-flex px-5 py-2.5 rounded-xl text-sm font-semibold text-pool-700 bg-white hover:bg-pool-50 shadow-md transition-colors"
-              >
-                Work Orders
-              </button>
-            </div>
-          </div>
-        </div>
+    <PageWrapper width="wide">
+      <PageHero
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5" strokeWidth={2.5} />
+            {greeting()}
+          </span>
+        }
+        title={business?.name || 'Welcome'}
+        subtitle={formatDate(new Date())}
+      />
 
         {/* Getting Started */}
         {!allDone && (
@@ -298,22 +275,40 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Stats Grid */}
+        {/* KPI strip — AWC StatCards with right-side icon-boxes */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-          {[
-            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900 dark:text-gray-100', to: '/schedule' },
-            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100', to: '/schedule' },
-            { label: 'Work Orders', value: stats.activeJobs, sub: 'in progress', color: 'text-gray-900 dark:text-gray-100', to: '/work-orders' },
-            { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-gray-900 dark:text-gray-100', to: '/work-orders?tab=quotes' },
-          ].map((stat, i) => (
-            <Card key={i} onClick={() => navigate(stat.to)}>
-              <p className="section-title mb-1">{stat.label}</p>
-              <p className={cn('text-2xl font-bold tracking-tight tabular-nums', stat.color)}>
-                {stat.value}
-              </p>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{stat.sub}</p>
-            </Card>
-          ))}
+          <StatCard
+            label="Serviced"
+            value={stats.servicedThisWeek}
+            icon={Wallet}
+            iconTone="brand"
+            trendLabel="this week"
+            onClick={() => navigate('/schedule')}
+          />
+          <StatCard
+            label="Overdue"
+            value={stats.overduePools}
+            icon={AlertTriangle}
+            iconTone={stats.overduePools > 0 ? 'red' : 'gray'}
+            trendLabel="pools"
+            onClick={() => navigate('/schedule')}
+          />
+          <StatCard
+            label="Work Orders"
+            value={stats.activeJobs}
+            icon={Briefcase}
+            iconTone="brand"
+            trendLabel="in progress"
+            onClick={() => navigate('/work-orders')}
+          />
+          <StatCard
+            label="Quotes"
+            value={stats.pendingQuotes}
+            icon={FileText}
+            iconTone="brand"
+            trendLabel="pending"
+            onClick={() => navigate('/work-orders?tab=quotes')}
+          />
         </div>
 
         <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -372,32 +367,32 @@ export default function Dashboard() {
                 onClick={() => navigate('/schedule')}
                 className={cn(
                   'rounded-xl py-2.5 text-center transition-colors',
-                  todaySummary.overdue > 0 ? 'bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60' : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  todaySummary.overdue > 0 ? 'bg-red-50 dark:bg-red-950/30 hover:bg-red-100/70 dark:hover:bg-red-950/50' : 'bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800'
                 )}
               >
                 <p className={cn('text-lg font-bold tabular-nums', todaySummary.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500')}>
                   {todaySummary.overdue}
                 </p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Overdue</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Overdue</p>
               </button>
               <button
                 onClick={() => navigate('/schedule')}
-                className="rounded-xl py-2.5 text-center bg-pool-50 dark:bg-pool-950/40 hover:bg-pool-100 dark:hover:bg-pool-950/60 transition-colors"
+                className="rounded-xl py-2.5 text-center bg-pool-50 dark:bg-pool-950/30 hover:bg-pool-100/70 dark:hover:bg-pool-950/50 transition-colors"
               >
                 <p className="text-lg font-bold text-pool-600 dark:text-pool-400 tabular-nums">{todaySummary.dueToday}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Due Today</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Due Today</p>
               </button>
               <button
                 onClick={() => navigate('/schedule')}
                 className={cn(
                   'rounded-xl py-2.5 text-center transition-colors',
-                  todaySummary.completed > 0 ? 'bg-green-50 dark:bg-green-950/40 hover:bg-green-100 dark:hover:bg-green-950/60' : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  todaySummary.completed > 0 ? 'bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/50' : 'bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800'
                 )}
               >
-                <p className={cn('text-lg font-bold tabular-nums', todaySummary.completed > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500')}>
+                <p className={cn('text-lg font-bold tabular-nums', todaySummary.completed > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500')}>
                   {todaySummary.completed}
                 </p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Completed</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Completed</p>
               </button>
             </div>
 
@@ -462,8 +457,6 @@ export default function Dashboard() {
         )}
         </div>
         </div>
-      </PageWrapper>
-      <ActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
-    </>
+    </PageWrapper>
   )
 }
