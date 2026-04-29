@@ -129,7 +129,7 @@ export default function Dashboard() {
 
         supabase
           .from('service_records')
-          .select('id, serviced_at, technician_name, pools(address)')
+          .select('id, serviced_at, technician_name, pool_id, pools(address)')
           .eq('business_id', business.id)
           .eq('status', 'completed')
           .order('serviced_at', { ascending: false })
@@ -332,12 +332,12 @@ export default function Dashboard() {
         {/* TODAY (compact list) + RECENT ACTIVITY (feed) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* TODAY — narrow column */}
-          <Card className="md:col-span-1 !p-5 self-start">
+          <Card className="md:col-span-1 !p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-4">
               <CalendarClock className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" strokeWidth={2.5} />
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Today</p>
             </div>
-            <ul className="space-y-3">
+            <ul className="space-y-3 flex-1">
               <li className="flex items-center justify-between">
                 <span className="text-sm text-gray-700 dark:text-gray-300">Scheduled</span>
                 <span className="inline-flex items-center justify-center min-w-[28px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
@@ -364,7 +364,7 @@ export default function Dashboard() {
             </ul>
             <button
               onClick={() => navigate('/schedule')}
-              className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
+              className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group self-start"
             >
               Open schedule
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
@@ -372,7 +372,7 @@ export default function Dashboard() {
           </Card>
 
           {/* RECENT ACTIVITY — wide column */}
-          <Card className="md:col-span-2 !p-5">
+          <Card className="md:col-span-2 !p-5 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Activity className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" strokeWidth={2.5} />
@@ -385,22 +385,27 @@ export default function Dashboard() {
               </div>
             </div>
             {recentActivity.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No recent activity yet.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 py-4 flex-1">No recent activity yet.</p>
             ) : (
-              <ul className="space-y-3.5">
+              <ul className="space-y-1 flex-1 -mx-2">
                 {recentActivity.map(record => (
-                  <li key={record.id} className="flex items-start gap-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-pool-500 mt-2 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                        {record.pools?.address || 'Pool'} serviced
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {record.technician_name && `${record.technician_name} · `}
-                        {formatDate(record.serviced_at)}
-                      </p>
-                    </div>
-                    <Badge variant="success" className="shrink-0">Service</Badge>
+                  <li key={record.id}>
+                    <button
+                      onClick={() => navigate(record.id ? `/services/${record.id}` : `/pools/${record.pool_id}`)}
+                      className="w-full text-left flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-pool-500 mt-2 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-pool-700 dark:group-hover:text-pool-300 transition-colors">
+                          {record.pools?.address || 'Pool'} serviced
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          {record.technician_name && `${record.technician_name} · `}
+                          {formatDate(record.serviced_at)}
+                        </p>
+                      </div>
+                      <Badge variant="success" className="shrink-0 mt-0.5">Service</Badge>
+                    </button>
                   </li>
                 ))}
               </ul>
