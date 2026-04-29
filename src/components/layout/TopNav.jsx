@@ -1,9 +1,7 @@
-import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Home, Calendar, ClipboardList, Users, Settings as SettingsIcon, FileText, Receipt, Repeat, BarChart3 } from 'lucide-react'
 import { ThemeToggleCompact } from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
-import ActivityPanel, { ActivityBell } from '../ui/ActivityPanel'
 import { cn } from '../../lib/utils'
 
 const tabs = [
@@ -21,7 +19,6 @@ const tabs = [
 export default function TopNav() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [activityOpen, setActivityOpen] = useState(false)
 
   return (
     <header
@@ -30,25 +27,31 @@ export default function TopNav() {
     >
       {/* ── ROW 1: brand + search + theme ──────────────────── */}
       <div className="max-w-7xl mx-auto px-8 flex items-center gap-6 min-h-[60px]">
-        {/* LEFT: brand */}
+        {/* LEFT: brand wordmark with FieldSuite subscript */}
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 group shrink-0"
+          className="flex items-center gap-2.5 group shrink-0"
         >
           <div className="w-8 h-8 rounded-xl bg-gradient-brand flex items-center justify-center shadow-glow">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 15c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M3 19c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2" />
             </svg>
           </div>
-          <span className="text-base font-bold text-gray-900 dark:text-gray-100 group-hover:text-pool-600 transition-colors">PoolPro</span>
+          <div className="leading-tight text-left">
+            <div className="text-[15px] font-semibold tracking-tight text-gray-900 dark:text-gray-100 group-hover:text-pool-600 transition-colors">
+              PoolMate
+            </div>
+            <div className="text-[9.5px] font-medium tracking-[0.14em] uppercase text-gray-500 dark:text-gray-400">
+              by Fieldsuite
+            </div>
+          </div>
         </button>
 
         {/* CENTER: global search */}
         <GlobalSearch className="flex-1 max-w-2xl mx-auto" />
 
-        {/* RIGHT: bell + theme toggle */}
+        {/* RIGHT: theme toggle */}
         <div className="flex items-center gap-1 shrink-0">
-          <ActivityBell onClick={() => setActivityOpen(true)} />
           <ThemeToggleCompact />
         </div>
       </div>
@@ -76,8 +79,6 @@ export default function TopNav() {
           )
         })}
       </nav>
-
-      <ActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
     </header>
   )
 }
