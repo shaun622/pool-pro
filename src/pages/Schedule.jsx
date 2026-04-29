@@ -9,7 +9,7 @@ import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
-import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Users } from 'lucide-react'
+import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Users, X } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -193,7 +193,7 @@ export default function Route() {
 function Schedule({ business }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [view, setView] = useState('week') // 'week' | 'map'
+  const [view, setView] = useState('week') // 'week' | 'day' | 'map'
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()))
   const [allJobs, setAllJobs] = useState([])
   const [allPools, setAllPools] = useState([])
@@ -201,6 +201,10 @@ function Schedule({ business }) {
   const [allStaff, setAllStaff] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
+  // Filter the grid + today list to a single tech (or 'unassigned') —
+  // toggled by clicking a pill in the "On service / Crew" card.
+  // null = no filter (show everyone).
+  const [techFilter, setTechFilter] = useState(null)
 
   async function fetchData() {
     if (!business?.id) return
@@ -382,6 +386,36 @@ function Schedule({ business }) {
   const today = new Date()
   const todayStops = stopsByDay.get(ymd(today)) || []
 
+  // All stops across the visible 7-day window — flat array, used for the
+  // week-scope "Crew this week" tally.
+  const allWeekStops = useMemo(() => {
+    const out = []
+    for (const stops of stopsByDay.values()) out.push(...stops)
+    return out
+  }, [stopsByDay])
+
+  // Apply techFilter to the grid + today list. The "On service" card
+  // always sees the unfiltered set so the user can switch between techs.
+  const stopMatchesFilter = (s) => {
+    if (!techFilter) return true
+    if (techFilter === 'unassigned') return !s.assigned_staff_id
+    return s.assigned_staff_id === techFilter
+  }
+  const filteredStopsByDay = useMemo(() => {
+    if (!techFilter) return stopsByDay
+    const filtered = new Map()
+    for (const [k, stops] of stopsByDay.entries()) {
+      filtered.set(k, stops.filter(stopMatchesFilter))
+    }
+    return filtered
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopsByDay, techFilter])
+  const filteredTodayStops = useMemo(
+    () => todayStops.filter(stopMatchesFilter),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [todayStops, techFilter],
+  )
+
   const weekEnd = addDays(weekStart, 6)
   const isThisWeek = sameYMD(weekStart, getMondayOfWeek(new Date()))
 
@@ -432,14 +466,28 @@ function Schedule({ business }) {
         <LoadingSpinner />
       ) : view === 'day' ? (
         <>
-          {todayStops.length > 0 && <TechsOnService stops={todayStops} />}
-          <TodayList stops={todayStops} onStopSelect={handleStopSelect} variant="standalone" />
+          {todayStops.length > 0 && (
+            <TechsOnService
+              stops={todayStops}
+              scope="day"
+              activeFilter={techFilter}
+              onSelect={(id) => setTechFilter(prev => prev === id ? null : id)}
+            />
+          )}
+          <TodayList stops={filteredTodayStops} onStopSelect={handleStopSelect} variant="standalone" />
         </>
       ) : (
         <>
-          <WeekGrid weekDays={weekDays} stopsByDay={stopsByDay} onStopSelect={handleStopSelect} />
-          {todayStops.length > 0 && <TechsOnService stops={todayStops} />}
-          <TodayList stops={todayStops} onStopSelect={handleStopSelect} />
+          <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} />
+          {allWeekStops.length > 0 && (
+            <TechsOnService
+              stops={allWeekStops}
+              scope="week"
+              activeFilter={techFilter}
+              onSelect={(id) => setTechFilter(prev => prev === id ? null : id)}
+            />
+          )}
+          <TodayList stops={filteredTodayStops} onStopSelect={handleStopSelect} />
         </>
       )}
 
@@ -581,8 +629,12 @@ function EventCard({ stop, onClick }) {
   )
 }
 
-// ─── On service today (techs working today + their stop counts) ──
-function TechsOnService({ stops }) {
+// ─── On service today / Crew this week ──
+// scope='week' → "Crew this week" + counts across the visible 7-day window
+// scope='day'  → "On service today" + counts for today only
+// Click a pill to filter the grid + today list to that tech (or 'unassigned').
+// Click again to clear. activeFilter / onSelect drive that.
+function TechsOnService({ stops, scope = 'day', activeFilter, onSelect }) {
   const byTech = new Map()
   let unassigned = 0
   for (const stop of stops) {
@@ -602,40 +654,78 @@ function TechsOnService({ stops }) {
     }
   }
   const techs = Array.from(byTech.values()).sort((a, b) => b.count - a.count)
+  const totalStops = stops.length
 
   if (techs.length === 0 && unassigned === 0) return null
+
+  const eyebrowLabel = scope === 'week' ? 'Crew this week' : 'On service today'
 
   return (
     <Card className="!p-0 overflow-hidden mb-4">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400 inline-flex items-center gap-2">
           <Users className="w-3.5 h-3.5" strokeWidth={2.5} />
-          On service today
+          {eyebrowLabel}
         </p>
-        <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
-          {techs.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {activeFilter && (
+            <button
+              onClick={() => onSelect && onSelect(activeFilter)}
+              className="inline-flex items-center gap-1 px-2 h-6 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 text-[10.5px] font-semibold uppercase tracking-wider hover:bg-pool-100 transition-colors"
+              title="Clear filter"
+            >
+              <X className="w-3 h-3" strokeWidth={2.5} />
+              Clear
+            </button>
+          )}
+          <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+            {totalStops}
+          </span>
+        </div>
       </div>
       <div className="px-4 py-3 flex flex-wrap gap-2">
-        {techs.map(t => (
-          <span
-            key={t.id}
-            className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700"
-          >
-            <TechAvatar photo={t.photo} name={t.name} />
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none">
-              {t.name.split(' ')[0]}
-            </span>
-            <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400 leading-none">
-              · {t.count} stop{t.count !== 1 ? 's' : ''}
-            </span>
-          </span>
-        ))}
+        {techs.map(t => {
+          const active = activeFilter === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => onSelect && onSelect(t.id)}
+              className={cn(
+                'inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-colors',
+                active
+                  ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200 dark:border-pool-800/40 ring-1 ring-pool-300/60 dark:ring-pool-700/40'
+                  : 'bg-gray-50 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800',
+              )}
+            >
+              <TechAvatar photo={t.photo} name={t.name} />
+              <span className={cn(
+                'text-sm font-semibold leading-none',
+                active ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100',
+              )}>
+                {t.name.split(' ')[0]}
+              </span>
+              <span className={cn(
+                'text-xs tabular-nums leading-none',
+                active ? 'text-pool-600 dark:text-pool-400' : 'text-gray-500 dark:text-gray-400',
+              )}>
+                · {t.count} stop{t.count !== 1 ? 's' : ''}
+              </span>
+            </button>
+          )
+        })}
         {unassigned > 0 && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 text-amber-700 dark:text-amber-300 text-xs font-semibold">
+          <button
+            onClick={() => onSelect && onSelect('unassigned')}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold transition-colors',
+              activeFilter === 'unassigned'
+                ? 'bg-amber-100 dark:bg-amber-950/50 border-amber-300/70 dark:border-amber-800/60 text-amber-800 dark:text-amber-200 ring-1 ring-amber-300/60'
+                : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100/70',
+            )}
+          >
             <AlertCircle className="w-3.5 h-3.5" strokeWidth={2.5} />
             <span className="tabular-nums">{unassigned}</span> unassigned
-          </span>
+          </button>
         )}
       </div>
     </Card>
