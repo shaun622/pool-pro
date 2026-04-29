@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, Users } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -177,6 +177,12 @@ export default function Clients() {
     <>
       <PageWrapper width="wide">
         <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Users className="w-3.5 h-3.5" strokeWidth={2.5} />
+              CRM
+            </span>
+          }
           title="Clients"
           subtitle={subtitle}
           action={
