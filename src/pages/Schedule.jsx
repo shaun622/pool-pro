@@ -358,14 +358,13 @@ function Schedule({ business }) {
       }
     }
 
-    // Sort each day: overdue first, then by time
+    // Sort each day strictly by time (overdue stops are styled with the
+    // overdue badge but no longer jump to the top — they slot in at their
+    // own scheduled time so the day reads chronologically).
     for (const group of byDay.values()) {
-      group.stops.sort((a, b) => {
-        if (a.isOverdue && !b.isOverdue) return -1
-        if (!a.isOverdue && b.isOverdue) return 1
-        if (a.isOverdue && b.isOverdue) return (b.daysOverdue || 0) - (a.daysOverdue || 0)
-        return (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99')
-      })
+      group.stops.sort((a, b) =>
+        (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99')
+      )
     }
 
     // Return as flat ymd→stops Map for cheap day-column lookup
