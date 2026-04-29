@@ -535,7 +535,7 @@ function DayColumn({ day, stops, isToday, onStopSelect }) {
           {day.getDate()}
         </p>
       </div>
-      <div className="p-2 space-y-1.5 flex-1">
+      <div className="p-1.5 space-y-1 flex-1">
         {stops.length === 0 ? (
           <p className="text-center text-gray-300 dark:text-gray-700 text-sm py-6 select-none">—</p>
         ) : (
@@ -552,28 +552,26 @@ function EventCard({ stop, onClick }) {
   const meta = statusMeta(stop)
   const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
   const sub = stop.client_name || stop.address || null
-  const tech = stop.tech_name ? stop.tech_name.split(' ')[0] : null
   return (
     <button
       onClick={onClick}
       className={cn(
-        'block w-full text-left rounded-lg border-l-2 px-2.5 py-2 transition-colors',
+        'block w-full text-left rounded-md border-l-[3px] px-2 py-1.5 transition-colors',
         meta.accent,
-        meta.cardBg
+        meta.cardBg,
       )}
     >
       {time && (
-        <p className="tabular-nums text-[11px] text-gray-700 dark:text-gray-300 leading-tight">{time}</p>
+        <p className="tabular-nums text-[10.5px] text-gray-600 dark:text-gray-400 leading-none">{time}</p>
       )}
       <p className={cn(
-        'text-[13px] font-semibold text-gray-900 dark:text-gray-100 leading-snug line-clamp-2 mt-0.5',
-        stop.status === 'cancelled' && 'line-through text-gray-500 dark:text-gray-500'
+        'text-[12px] font-semibold text-gray-900 dark:text-gray-100 leading-tight truncate mt-0.5',
+        stop.status === 'cancelled' && 'line-through text-gray-500 dark:text-gray-500',
       )}>
         {stop.title}
-        {sub && <span className="font-normal text-gray-600 dark:text-gray-400"> · {sub}</span>}
       </p>
-      {tech && (
-        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{tech}</p>
+      {sub && (
+        <p className="text-[10.5px] text-gray-500 dark:text-gray-400 leading-tight truncate">{sub}</p>
       )}
     </button>
   )
