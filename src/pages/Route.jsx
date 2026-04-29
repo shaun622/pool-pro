@@ -1,62 +1,17 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import Header from '../components/layout/Header'
 import PageHero from '../components/layout/PageHero'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
-import Badge from '../components/ui/Badge'
-import Button from '../components/ui/Button'
-import Input, { Select, TextArea } from '../components/ui/Input'
-import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
-import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
-import AddressAutocomplete from '../components/ui/AddressAutocomplete'
-import NewClientModal from '../components/ui/NewClientModal'
-import NewPoolModal from '../components/ui/NewPoolModal'
-import NewTechnicianModal from '../components/ui/NewTechnicianModal'
-import AddRecurringModal from '../components/ui/AddRecurringModal'
-import { Calendar, Check, ChevronLeft, ChevronRight, Clock, Droplet, Mail, Map, MapPin, Pencil, Phone, Plus, Repeat, Search, User, X } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Map, Phone } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
-import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, getRoute, haversineKm } from '../lib/mapbox'
-
-const RECURRENCE_OPTIONS = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'fortnightly', label: 'Fortnightly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: '6_weekly', label: 'Every 6 Weeks' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'custom', label: 'Custom' },
-]
-
-const DAY_OPTIONS = [
-  { value: '', label: 'No preference' },
-  { value: '1', label: 'Monday' },
-  { value: '2', label: 'Tuesday' },
-  { value: '3', label: 'Wednesday' },
-  { value: '4', label: 'Thursday' },
-  { value: '5', label: 'Friday' },
-  { value: '6', label: 'Saturday' },
-  { value: '0', label: 'Sunday' },
-]
-
-// ─── Numbered pin icon ──────────────────────────
-function numberedIcon(n, color = '#0CA5EB') {
-  return L.divIcon({
-    className: 'numbered-pin',
-    html: `<div style="
-      background:${color};color:white;width:34px;height:34px;border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
-      border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);font-weight:700;font-size:13px;
-    "><span style="transform:rotate(45deg);">${n}</span></div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 34],
-  })
-}
+import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
 
 // ─── Helpers ───────────────────────────────────
 function ymd(d) {
@@ -70,13 +25,39 @@ function sameYMD(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-function formatDateLong(d) {
-  return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+function getMondayOfWeek(date) {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const dow = d.getDay() // 0=Sun..6=Sat
+  const diffToMon = (dow + 6) % 7
+  d.setDate(d.getDate() - diffToMon)
+  return d
 }
 
-// Parse a pool's schedule_frequency to interval days.
-// Supports: 'weekly', 'fortnightly', 'biweekly', 'monthly', 'every_2_weeks',
-// 'every_3_weeks', 'every_4_weeks', numeric strings (days), or { days: n }.
+function addDays(date, days) {
+  const d = new Date(date)
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+function formatRangeTitle(start, end) {
+  const sameMonth = start.getMonth() === end.getMonth()
+  const sameYear = start.getFullYear() === end.getFullYear()
+  const startFmt = start.toLocaleDateString('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: sameMonth ? undefined : 'short',
+    year: sameYear ? undefined : 'numeric',
+  })
+  const endFmt = end.toLocaleDateString('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+  return `${startFmt} — ${endFmt}`
+}
+
 function frequencyToDays(freq) {
   if (!freq) return null
   if (typeof freq === 'number') return freq
@@ -93,14 +74,12 @@ function frequencyToDays(freq) {
   return null
 }
 
-// Interval for a recurring_job_profile (supports 'custom' via custom_interval_days).
 function profileIntervalDays(profile) {
   if (!profile) return null
   if (profile.recurrence_rule === 'custom') return Number(profile.custom_interval_days) || 7
   return frequencyToDays(profile.recurrence_rule)
 }
 
-// Check if a recurring profile is still active (respects duration limits)
 function isProfileActive(profile) {
   if (profile.status === 'completed' || profile.status === 'cancelled' || profile.status === 'paused') return false
   if (profile.duration_type === 'num_visits' && profile.total_visits && (profile.completed_visits || 0) >= profile.total_visits) return false
@@ -108,7 +87,6 @@ function isProfileActive(profile) {
   return true
 }
 
-// Check if a projected occurrence date is within the profile's duration
 function isOccurrenceInRange(profile, occurrenceDate, occurrenceIndex) {
   if (profile.duration_type === 'until_date' && profile.end_date) {
     return occurrenceDate <= new Date(profile.end_date + 'T23:59:59')
@@ -117,7 +95,7 @@ function isOccurrenceInRange(profile, occurrenceDate, occurrenceIndex) {
     const remaining = profile.total_visits - (profile.completed_visits || 0)
     return occurrenceIndex < remaining
   }
-  return true // ongoing
+  return true
 }
 
 function formatTimeRange(start, durationMin) {
@@ -130,7 +108,64 @@ function formatTimeRange(start, durationMin) {
   return `${fmt(startD)} – ${fmt(endD)}`
 }
 
-// ─── Fit bounds helper ─────────────────────────
+// Status → display + classes for badges and accent borders.
+const STATUS_META = {
+  scheduled: {
+    label: 'Scheduled',
+    badge: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+    accent: 'border-l-emerald-400 dark:border-l-emerald-500/70',
+    cardBg: 'bg-emerald-50/70 hover:bg-emerald-100/70 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40',
+  },
+  in_progress: {
+    label: 'In progress',
+    badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+    accent: 'border-l-emerald-500 dark:border-l-emerald-400',
+    cardBg: 'bg-emerald-50/70 hover:bg-emerald-100/70 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40',
+  },
+  completed: {
+    label: 'Done',
+    badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    accent: 'border-l-blue-500 dark:border-l-blue-400',
+    cardBg: 'bg-blue-50/70 hover:bg-blue-100/70 dark:bg-blue-950/20 dark:hover:bg-blue-950/40',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    badge: 'bg-gray-100 text-gray-500 line-through dark:bg-gray-800 dark:text-gray-500',
+    accent: 'border-l-gray-300 dark:border-l-gray-600',
+    cardBg: 'bg-gray-50/70 hover:bg-gray-100/70 dark:bg-gray-900/40 dark:hover:bg-gray-800/60',
+  },
+  due: {
+    label: 'Due',
+    badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    accent: 'border-l-amber-500 dark:border-l-amber-400',
+    cardBg: 'bg-amber-50/70 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:hover:bg-amber-950/40',
+  },
+  overdue: {
+    label: 'Overdue',
+    badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    accent: 'border-l-red-500 dark:border-l-red-400',
+    cardBg: 'bg-red-50/70 hover:bg-red-100/70 dark:bg-red-950/20 dark:hover:bg-red-950/40',
+  },
+}
+function statusMeta(stop) {
+  if (stop.isOverdue) return STATUS_META.overdue
+  return STATUS_META[stop.status] || STATUS_META.scheduled
+}
+
+// ─── Numbered pin icon (for Map view) ──────────
+function numberedIcon(n, color = '#0CA5EB') {
+  return L.divIcon({
+    className: 'numbered-pin',
+    html: `<div style="
+      background:${color};color:white;width:34px;height:34px;border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
+      border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);font-weight:700;font-size:13px;
+    "><span style="transform:rotate(45deg);">${n}</span></div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 34],
+  })
+}
+
 function FitBounds({ stops }) {
   const map = useMap()
   useEffect(() => {
@@ -146,49 +181,18 @@ function FitBounds({ stops }) {
   return null
 }
 
-// ─── Main page ─────────────────────────────────
+// ─── Top-level page ────────────────────────────
 export default function Route() {
   const { business, loading: bizLoading } = useBusiness()
-  const [view, setView] = useState('list') // 'list' | 'week' | 'upcoming' | 'map'
-  const [showCalendar, setShowCalendar] = useState(false)
-
   if (bizLoading) return <LoadingPage />
-
-  const today = new Date()
-  const todayLabel = today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
-
-  return (
-    <>
-      <PageWrapper width="wide">
-        <PageHero
-          title="Schedule"
-          subtitle={todayLabel}
-          action={
-            <button
-              onClick={() => setShowCalendar(v => !v)}
-              className="min-h-tap min-w-tap flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-              title="Calendar"
-              aria-label="Toggle calendar"
-            >
-              <Calendar className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={1.5} />
-            </button>
-          }
-        />
-        {showCalendar ? (
-          <CalendarView business={business} onClose={() => setShowCalendar(false)} />
-        ) : (
-          <ScheduleView business={business} view={view} setView={setView} />
-        )}
-      </PageWrapper>
-    </>
-  )
+  return <Schedule business={business} />
 }
 
-// ─── Schedule (List / Upcoming / Map) ──────────
-function ScheduleView({ business, view, setView }) {
+function Schedule({ business }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [view, setView] = useState('week') // 'week' | 'map'
+  const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()))
   const [allJobs, setAllJobs] = useState([])
   const [allPools, setAllPools] = useState([])
   const [allProfiles, setAllProfiles] = useState([])
@@ -196,29 +200,12 @@ function ScheduleView({ business, view, setView }) {
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
 
-  // Real jobs navigate to full detail page; pools and recurring projections open the modal
-  function handleStopSelect(stop) {
-    if (stop.type === 'job' && !stop.projected) {
-      navigate(`/work-orders/${stop.id}`)
-    } else {
-      setSelectedStop(stop)
-    }
-  }
-  const [routeInfo, setRouteInfo] = useState(null) // { distance_km, duration_min, coordinates }
-  const [upcomingPage, setUpcomingPage] = useState(0) // 0 = next 5 jobs, 1 = following 5, etc.
-  const [recurModalOpen, setRecurModalOpen] = useState(false)
-  const UPCOMING_PAGE_SIZE = 5
-  const UPCOMING_HORIZON_DAYS = 180
-
   async function fetchData() {
     if (!business?.id) return
     setLoading(true)
-    // Load a wide range — 60 days back and 60 forward
-    const from = new Date()
-    from.setDate(from.getDate() - 60)
-    const to = new Date()
-    to.setDate(to.getDate() + 60)
-
+    // Wide window so prev/next week navigation is cached.
+    const from = new Date(); from.setDate(from.getDate() - 60)
+    const to = new Date(); to.setDate(to.getDate() + 120)
     const [jobsRes, poolsRes, profilesRes, staffRes] = await Promise.all([
       supabase
         .from('jobs')
@@ -228,18 +215,15 @@ function ScheduleView({ business, view, setView }) {
         .lte('scheduled_date', ymd(to))
         .order('scheduled_date')
         .order('scheduled_time'),
-      // Load ALL pools (map needs all, stop builders check next_due_at themselves)
       supabase
         .from('pools')
         .select('*, clients(name, email, phone), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id),
-      // Load active recurring job profiles so we can project future occurrences
       supabase
         .from('recurring_job_profiles')
         .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
         .eq('is_active', true),
-      // Load staff for tech display on cards
       supabase
         .from('staff_members')
         .select('id, name, photo_url')
@@ -255,133 +239,9 @@ function ScheduleView({ business, view, setView }) {
 
   useEffect(() => { fetchData() }, [business?.id, location.key])
 
-  // Build stops for the selected date — merges jobs, due pools, overdue pools, and recurring profiles.
-  // Deduplicates: if a pool has a jobs row for the day, prefer the job.
-  // If a pool is covered by a recurring profile, prefer the pool (real data).
-  const stopsForDate = useMemo(() => {
-    const now = new Date()
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const isViewingToday = sameYMD(selectedDate, now)
-
-    // 1. Jobs for selected date (+ track which pool_ids are covered)
-    const poolIdsCoveredByJob = new Set()
-    const todayItems = []
-    for (const j of allJobs) {
-      if (!j.scheduled_date) continue
-      const d = new Date(j.scheduled_date + 'T00:00:00')
-      if (!sameYMD(d, selectedDate)) continue
-      todayItems.push(jobToStop(j))
-      if (j.pool_id) poolIdsCoveredByJob.add(j.pool_id)
-    }
-
-    // 2. Pools due on selected date (skip if already covered by a job)
-    const poolIdsCovered = new Set(poolIdsCoveredByJob)
-    for (const p of allPools) {
-      if (!p.next_due_at) continue
-      const d = new Date(p.next_due_at)
-      if (!sameYMD(d, selectedDate)) continue
-      if (poolIdsCovered.has(p.id)) continue
-      todayItems.push(poolToStop(p))
-      poolIdsCovered.add(p.id)
-    }
-
-    // 3. Recurring profile projections for selected date
-    const takenByProfile = new Map()
-    for (const j of allJobs) {
-      if (j.recurring_profile_id && j.scheduled_date) {
-        if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
-        takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
-      }
-    }
-    const dateKey = ymd(selectedDate)
-    const selStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
-    for (const profile of allProfiles) {
-      if (!isProfileActive(profile)) continue
-      const intervalDays = profileIntervalDays(profile)
-      if (!intervalDays) continue
-      const anchorStr = profile.next_generation_at || profile.last_generated_at
-      const anchor = anchorStr ? new Date(anchorStr) : new Date()
-      if (isNaN(anchor.getTime())) continue
-      let cursor = new Date(anchor)
-      cursor.setHours(0, 0, 0, 0)
-      while (cursor > selStart) cursor.setDate(cursor.getDate() - intervalDays)
-      while (cursor < selStart) cursor.setDate(cursor.getDate() + intervalDays)
-      if (sameYMD(cursor, selectedDate)) {
-        if (!isOccurrenceInRange(profile, cursor, 0)) continue
-        const taken = takenByProfile.get(profile.id)
-        if (taken && taken.has(dateKey)) continue
-        if (profile.pool_id && poolIdsCovered.has(profile.pool_id)) continue
-        todayItems.push(profileToStop(profile, cursor))
-        if (profile.pool_id) poolIdsCovered.add(profile.pool_id)
-      }
-    }
-
-    todayItems.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
-
-    // 4. Overdue pools (only when viewing today)
-    const overdueItems = []
-    if (isViewingToday) {
-      for (const p of allPools) {
-        if (!p.next_due_at) continue
-        const d = new Date(p.next_due_at)
-        if (d >= startOfToday) continue
-        if (poolIdsCoveredByJob.has(p.id)) continue // has a job today already
-        // Compare date-only (strip time) to avoid timezone edge cases
-        const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
-        const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
-        if (daysOver <= 0) {
-          // Due today (timezone edge case where timestamp is just before midnight)
-          todayItems.push(poolToStop(p, { isOverdue: false, daysOverdue: 0 }))
-        } else {
-          overdueItems.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
-        }
-      }
-      overdueItems.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0))
-    }
-
-    // Return overdue first, then today — flat array for map/routing/modal numbering
-    return [...overdueItems, ...todayItems]
-  }, [allJobs, allPools, allProfiles, selectedDate])
-
-  // Fetch Mapbox route when stops change
-  useEffect(() => {
-    const withCoords = stopsForDate.filter(s => s.lat != null && s.lng != null)
-    if (withCoords.length < 2) {
-      if (withCoords.length === 0) {
-        setRouteInfo(null)
-      } else {
-        setRouteInfo({ distance_km: 0, duration_min: 0, coordinates: null })
-      }
-      return
-    }
-    let cancelled = false
-    getRoute(withCoords.map(s => ({ lat: s.lat, lng: s.lng }))).then(r => {
-      if (cancelled) return
-      if (r) {
-        setRouteInfo(r)
-      } else {
-        // Fallback to straight line
-        let total = 0
-        for (let i = 0; i < withCoords.length - 1; i++) {
-          total += haversineKm(withCoords[i], withCoords[i + 1])
-        }
-        setRouteInfo({ distance_km: total, duration_min: (total / 60) * 60, coordinates: null })
-      }
-    })
-    return () => { cancelled = true }
-  }, [stopsForDate])
-
-  // Build week groups — Mon..Sun of the week containing selectedDate, with
-  // recurring pool-service projections.
-  const weekGroups = useMemo(() => {
-    // Find Monday of the week containing selectedDate
-    const weekStart = new Date(selectedDate)
-    weekStart.setHours(0, 0, 0, 0)
-    const dow = weekStart.getDay() // 0=Sun..6=Sat
-    const diffToMon = (dow + 6) % 7 // days since Monday
-    weekStart.setDate(weekStart.getDate() - diffToMon)
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
+  // Build a Map<ymdKey, Stop[]> for the visible 7-day window.
+  const stopsByDay = useMemo(() => {
+    const weekEnd = addDays(weekStart, 6)
     weekEnd.setHours(23, 59, 59, 999)
 
     const byDay = new Map()
@@ -390,14 +250,10 @@ function ScheduleView({ business, view, setView }) {
       if (!byDay.has(key)) byDay.set(key, { date: new Date(d), stops: [] })
       return byDay.get(key)
     }
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart)
-      d.setDate(d.getDate() + i)
-      ensure(d)
-    }
+    for (let i = 0; i < 7; i++) ensure(addDays(weekStart, i))
 
-    // Track which pool_ids are covered per day (by jobs or pool stops) to avoid duplicates with profiles
-    const poolIdsCoveredByDay = new Map() // ymd -> Set of pool_ids
+    // Track which pool_ids are covered per day to dedupe profile/pool projections.
+    const poolIdsCoveredByDay = new Map()
     const coverPool = (d, poolId) => {
       if (!poolId) return
       const key = ymd(d)
@@ -410,6 +266,7 @@ function ScheduleView({ business, view, setView }) {
       return covered ? covered.has(poolId) : false
     }
 
+    // 1. Real jobs
     for (const j of allJobs) {
       if (!j.scheduled_date) continue
       const d = new Date(j.scheduled_date + 'T00:00:00')
@@ -418,12 +275,12 @@ function ScheduleView({ business, view, setView }) {
       coverPool(d, j.pool_id)
     }
 
+    // 2. Pools with next_due_at in range — project at frequency
     for (const p of allPools) {
       if (!p.next_due_at) continue
       const intervalDays = frequencyToDays(p.schedule_frequency)
       const firstDue = new Date(p.next_due_at)
       if (isNaN(firstDue.getTime())) continue
-
       const occurrences = []
       if (!intervalDays) {
         if (firstDue >= weekStart && firstDue <= weekEnd) occurrences.push(firstDue)
@@ -443,8 +300,8 @@ function ScheduleView({ business, view, setView }) {
       }
     }
 
-    // Recurring job profiles — project future occurrences across the week
-    const takenByProfile = new Map() // profile_id -> Set of ymd that already have a real job row
+    // 3. Recurring job profile projections
+    const takenByProfile = new Map()
     for (const j of allJobs) {
       if (j.recurring_profile_id && j.scheduled_date) {
         if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
@@ -478,602 +335,334 @@ function ScheduleView({ business, view, setView }) {
       }
     }
 
-    // Add overdue pools under today's group (spec: overdue appears under current day only)
+    // 4. Overdue pools — surface under today's column
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const todayKey = ymd(now)
-    const todayGroup = byDay.get(todayKey)
-    if (todayGroup) {
-      const poolIdsInToday = new Set(todayGroup.stops.filter(s => s.pool_id).map(s => s.pool_id))
-      for (const p of allPools) {
-        if (!p.next_due_at) continue
-        const d = new Date(p.next_due_at)
-        if (d >= startOfToday) continue
-        if (poolIdsInToday.has(p.id)) continue
-        const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
-        const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
-        todayGroup.stops.unshift(poolToStop(p, { isOverdue: true, daysOverdue: Math.max(daysOver, 1) }))
-        poolIdsInToday.add(p.id)
+    if (startOfToday >= weekStart && startOfToday <= weekEnd) {
+      const todayKey = ymd(now)
+      const todayGroup = byDay.get(todayKey)
+      if (todayGroup) {
+        const poolIdsInToday = new Set(todayGroup.stops.filter(s => s.pool_id).map(s => s.pool_id))
+        for (const p of allPools) {
+          if (!p.next_due_at) continue
+          const d = new Date(p.next_due_at)
+          if (d >= startOfToday) continue
+          if (poolIdsInToday.has(p.id)) continue
+          const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
+          const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
+          todayGroup.stops.unshift(poolToStop(p, { isOverdue: true, daysOverdue: Math.max(daysOver, 1) }))
+          poolIdsInToday.add(p.id)
+        }
       }
     }
 
-    const groups = []
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart)
-      d.setDate(d.getDate() + i)
-      const g = byDay.get(ymd(d))
-      if (!g) continue
-      // Sort: overdue first (by most overdue), then by time
-      g.stops.sort((a, b) => {
+    // Sort each day: overdue first, then by time
+    for (const group of byDay.values()) {
+      group.stops.sort((a, b) => {
         if (a.isOverdue && !b.isOverdue) return -1
         if (!a.isOverdue && b.isOverdue) return 1
         if (a.isOverdue && b.isOverdue) return (b.daysOverdue || 0) - (a.daysOverdue || 0)
         return (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99')
       })
-      groups.push(g)
-    }
-    return { weekStart, weekEnd, groups }
-  }, [allJobs, allPools, allProfiles, selectedDate])
-
-  // Build upcoming: collect all stops across the horizon, sort chronologically,
-  // and paginate 5 at a time. Includes recurring projections of pool services.
-  const { upcomingGroups, upcomingHasMore } = useMemo(() => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const horizonEnd = new Date(today)
-    horizonEnd.setDate(horizonEnd.getDate() + UPCOMING_HORIZON_DAYS)
-    horizonEnd.setHours(23, 59, 59, 999)
-
-    const allStops = []
-
-    // Track which pool_ids are covered per day to avoid duplicates
-    const poolIdsCoveredByDay = new Map()
-    const coverPool = (d, poolId) => {
-      if (!poolId) return
-      const key = ymd(d)
-      if (!poolIdsCoveredByDay.has(key)) poolIdsCoveredByDay.set(key, new Set())
-      poolIdsCoveredByDay.get(key).add(poolId)
-    }
-    const isPoolCovered = (d, poolId) => {
-      if (!poolId) return false
-      const covered = poolIdsCoveredByDay.get(ymd(d))
-      return covered ? covered.has(poolId) : false
     }
 
-    // Jobs from today forward
-    for (const j of allJobs) {
-      if (!j.scheduled_date) continue
-      const d = new Date(j.scheduled_date + 'T00:00:00')
-      if (d < today || d > horizonEnd) continue
-      const stop = jobToStop(j)
-      allStops.push({ date: d, stop, sortTime: stop.sortTime || '99:99' })
-      coverPool(d, j.pool_id)
+    // Return as flat ymd→stops Map for cheap day-column lookup
+    const flat = new Map()
+    for (const [k, v] of byDay.entries()) flat.set(k, v.stops)
+    return flat
+  }, [allJobs, allPools, allProfiles, weekStart])
+
+  const weekDays = useMemo(() => {
+    const days = []
+    for (let i = 0; i < 7; i++) days.push(addDays(weekStart, i))
+    return days
+  }, [weekStart])
+
+  const today = new Date()
+  const todayStops = stopsByDay.get(ymd(today)) || []
+
+  const weekEnd = addDays(weekStart, 6)
+  const isThisWeek = sameYMD(weekStart, getMondayOfWeek(new Date()))
+
+  // Real jobs route to /work-orders/:id; everything else opens detail modal.
+  function handleStopSelect(stop) {
+    if (stop.type === 'job' && !stop.projected) {
+      navigate(`/work-orders/${stop.id}`)
+    } else {
+      setSelectedStop(stop)
     }
-
-    // Pools: project recurring occurrences from today to horizon
-    for (const p of allPools) {
-      if (!p.next_due_at) continue
-      const intervalDays = frequencyToDays(p.schedule_frequency)
-      const firstDue = new Date(p.next_due_at)
-      if (isNaN(firstDue.getTime())) continue
-
-      const occurrences = []
-      if (!intervalDays) {
-        if (firstDue >= today && firstDue <= horizonEnd) occurrences.push(firstDue)
-      } else {
-        let cursor = new Date(firstDue)
-        while (cursor > today) cursor.setDate(cursor.getDate() - intervalDays)
-        while (cursor < today) cursor.setDate(cursor.getDate() + intervalDays)
-        while (cursor <= horizonEnd) {
-          occurrences.push(new Date(cursor))
-          cursor.setDate(cursor.getDate() + intervalDays)
-        }
-      }
-
-      for (const occ of occurrences) {
-        if (isPoolCovered(occ, p.id)) continue
-        const stop = poolToStop({ ...p, next_due_at: occ.toISOString() })
-        allStops.push({ date: new Date(occ), stop, sortTime: stop.sortTime || '99:99' })
-        coverPool(occ, p.id)
-      }
-    }
-
-    // Recurring job profiles: project future occurrences
-    const takenByProfile = new Map()
-    for (const j of allJobs) {
-      if (j.recurring_profile_id && j.scheduled_date) {
-        if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
-        takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
-      }
-    }
-    for (const profile of allProfiles) {
-      if (!isProfileActive(profile)) continue
-      const intervalDays = profileIntervalDays(profile)
-      if (!intervalDays) continue
-      const anchorStr = profile.next_generation_at || profile.last_generated_at
-      const anchor = anchorStr ? new Date(anchorStr) : new Date()
-      if (isNaN(anchor.getTime())) continue
-      let cursor = new Date(anchor)
-      cursor.setHours(0, 0, 0, 0)
-      while (cursor > today) cursor.setDate(cursor.getDate() - intervalDays)
-      while (cursor < today) cursor.setDate(cursor.getDate() + intervalDays)
-      let occurrenceIdx = 0
-      while (cursor <= horizonEnd) {
-        if (!isOccurrenceInRange(profile, cursor, occurrenceIdx)) break
-        const key = ymd(cursor)
-        const taken = takenByProfile.get(profile.id)
-        if (!taken || !taken.has(key)) {
-          if (!isPoolCovered(cursor, profile.pool_id)) {
-            const stop = profileToStop(profile, cursor)
-            allStops.push({ date: new Date(cursor), stop, sortTime: stop.sortTime || '99:99' })
-            coverPool(cursor, profile.pool_id)
-          }
-        }
-        cursor.setDate(cursor.getDate() + intervalDays)
-        occurrenceIdx++
-      }
-    }
-
-    // Overdue pools — show under today in upcoming
-    const poolIdsInStops = new Set(allStops.filter(s => s.stop.pool_id).map(s => s.stop.pool_id))
-    for (const p of allPools) {
-      if (!p.next_due_at) continue
-      const d = new Date(p.next_due_at)
-      if (d >= today) continue // not overdue
-      if (poolIdsInStops.has(p.id)) continue
-      const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
-      const daysOver = Math.max(Math.round((today - dueDate) / (1000 * 60 * 60 * 24)), 1)
-      const stop = poolToStop(p, { isOverdue: true, daysOverdue: daysOver })
-      allStops.push({ date: new Date(today), stop, sortTime: '00:00' }) // sort first under today
-      poolIdsInStops.add(p.id)
-    }
-
-    // Sort chronologically (date, then time — overdue items sort first via '00:00')
-    allStops.sort((a, b) => {
-      const dc = a.date - b.date
-      if (dc !== 0) return dc
-      // overdue items first within a day
-      if (a.stop.isOverdue && !b.stop.isOverdue) return -1
-      if (!a.stop.isOverdue && b.stop.isOverdue) return 1
-      return a.sortTime.localeCompare(b.sortTime)
-    })
-
-    // Slice page
-    const start = upcomingPage * UPCOMING_PAGE_SIZE
-    const pageStops = allStops.slice(start, start + UPCOMING_PAGE_SIZE)
-    const hasMore = allStops.length > start + UPCOMING_PAGE_SIZE
-
-    // Group by day for the view
-    const byKey = new Map()
-    for (const { date, stop } of pageStops) {
-      const key = ymd(date)
-      if (!byKey.has(key)) byKey.set(key, { date: new Date(date), stops: [] })
-      byKey.get(key).stops.push(stop)
-    }
-    const groups = [...byKey.values()]
-    return { upcomingGroups: groups, upcomingHasMore: hasMore }
-  }, [allJobs, allPools, allProfiles, upcomingPage])
-
-  function prevDay() { setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() - 1); return n }) }
-  function nextDay() { setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() + 1); return n }) }
-  function jumpToday() { setSelectedDate(new Date()) }
-
-  const isToday = sameYMD(selectedDate, new Date())
+  }
 
   return (
-    <>
-      {/* Date navigator */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 p-3 mb-4">
-        <div className="flex items-center justify-between">
-          <button onClick={prevDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-            <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-          </button>
-          <div className="text-center">
-            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
-              {selectedDate.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-            {!isToday && (
-              <button onClick={jumpToday} className="text-xs font-semibold text-pool-600 dark:text-pool-400 mt-0.5 hover:text-pool-700">
-                Jump to today
-              </button>
-            )}
-          </div>
-          <button onClick={nextDay} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-            <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-          </button>
-        </div>
-      </div>
+    <PageWrapper width="wide">
+      <PageHero
+        title="Schedule"
+        subtitle={today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+        action={<ViewToggle view={view} setView={setView} />}
+      />
 
-      {/* Tab switcher */}
-      <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
-        {[
-          { key: 'list', label: 'Today' },
-          { key: 'week', label: 'Week' },
-          { key: 'upcoming', label: 'Upcoming' },
-          { key: 'map', label: 'Map' },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setView(t.key)}
-            className={cn(
-              'flex-1 py-2 rounded-lg text-sm font-semibold text-center min-h-tap transition-all',
-              view === t.key ? 'bg-white dark:bg-gray-900 text-pool-700 shadow-card' : 'text-gray-500 dark:text-gray-400'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Add Recurring Service */}
-      <div className="mb-4">
-        <button
-          onClick={() => setRecurModalOpen(true)}
-          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-brand text-white shadow-md shadow-pool-500/20 text-sm font-semibold hover:shadow-lg active:scale-[0.98] transition-all min-h-tap"
-        >
-          <Plus className="w-5 h-5" strokeWidth={2} />
-          Add Recurring Service
-        </button>
-      </div>
-
-      {/* Total route card */}
-      {routeInfo && stopsForDate.length > 1 && (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 mb-4 shadow-card border border-gray-100 dark:border-gray-800 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
-            <Map className="w-6 h-6 text-pool-600 dark:text-pool-400" strokeWidth={1.8} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Total Route</p>
-            <p className="text-base font-bold text-gray-900 dark:text-gray-100">
-              {routeInfo.distance_km.toFixed(1)} km · ~{Math.round(routeInfo.duration_min)} min travel
-            </p>
-            {routeInfo.coordinates && <p className="text-[11px] text-gray-400 dark:text-gray-500">via road network</p>}
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <LoadingSpinner />
-      ) : view === 'list' ? (
-        <ListView stops={stopsForDate} onSelect={handleStopSelect} navigate={navigate} isViewingToday={sameYMD(selectedDate, new Date())} />
-      ) : view === 'week' ? (
-        <WeekView
-          weekStart={weekGroups.weekStart}
-          weekEnd={weekGroups.weekEnd}
-          groups={weekGroups.groups}
-          selectedDate={selectedDate}
-          onSelect={handleStopSelect}
-          onPrev={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })}
-          onNext={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })}
-          onPickDay={(d) => setSelectedDate(d)}
-        />
-      ) : view === 'upcoming' ? (
-        <UpcomingView
-          groups={upcomingGroups}
-          hasMore={upcomingHasMore}
-          onSelect={handleStopSelect}
-          page={upcomingPage}
-          onPrev={() => setUpcomingPage(p => Math.max(0, p - 1))}
-          onNext={() => setUpcomingPage(p => p + 1)}
-        />
+      {view === 'map' ? (
+        <MapView pools={allPools} onSelect={handleStopSelect} />
       ) : (
-        <MapView pools={allPools} onSelect={handleStopSelect} staffList={allStaff} />
+        <>
+          <WeekToolbar
+            rangeTitle={formatRangeTitle(weekStart, weekEnd)}
+            isThisWeek={isThisWeek}
+            onPrev={() => setWeekStart(d => addDays(d, -7))}
+            onThisWeek={() => setWeekStart(getMondayOfWeek(new Date()))}
+            onNext={() => setWeekStart(d => addDays(d, 7))}
+          />
+          {loading ? (
+            <LoadingSpinner />
+          ) : (
+            <>
+              <WeekGrid weekDays={weekDays} stopsByDay={stopsByDay} onStopSelect={handleStopSelect} />
+              <TodayList stops={todayStops} onStopSelect={handleStopSelect} />
+            </>
+          )}
+        </>
       )}
 
       <StopDetailModal
         open={!!selectedStop}
         onClose={() => setSelectedStop(null)}
         stop={selectedStop}
-        stopNumber={selectedStop ? stopsForDate.findIndex(s => s.id === selectedStop.id && s.type === selectedStop.type) + 1 : 1}
+        stopNumber={1}
         onUpdated={() => { fetchData(); setSelectedStop(null) }}
         staffList={allStaff}
       />
-
-      <AddRecurringModal
-        open={recurModalOpen}
-        onClose={() => setRecurModalOpen(false)}
-        business={business}
-        staff={allStaff}
-        onCreated={() => { fetchData(); setRecurModalOpen(false) }}
-      />
-    </>
+    </PageWrapper>
   )
 }
 
-// ─── List view ────────────────────────────────
-function ListView({ stops, onSelect, navigate, isViewingToday }) {
-  const overdueStops = stops.filter(s => s.isOverdue)
-  const todayStops = stops.filter(s => !s.isOverdue)
-
-  // When viewing today, always show both sections
-  if (isViewingToday) {
-    let num = 0
-    return (
-      <div className="space-y-5">
-        {/* Overdue section — always visible */}
-        <section>
-          <div className="flex items-center gap-2 mb-2">
-            <div className={`w-2 h-2 rounded-full ${overdueStops.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
-            <h3 className={`text-xs font-bold uppercase tracking-wide ${overdueStops.length > 0 ? 'text-red-600' : 'text-gray-400 dark:text-gray-500'}`}>
-              Overdue {overdueStops.length > 0 ? `(${overdueStops.length})` : ''}
-            </h3>
-          </div>
-          {overdueStops.length > 0 ? (
-            <div className="space-y-2.5">
-              {overdueStops.map(stop => {
-                num++
-                return (
-                  <OverdueCard
-                    key={`overdue-${stop.id}`}
-                    stop={stop}
-                    onService={() => navigate(`/pools/${stop.pool_id || stop.id}/service`)}
-                    onClick={() => onSelect(stop)}
-                  />
-                )
-              })}
-            </div>
-          ) : (
-            <div className="bg-green-50 dark:bg-green-950/30 rounded-xl border border-green-100 px-4 py-3 flex items-center gap-2.5">
-              <Check className="w-4 h-4 text-green-500 shrink-0" strokeWidth={2} />
-              <p className="text-sm text-green-700">No overdue pools</p>
-            </div>
-          )}
-        </section>
-
-        {/* Today's Route — always visible */}
-        <section>
-          <div className="flex items-center gap-2 mb-2">
-            <div className={`w-2 h-2 rounded-full ${todayStops.length > 0 ? 'bg-pool-500' : 'bg-gray-300'}`} />
-            <h3 className={`text-xs font-bold uppercase tracking-wide ${todayStops.length > 0 ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
-              Today's Route {todayStops.length > 0 ? `(${todayStops.length})` : ''}
-            </h3>
-          </div>
-          {todayStops.length > 0 ? (
-            <div className="space-y-2.5">
-              {todayStops.map((stop) => {
-                num++
-                return (
-                  <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={num} onClick={() => onSelect(stop)} />
-                )
-              })}
-            </div>
-          ) : (
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center gap-2.5">
-              <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" strokeWidth={1.5} />
-              <p className="text-sm text-gray-500 dark:text-gray-400">No stops scheduled for today</p>
-            </div>
-          )}
-        </section>
-      </div>
-    )
-  }
-
-  // Non-today view — simple flat list
-  if (!stops.length) {
-    return (
-      <EmptyState
-        icon={<Calendar className="w-10 h-10" strokeWidth={1.5} />}
-        title="Nothing scheduled"
-        description="No jobs or services scheduled for this day"
-      />
-    )
-  }
-
-  let num = 0
+// ─── View toggle (Week / Map) ──────────────────
+function ViewToggle({ view, setView }) {
+  const base = 'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-medium transition-colors'
+  const active = 'bg-pool-100 text-pool-700 dark:bg-pool-900/40 dark:text-pool-300'
+  const inactive = 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
   return (
-    <div className="space-y-2.5">
-      {stops.map((stop) => {
-        num++
-        return (
-          <StopCard key={`${stop.type}-${stop.id}`} stop={stop} number={num} onClick={() => onSelect(stop)} />
-        )
-      })}
+    <div className="inline-flex items-center gap-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-1 shadow-card">
+      <button onClick={() => setView('week')} className={cn(base, view === 'week' ? active : inactive)} aria-pressed={view === 'week'}>
+        <Calendar className="w-4 h-4" strokeWidth={1.8} />
+        Week
+      </button>
+      <button onClick={() => setView('map')} className={cn(base, view === 'map' ? active : inactive)} aria-pressed={view === 'map'}>
+        <Map className="w-4 h-4" strokeWidth={1.8} />
+        Map
+      </button>
     </div>
   )
 }
 
-// ─── Overdue card ─────────────────────────────
-function OverdueCard({ stop, onService, onClick }) {
+// ─── Week toolbar (label + range + prev/this/next) ──────
+function WeekToolbar({ rangeTitle, isThisWeek, onPrev, onThisWeek, onNext }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-red-200 shadow-card p-3.5" style={{ borderLeft: '4px solid #ef4444' }}>
-      <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold text-xs flex items-center justify-center shrink-0">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div className="flex-1 min-w-0" onClick={onClick} role="button" tabIndex={0}>
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{stop.client_name || 'Pool Service'}</p>
-              {stop.address && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{stop.address}</p>}
-            </div>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap ${stop.daysOverdue === 0 ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'}`}>
-              {stop.daysOverdue === 0 ? 'Due today' : `${stop.daysOverdue}d overdue`}
-            </span>
-          </div>
-          {stop.phone && (
-            <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 dark:text-pool-400 font-medium mt-1">
-              <Phone className="w-3 h-3" strokeWidth={2} />
-              {stop.phone}
-            </a>
-          )}
-        </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); onService() }}
-          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-pool-600 hover:bg-pool-700 transition-colors shrink-0 min-h-tap flex items-center"
-        >
-          Service
-        </button>
+    <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400 mb-1">
+          Week View
+        </p>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+          {rangeTitle}
+        </h2>
       </div>
-    </div>
-  )
-}
-
-// ─── Week view ────────────────────────────────
-function WeekView({ weekStart, weekEnd, groups, selectedDate, onSelect, onPrev, onNext, onPickDay }) {
-  const fmt = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
-  const totalStops = groups.reduce((s, g) => s + g.stops.length, 0)
-
-  return (
-    <div className="space-y-4">
-      {/* Week navigator */}
-      <div className="flex items-center justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card p-3">
-        <button onClick={onPrev} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-        </button>
-        <div className="text-center">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500">Week</p>
-          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmt(weekStart)} – {fmt(weekEnd)}</p>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{totalStops} stop{totalStops === 1 ? '' : 's'}</p>
-        </div>
-        <button onClick={onNext} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-        </button>
-      </div>
-
-      {/* Day chip strip (Mon..Sun) */}
-      <div className="grid grid-cols-7 gap-1.5">
-        {groups.map((g, gi) => {
-          const isSelected = sameYMD(g.date, selectedDate)
-          const isToday = sameYMD(g.date, new Date())
-          const dayShort = g.date.toLocaleDateString('en-AU', { weekday: 'short' }).slice(0, 3)
-          return (
-            <button
-              key={gi}
-              onClick={() => onPickDay(g.date)}
-              className={cn(
-                'flex flex-col items-center py-2 rounded-xl border transition-all',
-                isSelected
-                  ? 'bg-gradient-brand text-white border-transparent shadow-card'
-                  : isToday
-                    ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200 text-pool-700'
-                    : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300'
-              )}
-            >
-              <span className="text-[10px] font-bold uppercase opacity-80">{dayShort}</span>
-              <span className="text-base font-bold leading-tight">{g.date.getDate()}</span>
-              {g.stops.length > 0 && (
-                <span className={cn(
-                  'mt-0.5 text-[9px] font-bold px-1.5 rounded-full',
-                  isSelected ? 'bg-white/25' : 'bg-pool-100 text-pool-700'
-                )}>
-                  {g.stops.length}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Day sections — start from the selected day, continue to end of week */}
-      <div className="space-y-4">
-        {groups.filter(g => g.date >= new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())).map((g, gi) => (
-          <section key={gi}>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-              {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
-            </h3>
-            {g.stops.length > 0 ? (
-              <div className="space-y-2.5">
-                {g.stops.map((stop, idx) => (
-                  <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} />
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs italic text-gray-400 dark:text-gray-500 pl-0.5">No services</p>
-            )}
-          </section>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ─── Upcoming view ────────────────────────────
-function UpcomingView({ groups, hasMore, onSelect, page, onPrev, onNext }) {
-  const rangeLabel = (() => {
-    if (!groups.length) return ''
-    const first = groups[0].date
-    const last = groups[groups.length - 1].date
-    const fmt = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
-    if (sameYMD(first, last)) return fmt(first)
-    return `${fmt(first)} – ${fmt(last)}`
-  })()
-
-  const hasAnyStops = groups.some(g => g.stops.length > 0)
-
-  return (
-    <div className="space-y-4">
-      {/* Range header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            {page === 0 ? 'Next 5 jobs' : `Jobs ${page * 5 + 1}–${page * 5 + 5}`}
-          </p>
-          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{rangeLabel}</p>
-        </div>
-      </div>
-
-      {!hasAnyStops ? (
-        <EmptyState
-          icon={<Calendar className="w-10 h-10" strokeWidth={1.5} />}
-          title="Nothing coming up"
-          description="No jobs or recurring services in this range"
-        />
-      ) : (
-        groups.map((g, gi) => (
-          <section key={gi}>
-            <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
-              {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
-            </h3>
-            {g.stops.length === 0 ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500 italic pl-1">No jobs or services</p>
-            ) : (
-              <div className="space-y-2">
-                {g.stops.map((stop, idx) => (
-                  <StopCard key={`${stop.type}-${stop.id}-${gi}-${idx}`} stop={stop} number={idx + 1} onClick={() => onSelect(stop)} compact />
-                ))}
-              </div>
-            )}
-          </section>
-        ))
-      )}
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between gap-3 pt-2">
+      <div className="inline-flex items-center gap-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-1 shadow-card shrink-0">
         <button
           onClick={onPrev}
-          disabled={page === 0}
+          className="inline-flex items-center gap-1 px-3 h-9 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" strokeWidth={1.8} />
+          Prev
+        </button>
+        <button
+          onClick={onThisWeek}
           className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors min-h-tap',
-            page === 0
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-              : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 shadow-card'
+            'inline-flex items-center px-3 h-9 rounded-lg text-sm font-medium transition-colors',
+            isThisWeek
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
           )}
         >
-          <ChevronLeft className="w-4 h-4" strokeWidth={2} />
-          Previous
+          This week
         </button>
         <button
           onClick={onNext}
-          disabled={!hasMore}
-          className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors min-h-tap',
-            !hasMore
-              ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-              : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 shadow-card'
-          )}
+          className="inline-flex items-center gap-1 px-3 h-9 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         >
           Next
-          <ChevronRight className="w-4 h-4" strokeWidth={2} />
+          <ChevronRight className="w-4 h-4" strokeWidth={1.8} />
         </button>
       </div>
     </div>
   )
 }
 
-// ─── Map view ─────────────────────────────────
-function MapView({ pools, onSelect, staffList }) {
+// ─── Week grid (7 day columns) ─────────────────
+function WeekGrid({ weekDays, stopsByDay, onStopSelect }) {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 overflow-hidden mb-4">
+      <div className="grid grid-cols-7 divide-x divide-gray-100 dark:divide-gray-800">
+        {weekDays.map(day => {
+          const stops = stopsByDay.get(ymd(day)) || []
+          const isToday = sameYMD(day, new Date())
+          return (
+            <DayColumn
+              key={ymd(day)}
+              day={day}
+              stops={stops}
+              isToday={isToday}
+              onStopSelect={onStopSelect}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DayColumn({ day, stops, isToday, onStopSelect }) {
+  const dow = day.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()
+  return (
+    <div className="min-h-[220px] flex flex-col">
+      <div className={cn(
+        'px-3 py-2 border-b border-gray-100 dark:border-gray-800',
+        isToday && 'bg-emerald-50/60 dark:bg-emerald-950/20'
+      )}>
+        <p className={cn(
+          'text-[10px] font-semibold uppercase tracking-wider',
+          isToday ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'
+        )}>{dow}</p>
+        <p className={cn(
+          'text-2xl font-bold leading-none mt-0.5',
+          isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-900 dark:text-gray-100'
+        )}>
+          {day.getDate()}
+        </p>
+      </div>
+      <div className="p-2 space-y-1.5 flex-1">
+        {stops.length === 0 ? (
+          <p className="text-center text-gray-300 dark:text-gray-700 text-sm py-6 select-none">—</p>
+        ) : (
+          stops.map(stop => (
+            <EventCard key={stop.id} stop={stop} onClick={() => onStopSelect(stop)} />
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+function EventCard({ stop, onClick }) {
+  const meta = statusMeta(stop)
+  const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
+  const sub = stop.client_name || stop.address || null
+  const tech = stop.tech_name ? stop.tech_name.split(' ')[0] : null
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'block w-full text-left rounded-lg border-l-2 px-2.5 py-2 transition-colors',
+        meta.accent,
+        meta.cardBg
+      )}
+    >
+      {time && (
+        <p className="font-mono text-[11px] text-gray-700 dark:text-gray-300 leading-tight">{time}</p>
+      )}
+      <p className={cn(
+        'text-[13px] font-semibold text-gray-900 dark:text-gray-100 leading-snug line-clamp-2 mt-0.5',
+        stop.status === 'cancelled' && 'line-through text-gray-500 dark:text-gray-500'
+      )}>
+        {stop.title}
+        {sub && <span className="font-normal text-gray-600 dark:text-gray-400"> · {sub}</span>}
+      </p>
+      {tech && (
+        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">{tech}</p>
+      )}
+    </button>
+  )
+}
+
+// ─── Today list (below week grid) ──────────────
+function TodayList({ stops, onStopSelect }) {
+  const today = new Date()
+  const dateLabel = today
+    .toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+    .toUpperCase()
+  const inProgressCount = stops.filter(s => s.status === 'in_progress').length
+
+  return (
+    <Card className="p-0 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400">
+          Today · {dateLabel}
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {stops.length === 0
+            ? 'Nothing scheduled'
+            : <>
+                {stops.length} {stops.length === 1 ? 'job' : 'jobs'}
+                {inProgressCount > 0 && ` · ${inProgressCount} in progress`}
+              </>
+          }
+        </p>
+      </div>
+      {stops.length === 0 ? (
+        <div className="px-4 py-12 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Nothing scheduled today.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+          {stops.map(stop => (
+            <li key={stop.id}>
+              <TodayRow stop={stop} onClick={() => onStopSelect(stop)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+function TodayRow({ stop, onClick }) {
+  const meta = statusMeta(stop)
+  const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
+  const sub = stop.address || stop.client_name
+  return (
+    <button
+      onClick={onClick}
+      className="block w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+    >
+      <div className="flex items-center gap-4">
+        <p className="font-mono text-sm text-emerald-700 dark:text-emerald-400 w-12 shrink-0">
+          {time || '—'}
+        </p>
+        <div className="flex-1 min-w-0">
+          <p className={cn(
+            'text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-1',
+            stop.status === 'cancelled' && 'line-through text-gray-500'
+          )}>
+            {stop.title}
+          </p>
+          {sub && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
+              {sub}{stop.client_name && stop.address ? ` · ${stop.client_name}` : ''}
+            </p>
+          )}
+        </div>
+        <span className={cn(
+          'inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium shrink-0',
+          meta.badge
+        )}>
+          {meta.label}
+        </span>
+      </div>
+    </button>
+  )
+}
+
+// ─── Map view (kept) ──────────────────────────
+function MapView({ pools, onSelect }) {
   const withCoords = pools.filter(p => p.latitude != null && p.longitude != null)
 
   if (!MAPBOX_TILE_URL) {
@@ -1085,7 +674,6 @@ function MapView({ pools, onSelect, staffList }) {
       />
     )
   }
-
   if (!withCoords.length) {
     return (
       <EmptyState
@@ -1099,7 +687,7 @@ function MapView({ pools, onSelect, staffList }) {
   function pinColor(pool) {
     if (!pool.next_due_at) return '#9ca3af'
     const due = new Date(pool.next_due_at)
-    const today = new Date(); today.setHours(0,0,0,0)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
     if (due < today) return '#ef4444'
     if (due.toDateString() === today.toDateString()) return '#10b981'
     return '#0CA5EB'
@@ -1108,7 +696,7 @@ function MapView({ pools, onSelect, staffList }) {
   function statusLabel(pool) {
     if (!pool.next_due_at) return { text: 'No schedule', color: 'text-gray-400 dark:text-gray-500' }
     const due = new Date(pool.next_due_at)
-    const today = new Date(); today.setHours(0,0,0,0)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
     if (due < today) {
       const dueDate = new Date(due); dueDate.setHours(0, 0, 0, 0)
       const days = Math.round((today - dueDate) / (1000 * 60 * 60 * 24))
@@ -1121,7 +709,7 @@ function MapView({ pools, onSelect, staffList }) {
 
   function poolToMapStop(p) {
     const due = p.next_due_at ? new Date(p.next_due_at) : null
-    const today = new Date(); today.setHours(0,0,0,0)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
     const isOverdue = due && due < today
     const dueDate = due ? new Date(due) : null
     if (dueDate) dueDate.setHours(0, 0, 0, 0)
@@ -1144,7 +732,6 @@ function MapView({ pools, onSelect, staffList }) {
 
   return (
     <div className="space-y-3">
-      {/* Legend */}
       <div className="flex items-center justify-center gap-4 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Overdue</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Due Today</span>
@@ -1152,14 +739,13 @@ function MapView({ pools, onSelect, staffList }) {
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400" />Unscheduled</span>
       </div>
 
-      <div className="h-[520px] rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-card">
+      <div className="h-[560px] rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-card">
         <MapContainer center={center} zoom={11} style={{ height: '100%', width: '100%' }}>
           <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
           <FitBounds stops={withCoords.map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }))} />
           {withCoords.map((pool, idx) => {
             const status = statusLabel(pool)
             const techName = pool.staff?.name || null
-            const freq = pool.schedule_frequency
             return (
               <Marker
                 key={pool.id}
@@ -1168,55 +754,26 @@ function MapView({ pools, onSelect, staffList }) {
               >
                 <Popup className="pool-map-popup" closeButton={false} maxWidth={280} minWidth={240}>
                   <div style={{ fontFamily: 'inherit', padding: '2px 0' }}>
-                    {/* Client name */}
                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '2px', lineHeight: 1.3 }}>
                       {pool.clients?.name || 'Unknown Client'}
                     </div>
-
-                    {/* Address */}
                     <div style={{ fontSize: '12px', color: '#0CA5EB', marginBottom: '8px', lineHeight: 1.3 }}>
                       {pool.address}
                     </div>
-
-                    {/* Status + frequency */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '11px', fontWeight: 600 }} className={status.color}>{status.text}</span>
-                      {freq && (
-                        <span style={{ fontSize: '11px', color: '#9ca3af' }}>
-                          {freq === 'weekly' ? 'Weekly' : freq === 'fortnightly' ? 'Fortnightly' : freq === 'monthly' ? 'Monthly' : freq}
-                        </span>
-                      )}
-                      {pool.type && (
-                        <span style={{ fontSize: '10px', color: '#6b7280', background: '#f3f4f6', borderRadius: '6px', padding: '1px 6px', fontWeight: 500, textTransform: 'capitalize' }}>
-                          {pool.type}
-                        </span>
-                      )}
                     </div>
-
-                    {/* Phone */}
                     {pool.clients?.phone && (
                       <a href={`tel:${pool.clients.phone}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#0CA5EB', fontWeight: 600, textDecoration: 'none', marginBottom: '4px' }}>
-                        <Phone className="w-5 h-5" strokeWidth={2} />
+                        <Phone className="w-4 h-4" strokeWidth={2} />
                         {pool.clients.phone}
                       </a>
                     )}
-
-                    {/* Access notes */}
-                    {pool.access_notes && (
-                      <div style={{ fontSize: '11px', color: '#d97706', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
-                        {pool.access_notes}
-                      </div>
-                    )}
-
-                    {/* Tech assigned */}
                     {techName && (
                       <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>
                         Tech: <span style={{ fontWeight: 600, color: '#374151' }}>{techName}</span>
                       </div>
                     )}
-
-                    {/* View Details button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); onSelect(poolToMapStop(pool)) }}
                       style={{
@@ -1228,7 +785,7 @@ function MapView({ pools, onSelect, staffList }) {
                       }}
                     >
                       View Details
-                      <ChevronRight className="w-5 h-5" strokeWidth={2} />
+                      <ChevronRight className="w-4 h-4" strokeWidth={2} />
                     </button>
                   </div>
                 </Popup>
@@ -1242,270 +799,11 @@ function MapView({ pools, onSelect, staffList }) {
         {withCoords.length} pool{withCoords.length !== 1 ? 's' : ''} on map
         {pools.length > withCoords.length && (
           <span className="text-amber-500 ml-1">
-            · {pools.length - withCoords.length} missing location (update address with suburb)
+            · {pools.length - withCoords.length} missing location
           </span>
         )}
       </p>
     </div>
-  )
-}
-
-// ─── Tech avatar ─────────────────────────────
-function TechBadge({ name, photo }) {
-  if (!name) return null
-  const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-  const firstName = name.split(' ')[0]
-  return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      {photo ? (
-        <img src={photo} alt={name} className="w-6 h-6 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
-      ) : (
-        <div className="w-6 h-6 rounded-full bg-pool-100 text-pool-700 flex items-center justify-center text-[10px] font-bold border border-pool-200">
-          {initials}
-        </div>
-      )}
-      <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{firstName}</span>
-    </div>
-  )
-}
-
-// ─── Stop card ────────────────────────────────
-function StopCard({ stop, number, onClick, compact = false }) {
-  const color = stop.isOverdue ? '#ef4444' : stop.status === 'completed' ? '#10b981' : stop.status === 'in_progress' ? '#f59e0b' : '#0CA5EB'
-
-  if (compact) {
-    return (
-      <button
-        onClick={onClick}
-        className="w-full text-left bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-card px-3.5 py-2.5 hover:shadow-card-hover transition-shadow"
-        style={{ borderLeft: `4px solid ${color}` }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 font-bold text-xs flex items-center justify-center shrink-0">
-            {number}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                {stop.title}
-                {stop.client_name && <span className="text-gray-400 dark:text-gray-500 font-normal"> · {stop.client_name}</span>}
-              </p>
-              <div className="flex items-center gap-2 shrink-0">
-                <TechBadge name={stop.tech_name} photo={stop.tech_photo} />
-                {stop.time_display && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{stop.time_display.split(' – ')[0]}</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 mt-0.5">
-              {stop.address && (
-                <p className="text-xs text-pool-600 dark:text-pool-400 truncate">{stop.address}</p>
-              )}
-              {stop.phone && (
-                <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-[11px] text-pool-600 dark:text-pool-400 font-medium shrink-0">
-                  <Phone className="w-2.5 h-2.5" strokeWidth={2} />
-                  {stop.phone}
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      </button>
-    )
-  }
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card p-3.5 hover:shadow-card-hover transition-shadow"
-      style={{ borderLeft: `4px solid ${color}` }}
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 font-bold text-sm flex items-center justify-center shrink-0">
-          {number}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{stop.title}</p>
-              {stop.client_name && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stop.client_name}</p>}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <TechBadge name={stop.tech_name} photo={stop.tech_photo} />
-              <Badge variant={stop.status === 'completed' ? 'success' : stop.status === 'in_progress' ? 'warning' : 'primary'} className="shrink-0 capitalize">
-                {String(stop.status || 'scheduled').replace('_', ' ')}
-              </Badge>
-            </div>
-          </div>
-          {stop.address && (
-            <p className="text-xs text-pool-600 dark:text-pool-400 mt-1 truncate">{stop.address}</p>
-          )}
-          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-            {stop.time_display && (
-              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                <Clock className="w-3 h-3" strokeWidth={2} />
-                <span>{stop.time_display}</span>
-              </div>
-            )}
-            {stop.phone && (
-              <a href={`tel:${stop.phone}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-pool-600 dark:text-pool-400 font-medium">
-                <Phone className="w-3 h-3" strokeWidth={2} />
-                {stop.phone}
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </button>
-  )
-}
-
-// ─── Calendar view (kept as before, simplified) ─
-function CalendarView({ business, onClose }) {
-  const navigate = useNavigate()
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState(new Date())
-  const [jobs, setJobs] = useState([])
-  const [pools, setPools] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  const year = currentDate.getFullYear()
-  const month = currentDate.getMonth()
-
-  useEffect(() => {
-    if (!business?.id) return
-    async function fetch() {
-      setLoading(true)
-      const start = new Date(year, month, 1)
-      start.setDate(start.getDate() - start.getDay() + 1)
-      const end = new Date(year, month + 1, 0)
-      end.setDate(end.getDate() + (7 - end.getDay()))
-      const [jobsRes, poolsRes] = await Promise.all([
-        supabase.from('jobs').select('*, clients(name), pools(address)').eq('business_id', business.id)
-          .gte('scheduled_date', ymd(start)).lte('scheduled_date', ymd(end)).order('scheduled_date'),
-        supabase.from('pools').select('id, address, next_due_at, schedule_frequency, clients(name)').eq('business_id', business.id)
-          .gte('next_due_at', start.toISOString()).lte('next_due_at', end.toISOString()),
-      ])
-      setJobs(jobsRes.data || [])
-      setPools(poolsRes.data || [])
-      setLoading(false)
-    }
-    fetch()
-  }, [business?.id, year, month])
-
-  const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
-  const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
-  const startOffset = (firstDay.getDay() + 6) % 7
-  const totalDays = lastDay.getDate()
-  const weeks = []
-  let week = []
-  for (let i = 0; i < startOffset; i++) week.push(null)
-  for (let d = 1; d <= totalDays; d++) {
-    week.push(d)
-    if (week.length === 7) { weeks.push(week); week = [] }
-  }
-  if (week.length > 0) { while (week.length < 7) week.push(null); weeks.push(week) }
-
-  function getEvents(day) {
-    if (!day) return []
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    const dayJobs = jobs.filter(j => j.scheduled_date === dateStr)
-    const dayPools = pools.filter(p => {
-      if (!p.next_due_at) return false
-      const due = new Date(p.next_due_at)
-      return due.getFullYear() === year && due.getMonth() === month && due.getDate() === day
-    })
-    return [
-      ...dayJobs.map(j => ({ type: 'job', label: j.clients?.name || j.title, status: j.status, id: j.id })),
-      ...dayPools.map(p => ({ type: 'pool', label: p.clients?.name || p.address, id: p.id })),
-    ]
-  }
-
-  const today = new Date()
-  const isToday = (d) => d && today.getFullYear() === year && today.getMonth() === month && today.getDate() === d
-  const isSelected = (d) => d && selectedDate.getFullYear() === year && selectedDate.getMonth() === month && selectedDate.getDate() === d
-
-  const selectedEvents = getEvents(
-    selectedDate.getMonth() === month && selectedDate.getFullYear() === year ? selectedDate.getDate() : null
-  )
-
-  return (
-    <>
-      <div className="flex items-center justify-between mb-2">
-        <button onClick={onClose} className="text-sm font-semibold text-pool-600 dark:text-pool-400">← Back to Schedule</button>
-      </div>
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-        </button>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{MONTH_NAMES[month]} {year}</h2>
-        <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800">
-          <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 mb-1">
-        {DAY_NAMES.map(d => <div key={d} className="text-center text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase py-1">{d}</div>)}
-      </div>
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card overflow-hidden mb-4">
-        {weeks.map((w, wi) => (
-          <div key={wi} className="grid grid-cols-7 border-b border-gray-50 last:border-0">
-            {w.map((day, di) => {
-              const events = getEvents(day)
-              return (
-                <button key={di} disabled={!day}
-                  onClick={() => day && setSelectedDate(new Date(year, month, day))}
-                  className={cn(
-                    'relative flex flex-col items-center py-2 min-h-[52px] transition-all',
-                    day ? 'hover:bg-pool-50/50 dark:hover:bg-pool-950/30 cursor-pointer' : 'cursor-default',
-                    isSelected(day) && 'bg-pool-50 dark:bg-pool-950/40',
-                    isToday(day) && !isSelected(day) && 'bg-amber-50 dark:bg-amber-950/30'
-                  )}>
-                  {day && (
-                    <>
-                      <span className={cn('text-sm w-7 h-7 flex items-center justify-center rounded-full',
-                        isToday(day) ? 'bg-pool-500 text-white font-bold' :
-                        isSelected(day) ? 'bg-pool-100 text-pool-700 font-bold' : 'text-gray-700 dark:text-gray-300')}>
-                        {day}
-                      </span>
-                      {events.length > 0 && (
-                        <div className="flex gap-0.5 mt-0.5">
-                          {events.slice(0, 3).map((e, i) => (
-                            <div key={i} className="w-1.5 h-1.5 rounded-full bg-pool-500" />
-                          ))}
-                          {events.length > 3 && <span className="text-[8px] text-gray-400 dark:text-gray-500">+{events.length - 3}</span>}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        ))}
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">{formatDateLong(selectedDate)}</h3>
-        {selectedEvents.length === 0 ? (
-          <p className="text-xs text-gray-400 dark:text-gray-500 py-4 text-center">No jobs or services scheduled</p>
-        ) : (
-          <div className="space-y-1.5">
-            {selectedEvents.map((event, i) => (
-              <Card key={i} onClick={() => event.type === 'job' ? navigate(`/work-orders/${event.id}`) : navigate(`/pools/${event.id}`)} className="py-2.5">
-                <div className="flex items-center gap-3">
-                  <div className="w-2.5 h-2.5 rounded-full bg-pool-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{event.label}</p>
-                    <p className="text-[11px] text-gray-400 dark:text-gray-500">{event.type === 'job' ? 'Job' : 'Service Due'}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
   )
 }
 
@@ -1539,14 +837,12 @@ function jobToStop(j) {
   }
 }
 
-// Build a stop from a recurring_job_profile projected onto a specific date.
 function profileToStop(profile, occurrenceDate) {
   const duration = 60
   const time = profile.preferred_time ? String(profile.preferred_time).slice(0, 5) : null
   const timeDisp = time ? formatTimeRange(time, duration) : null
   return {
     type: 'job',
-    // Prefix id so it's distinct from actual job rows, and unique per occurrence
     id: `profile-${profile.id}-${ymd(occurrenceDate)}`,
     title: profile.title || 'Recurring Job',
     client_id: profile.client_id,
@@ -1591,6 +887,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
     access_notes: p.access_notes,
     frequency: p.schedule_frequency,
     sortTime,
+    scheduled_time: sortTime,
     time_display: due ? formatTimeRange(sortTime, 45) : null,
     duration: 45,
     phone: p.clients?.phone,
@@ -1605,7 +902,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
   }
 }
 
-// ─── Misc ─────────────────────────────────────
+// ─── Loading ──────────────────────────────────
 function LoadingPage() {
   return (
     <PageWrapper>
@@ -1614,6 +911,7 @@ function LoadingPage() {
     </PageWrapper>
   )
 }
+
 function LoadingSpinner() {
   return (
     <div className="flex items-center justify-center py-20">
