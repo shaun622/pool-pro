@@ -9,8 +9,8 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
 import {
-  Calendar, CalendarDays, Check, CheckCircle2, ChevronRight, Sparkles,
-  AlertTriangle, Briefcase,
+  Calendar, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronRight,
+  Sparkles, AlertTriangle, Briefcase, Activity, ArrowRight,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -329,151 +329,83 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-        <div className="md:col-span-2 md:space-y-6">
-
-        {/* Today's Summary */}
-        <section className="mb-6 md:mb-0">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="section-title">Today's Summary</h3>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                {new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </p>
+        {/* TODAY (compact list) + RECENT ACTIVITY (feed) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* TODAY — narrow column */}
+          <Card className="md:col-span-1 !p-5 self-start">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarClock className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" strokeWidth={2.5} />
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Today</p>
             </div>
-          </div>
-
-          <Card className="space-y-4">
-            {/* Progress bar */}
-            {todaySummary.total > 0 ? (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  {todaySummary.completed >= todaySummary.total ? (
-                    <div className="flex items-center gap-1.5 text-sm font-semibold text-green-600 dark:text-green-400">
-                      <Check className="w-4 h-4" strokeWidth={2.5} />
-                      All done!
-                    </div>
-                  ) : (
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      <span className="tabular-nums">{todaySummary.completed} of {todaySummary.total}</span> stops completed
-                    </p>
-                  )}
-                  <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 tabular-nums">
-                    {Math.round((todaySummary.completed / todaySummary.total) * 100)}%
-                  </span>
-                </div>
-                <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      'h-2.5 rounded-full transition-all duration-700',
-                      todaySummary.completed >= todaySummary.total ? 'bg-green-500' : 'bg-gradient-brand'
-                    )}
-                    style={{ width: `${Math.min((todaySummary.completed / todaySummary.total) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2.5 py-1">
-                <Calendar className="w-5 h-5 text-gray-300 dark:text-gray-600 shrink-0" strokeWidth={1.5} />
-                <p className="text-sm text-gray-500 dark:text-gray-400">No stops scheduled for today</p>
-              </div>
-            )}
-
-            {/* Stat pills */}
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => navigate('/schedule')}
-                className={cn(
-                  'rounded-xl py-2.5 text-center transition-colors',
-                  todaySummary.overdue > 0 ? 'bg-red-50 dark:bg-red-950/30 hover:bg-red-100/70 dark:hover:bg-red-950/50' : 'bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800'
-                )}
-              >
-                <p className={cn('text-lg font-bold tabular-nums', todaySummary.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500')}>
-                  {todaySummary.overdue}
-                </p>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Overdue</p>
-              </button>
-              <button
-                onClick={() => navigate('/schedule')}
-                className="rounded-xl py-2.5 text-center bg-pool-50 dark:bg-pool-950/30 hover:bg-pool-100/70 dark:hover:bg-pool-950/50 transition-colors"
-              >
-                <p className="text-lg font-bold text-pool-600 dark:text-pool-400 tabular-nums">{todaySummary.dueToday}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Due Today</p>
-              </button>
-              <button
-                onClick={() => navigate('/schedule')}
-                className={cn(
-                  'rounded-xl py-2.5 text-center transition-colors',
-                  todaySummary.completed > 0 ? 'bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-950/50' : 'bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800'
-                )}
-              >
-                <p className={cn('text-lg font-bold tabular-nums', todaySummary.completed > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500')}>
+            <ul className="space-y-3">
+              <li className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Scheduled</span>
+                <span className="inline-flex items-center justify-center min-w-[28px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+                  {todaySummary.dueToday}
+                </span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Completed</span>
+                <span className="inline-flex items-center justify-center min-w-[28px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
                   {todaySummary.completed}
-                </p>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Completed</p>
-              </button>
-            </div>
-
-            {/* Notes & Alerts */}
-            {todaySummary.notes.length > 0 && (
-              <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">Notes & Alerts</p>
-                <div className="space-y-2">
-                  {todaySummary.notes.map((item, i) => (
-                    <div key={i} className="flex items-start gap-2.5">
-                      <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                      </svg>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                        <span className="font-semibold text-gray-900 dark:text-gray-100">{item.name}</span>
-                        <span className="text-gray-400 dark:text-gray-500 mx-1">—</span>
-                        {item.note}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* View Full Schedule link */}
+                </span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Overdue</span>
+                <span className={cn(
+                  'inline-flex items-center justify-center min-w-[28px] px-2 h-6 rounded-full text-xs font-semibold tabular-nums',
+                  todaySummary.overdue > 0
+                    ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+                )}>
+                  {todaySummary.overdue}
+                </span>
+              </li>
+            </ul>
             <button
               onClick={() => navigate('/schedule')}
-              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 pt-1 min-h-tap transition-colors"
+              className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
             >
-              View Full Schedule
-              <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
+              Open schedule
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
             </button>
           </Card>
-        </section>
 
-        </div>
-        <div className="md:col-span-1">
-        {/* Recent Activity */}
-        {recentActivity.length > 0 && (
-          <section className="mb-6 md:mb-0">
-            <h3 className="section-title mb-3">Recent Activity</h3>
-            <Card className="!p-0 overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
-              {recentActivity.map((record, i) => (
-                <div key={record.id} className="px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
-                    <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                      {record.pools?.address || 'Pool'}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      {record.technician_name && `${record.technician_name} · `}
-                      {formatDate(record.serviced_at)}
-                    </p>
-                  </div>
-                  <Badge variant="success" className="shrink-0">Serviced</Badge>
-                </div>
-              ))}
-            </Card>
-          </section>
-        )}
-        </div>
+          {/* RECENT ACTIVITY — wide column */}
+          <Card className="md:col-span-2 !p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" strokeWidth={2.5} />
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recent Activity</p>
+                {recentActivity.length > 0 && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-pool-500 text-white text-[10px] font-bold tabular-nums">
+                    {recentActivity.length}
+                  </span>
+                )}
+              </div>
+            </div>
+            {recentActivity.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No recent activity yet.</p>
+            ) : (
+              <ul className="space-y-3.5">
+                {recentActivity.map(record => (
+                  <li key={record.id} className="flex items-start gap-3">
+                    <span className="w-1.5 h-1.5 rounded-full bg-pool-500 mt-2 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {record.pools?.address || 'Pool'} serviced
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {record.technician_name && `${record.technician_name} · `}
+                        {formatDate(record.serviced_at)}
+                      </p>
+                    </div>
+                    <Badge variant="success" className="shrink-0">Service</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
     </PageWrapper>
   )
