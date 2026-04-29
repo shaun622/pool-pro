@@ -9,7 +9,7 @@ import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
-import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone } from 'lucide-react'
+import { CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -115,14 +115,14 @@ const STATUS_META = {
   scheduled: {
     label: 'Scheduled',
     badge: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-    accent: 'border-l-emerald-400 dark:border-l-emerald-500/70',
-    cardBg: 'bg-emerald-50/70 hover:bg-emerald-100/70 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40',
+    accent: 'border-l-pool-400 dark:border-l-pool-500/70',
+    cardBg: 'bg-pool-50/70 hover:bg-pool-100/70 dark:bg-pool-950/20 dark:hover:bg-pool-950/40',
   },
   in_progress: {
     label: 'In progress',
     badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-    accent: 'border-l-emerald-500 dark:border-l-emerald-400',
-    cardBg: 'bg-emerald-50/70 hover:bg-emerald-100/70 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40',
+    accent: 'border-l-pool-500 dark:border-l-pool-400',
+    cardBg: 'bg-pool-50/70 hover:bg-pool-100/70 dark:bg-pool-950/20 dark:hover:bg-pool-950/40',
   },
   completed: {
     label: 'Done',
@@ -395,39 +395,48 @@ function Schedule({ business }) {
     }
   }
 
+  // Eyebrow + title vary by view
+  const eyebrowLabel = view === 'map' ? 'Map view' : view === 'day' ? 'Day view' : 'Week view'
+  const heroTitle = view === 'day'
+    ? today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+    : formatRangeTitle(weekStart, weekEnd)
+
   return (
     <PageWrapper width="wide">
       <PageHero
         eyebrow={
           <span className="inline-flex items-center gap-2">
             <CalendarClock className="w-3.5 h-3.5" strokeWidth={2.5} />
-            {view === 'map' ? 'Map view' : 'Today'}
+            {eyebrowLabel}
           </span>
         }
-        title={today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+        title={heroTitle}
         subtitle={null}
-        action={<ViewToggle view={view} setView={setView} />}
+        action={
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            {view !== 'map' && (
+              <NavPills
+                isThisWeek={isThisWeek}
+                onPrev={() => setWeekStart(d => addDays(d, -7))}
+                onThisWeek={() => setWeekStart(getMondayOfWeek(new Date()))}
+                onNext={() => setWeekStart(d => addDays(d, 7))}
+              />
+            )}
+            <ViewToggle view={view} setView={setView} />
+          </div>
+        }
       />
 
       {view === 'map' ? (
         <MapView pools={allPools} onSelect={handleStopSelect} />
+      ) : loading ? (
+        <LoadingSpinner />
+      ) : view === 'day' ? (
+        <TodayList stops={todayStops} onStopSelect={handleStopSelect} variant="standalone" />
       ) : (
         <>
-          <WeekToolbar
-            rangeTitle={formatRangeTitle(weekStart, weekEnd)}
-            isThisWeek={isThisWeek}
-            onPrev={() => setWeekStart(d => addDays(d, -7))}
-            onThisWeek={() => setWeekStart(getMondayOfWeek(new Date()))}
-            onNext={() => setWeekStart(d => addDays(d, 7))}
-          />
-          {loading ? (
-            <LoadingSpinner />
-          ) : (
-            <>
-              <WeekGrid weekDays={weekDays} stopsByDay={stopsByDay} onStopSelect={handleStopSelect} />
-              <TodayList stops={todayStops} onStopSelect={handleStopSelect} />
-            </>
-          )}
+          <WeekGrid weekDays={weekDays} stopsByDay={stopsByDay} onStopSelect={handleStopSelect} />
+          <TodayList stops={todayStops} onStopSelect={handleStopSelect} />
         </>
       )}
 
@@ -443,64 +452,44 @@ function Schedule({ business }) {
   )
 }
 
-// ─── View toggle (Week / Map) ──────────────────
-function ViewToggle({ view, setView }) {
-  const base = 'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-medium transition-colors'
-  const active = 'bg-pool-100 text-pool-700 dark:bg-pool-900/40 dark:text-pool-300'
-  const inactive = 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+// ─── Prev / This week / Next — three separate rounded-full pills ──────
+function NavPills({ isThisWeek, onPrev, onThisWeek, onNext }) {
+  const pillBase = 'inline-flex items-center gap-1 px-3.5 h-9 rounded-full text-sm font-medium transition-colors border'
+  const idle = 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 shadow-card'
+  const activeNow = 'bg-pool-50 dark:bg-pool-950/40 border-pool-200/70 dark:border-pool-800/40 text-pool-700 dark:text-pool-300 shadow-card'
   return (
-    <div className="inline-flex items-center gap-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-1 shadow-card">
-      <button onClick={() => setView('week')} className={cn(base, view === 'week' ? active : inactive)} aria-pressed={view === 'week'}>
-        <Calendar className="w-4 h-4" strokeWidth={1.8} />
-        Week
+    <div className="inline-flex items-center gap-2 shrink-0">
+      <button onClick={onPrev} className={cn(pillBase, idle)}>
+        <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+        Prev
       </button>
-      <button onClick={() => setView('map')} className={cn(base, view === 'map' ? active : inactive)} aria-pressed={view === 'map'}>
-        <MapIcon className="w-4 h-4" strokeWidth={1.8} />
-        Map
+      <button onClick={onThisWeek} className={cn(pillBase, isThisWeek ? activeNow : idle)}>
+        This week
+      </button>
+      <button onClick={onNext} className={cn(pillBase, idle)}>
+        Next
+        <ChevronRight className="w-4 h-4" strokeWidth={2} />
       </button>
     </div>
   )
 }
 
-// ─── Week toolbar (label + range + prev/this/next) ──────
-function WeekToolbar({ rangeTitle, isThisWeek, onPrev, onThisWeek, onNext }) {
+// ─── View toggle (Week / Day / Map) — typography-driven, active = solid pill
+function ViewToggle({ view, setView }) {
+  const base = 'inline-flex items-center px-3.5 h-9 rounded-full text-sm font-medium transition-colors'
+  const active = 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+  const inactive = 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400 mb-1">
-          Week View
-        </p>
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-          {rangeTitle}
-        </h2>
-      </div>
-      <div className="inline-flex items-center gap-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-1 shadow-card shrink-0">
-        <button
-          onClick={onPrev}
-          className="inline-flex items-center gap-1 px-3 h-9 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" strokeWidth={1.8} />
-          Prev
-        </button>
-        <button
-          onClick={onThisWeek}
-          className={cn(
-            'inline-flex items-center px-3 h-9 rounded-lg text-sm font-medium transition-colors',
-            isThisWeek
-              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-          )}
-        >
-          This week
-        </button>
-        <button
-          onClick={onNext}
-          className="inline-flex items-center gap-1 px-3 h-9 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-        >
-          Next
-          <ChevronRight className="w-4 h-4" strokeWidth={1.8} />
-        </button>
-      </div>
+    <div className="inline-flex items-center gap-1 shrink-0">
+      <button onClick={() => setView('week')} className={cn(base, view === 'week' ? active : inactive)} aria-pressed={view === 'week'}>
+        Week
+      </button>
+      <button onClick={() => setView('day')} className={cn(base, view === 'day' ? active : inactive)} aria-pressed={view === 'day'}>
+        Day
+      </button>
+      <button onClick={() => setView('map')} className={cn(base, view === 'map' ? active : inactive)} aria-pressed={view === 'map'}>
+        Map
+      </button>
     </div>
   )
 }
@@ -534,15 +523,15 @@ function DayColumn({ day, stops, isToday, onStopSelect }) {
     <div className="min-h-[220px] flex flex-col">
       <div className={cn(
         'px-3 py-2 border-b border-gray-100 dark:border-gray-800',
-        isToday && 'bg-emerald-50/60 dark:bg-emerald-950/20'
+        isToday && 'bg-pool-50/60 dark:bg-pool-950/20'
       )}>
         <p className={cn(
           'text-[10px] font-semibold uppercase tracking-wider',
-          isToday ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'
+          isToday ? 'text-pool-700 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500'
         )}>{dow}</p>
         <p className={cn(
           'text-2xl font-bold leading-none mt-0.5',
-          isToday ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-900 dark:text-gray-100'
+          isToday ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100'
         )}>
           {day.getDate()}
         </p>
@@ -591,33 +580,24 @@ function EventCard({ stop, onClick }) {
   )
 }
 
-// ─── Today list (below week grid) ──────────────
-function TodayList({ stops, onStopSelect }) {
-  const today = new Date()
-  const dateLabel = today
-    .toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
-    .toUpperCase()
-  const inProgressCount = stops.filter(s => s.status === 'in_progress').length
-
+// ─── Today list (below week grid; also stand-alone for Day view) ──
+function TodayList({ stops, onStopSelect, variant = 'attached' }) {
   return (
     <Card className="p-0 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400">
-          Today · {dateLabel}
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400 inline-flex items-center gap-2">
+          <CalendarClock className="w-3.5 h-3.5" strokeWidth={2.5} />
+          Today
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          {stops.length === 0
-            ? 'Nothing scheduled'
-            : <>
-                {stops.length} {stops.length === 1 ? 'job' : 'jobs'}
-                {inProgressCount > 0 && ` · ${inProgressCount} in progress`}
-              </>
-          }
-        </p>
+        <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+          {stops.length}
+        </span>
       </div>
       {stops.length === 0 ? (
         <div className="px-4 py-12 text-center">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Nothing scheduled today.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {variant === 'standalone' ? 'Nothing scheduled today.' : 'Nothing scheduled.'}
+          </p>
         </div>
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -642,7 +622,7 @@ function TodayRow({ stop, onClick }) {
       className="block w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
     >
       <div className="flex items-center gap-4">
-        <p className="tabular-nums text-sm text-emerald-700 dark:text-emerald-400 w-12 shrink-0">
+        <p className="tabular-nums text-sm text-pool-700 dark:text-pool-400 w-12 shrink-0">
           {time || '—'}
         </p>
         <div className="flex-1 min-w-0">
