@@ -375,7 +375,15 @@ export default function WorkOrders() {
   if (bizLoading || loading) {
     return (
       <PageWrapper>
-        <PageHero title="Work Orders" />
+        <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Briefcase className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Jobs board
+            </span>
+          }
+          title="Work Orders"
+        />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -386,7 +394,17 @@ export default function WorkOrders() {
   return (
     <>
       <PageWrapper width="wide">
-        <PageHero title="Work Orders" subtitle={heroSubtitle} action={heroAction} />
+        <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Briefcase className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Jobs board
+            </span>
+          }
+          title="Work Orders"
+          subtitle={heroSubtitle}
+          action={heroAction}
+        />
         {/* Jobs / Quotes tab toggle */}
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
           <button onClick={() => setTab('jobs')}
