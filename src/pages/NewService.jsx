@@ -1097,7 +1097,7 @@ export default function NewService() {
                   </Button>
                   <Button
                     className="flex-1 min-h-[48px]"
-                    onClick={() => navigate(isTech ? '/tech' : '/route')}
+                    onClick={() => navigate(isTech ? '/tech' : '/schedule')}
                   >
                     {isTech ? 'Run Sheet' : 'Next Pool'}
                   </Button>

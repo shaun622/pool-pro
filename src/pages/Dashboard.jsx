@@ -195,7 +195,7 @@ export default function Dashboard() {
     { label: 'Create your business', done: true, action: null },
     { label: 'Add your first client', done: counts.clients > 0, action: () => navigate('/clients'), actionLabel: 'Add Client' },
     { label: 'Add a pool to a client', done: counts.pools > 0, action: () => navigate('/clients'), actionLabel: 'Add Pool' },
-    { label: 'Complete your first service', done: counts.services > 0, action: () => navigate('/route'), actionLabel: 'Start Service' },
+    { label: 'Complete your first service', done: counts.services > 0, action: () => navigate('/schedule'), actionLabel: 'Start Service' },
   ]
   const allDone = steps.every(s => s.done)
   const completedSteps = steps.filter(s => s.done).length
@@ -231,7 +231,7 @@ export default function Dashboard() {
               <ActivityBell variant="onBrand" onClick={() => setActivityOpen(true)} />
               {/* Desktop: nav buttons */}
               <button
-                onClick={() => navigate('/route')}
+                onClick={() => navigate('/schedule')}
                 className="hidden md:inline-flex px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-white/15 border border-white/25 hover:bg-white/25 backdrop-blur transition-colors"
               >
                 View Schedule
@@ -301,8 +301,8 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
           {[
-            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900 dark:text-gray-100', to: '/route' },
-            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100', to: '/route' },
+            { label: 'Serviced', value: stats.servicedThisWeek, sub: 'this week', color: 'text-gray-900 dark:text-gray-100', to: '/schedule' },
+            { label: 'Overdue', value: stats.overduePools, sub: 'pools', color: stats.overduePools > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100', to: '/schedule' },
             { label: 'Work Orders', value: stats.activeJobs, sub: 'in progress', color: 'text-gray-900 dark:text-gray-100', to: '/work-orders' },
             { label: 'Quotes', value: stats.pendingQuotes, sub: 'pending', color: 'text-gray-900 dark:text-gray-100', to: '/work-orders?tab=quotes' },
           ].map((stat, i) => (
@@ -369,7 +369,7 @@ export default function Dashboard() {
             {/* Stat pills */}
             <div className="grid grid-cols-3 gap-2">
               <button
-                onClick={() => navigate('/route')}
+                onClick={() => navigate('/schedule')}
                 className={cn(
                   'rounded-xl py-2.5 text-center transition-colors',
                   todaySummary.overdue > 0 ? 'bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60' : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -381,14 +381,14 @@ export default function Dashboard() {
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Overdue</p>
               </button>
               <button
-                onClick={() => navigate('/route')}
+                onClick={() => navigate('/schedule')}
                 className="rounded-xl py-2.5 text-center bg-pool-50 dark:bg-pool-950/40 hover:bg-pool-100 dark:hover:bg-pool-950/60 transition-colors"
               >
                 <p className="text-lg font-bold text-pool-600 dark:text-pool-400 tabular-nums">{todaySummary.dueToday}</p>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Due Today</p>
               </button>
               <button
-                onClick={() => navigate('/route')}
+                onClick={() => navigate('/schedule')}
                 className={cn(
                   'rounded-xl py-2.5 text-center transition-colors',
                   todaySummary.completed > 0 ? 'bg-green-50 dark:bg-green-950/40 hover:bg-green-100 dark:hover:bg-green-950/60' : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -424,7 +424,7 @@ export default function Dashboard() {
 
             {/* View Full Schedule link */}
             <button
-              onClick={() => navigate('/route')}
+              onClick={() => navigate('/schedule')}
               className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 pt-1 min-h-tap transition-colors"
             >
               View Full Schedule

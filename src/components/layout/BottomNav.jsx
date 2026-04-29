@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils'
 // Primary tabs shown in the bottom bar
 const primaryTabs = [
   { path: '/',            label: 'Home',       Icon: Home },
-  { path: '/route',       label: 'Schedule',   Icon: Calendar },
+  { path: '/schedule',    label: 'Schedule',   Icon: Calendar },
   { path: '/work-orders', label: 'Jobs',       Icon: ClipboardList },
   { path: '/clients',     label: 'Clients',    Icon: Users },
 ]

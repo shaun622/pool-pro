@@ -11,7 +11,7 @@ const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
-const RoutePage = lazy(() => import('./pages/Route'))
+const Schedule = lazy(() => import('./pages/Schedule'))
 const Clients = lazy(() => import('./pages/Clients'))
 const ClientDetail = lazy(() => import('./pages/ClientDetail'))
 const PoolDetail = lazy(() => import('./pages/PoolDetail'))
@@ -137,7 +137,8 @@ export default function App() {
                 {/* Admin/Owner routes */}
                 <Route element={<BusinessGuard />}>
                   <Route path="/" element={<Dashboard />} />
-                  <Route path="/route" element={<RoutePage />} />
+                  <Route path="/schedule" element={<Schedule />} />
+                  <Route path="/route" element={<Navigate to="/schedule" replace />} />
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/clients/:id" element={<ClientDetail />} />
                   <Route path="/pools/:id" element={<PoolDetail />} />

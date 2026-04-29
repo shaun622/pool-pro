@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils'
 
 const tabs = [
   { path: '/',                label: 'Home',        Icon: Home },
-  { path: '/route',           label: 'Schedule',    Icon: Calendar },
+  { path: '/schedule',        label: 'Schedule',    Icon: Calendar },
   { path: '/work-orders',     label: 'Work Orders', Icon: ClipboardList },
   { path: '/clients',         label: 'Clients',     Icon: Users },
   { path: '/quotes',          label: 'Quotes',      Icon: FileText },
