@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, Repeat } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -315,7 +315,15 @@ export default function RecurringJobs() {
   if (loading) {
     return (
       <PageWrapper>
-        <PageHero title="Recurring" />
+        <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Repeat className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Recurring services
+            </span>
+          }
+          title="Recurring"
+        />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -333,6 +341,12 @@ export default function RecurringJobs() {
     <>
       <PageWrapper>
         <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Repeat className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Recurring services
+            </span>
+          }
           title="Recurring"
           subtitle={heroSubtitle}
           action={<Button leftIcon={Plus} onClick={openAdd}>Add Recurring Service</Button>}
