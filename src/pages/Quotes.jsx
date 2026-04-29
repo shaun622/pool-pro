@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, LayoutGrid, List } from 'lucide-react'
+import { Plus, LayoutGrid, List, FileText } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -111,7 +111,15 @@ export default function Quotes() {
   if (bizLoading || loading) {
     return (
       <PageWrapper>
-        <PageHero title="Quotes" />
+        <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <FileText className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Sales pipeline
+            </span>
+          }
+          title="Quotes"
+        />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -122,7 +130,17 @@ export default function Quotes() {
   return (
     <>
       <PageWrapper>
-        <PageHero title="Quotes" subtitle={heroSubtitle} action={heroAction} />
+        <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <FileText className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Sales pipeline
+            </span>
+          }
+          title="Quotes"
+          subtitle={heroSubtitle}
+          action={heroAction}
+        />
         {/* Pipeline summary bar */}
         {quotes.length > 0 && (
           <Card className="mb-4">
