@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, Receipt } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -130,6 +130,12 @@ export default function Invoices() {
     <>
       <PageWrapper>
         <PageHero
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Receipt className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Billing
+            </span>
+          }
           title="Invoices"
           subtitle={heroSubtitle}
           action={<Button leftIcon={Plus} onClick={() => navigate('/invoices/new')}>New Invoice</Button>}
