@@ -7,7 +7,9 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
-import { Calendar, ChevronLeft, ChevronRight, Map, Phone } from 'lucide-react'
+// `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
+// Map constructor we use in the day-bucket useMemo (`new Map()`).
+import { Calendar, ChevronLeft, ChevronRight, Map as MapIcon, Phone } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -447,7 +449,7 @@ function ViewToggle({ view, setView }) {
         Week
       </button>
       <button onClick={() => setView('map')} className={cn(base, view === 'map' ? active : inactive)} aria-pressed={view === 'map'}>
-        <Map className="w-4 h-4" strokeWidth={1.8} />
+        <MapIcon className="w-4 h-4" strokeWidth={1.8} />
         Map
       </button>
     </div>
@@ -668,7 +670,7 @@ function MapView({ pools, onSelect }) {
   if (!MAPBOX_TILE_URL) {
     return (
       <EmptyState
-        icon={<Map className="w-10 h-10" strokeWidth={1.5} />}
+        icon={<MapIcon className="w-10 h-10" strokeWidth={1.5} />}
         title="Map not configured"
         description="Add VITE_MAPBOX_TOKEN to your environment"
       />
@@ -677,7 +679,7 @@ function MapView({ pools, onSelect }) {
   if (!withCoords.length) {
     return (
       <EmptyState
-        icon={<Map className="w-10 h-10" strokeWidth={1.5} />}
+        icon={<MapIcon className="w-10 h-10" strokeWidth={1.5} />}
         title="No pool locations"
         description="Pools need a geocoded address to appear on the map"
       />
