@@ -172,6 +172,25 @@
     @apply rounded-2xl p-4 shadow-elevated;
   }
 
+  /* ── Eyebrow (FieldSuite/AWC visual identity) ─────────
+     Brand-tinted eyebrow above page titles + section headers.
+     Always paired with a lucide icon (`w-3.5 h-3.5 strokeWidth={2.5}`)
+     in JSX:
+       <span className="eyebrow">
+         <CalendarClock className="w-3.5 h-3.5" strokeWidth={2.5} />
+         Today
+       </span>
+  */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wider text-pool-600 dark:text-pool-400
+           inline-flex items-center gap-2;
+  }
+
+  .eyebrow-muted {
+    @apply text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400
+           inline-flex items-center gap-2;
+  }
+
   /* ── Glass effect ────────────────────────────────── */
   .glass {
     @apply bg-white/80 backdrop-blur-xl border border-white/20
