@@ -9,7 +9,7 @@ import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
-import { Calendar, ChevronLeft, ChevronRight, Map as MapIcon, Phone } from 'lucide-react'
+import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -398,8 +398,14 @@ function Schedule({ business }) {
   return (
     <PageWrapper width="wide">
       <PageHero
-        title="Schedule"
-        subtitle={today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <CalendarClock className="w-3.5 h-3.5" strokeWidth={2.5} />
+            {view === 'map' ? 'Map view' : 'Today'}
+          </span>
+        }
+        title={today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+        subtitle={null}
         action={<ViewToggle view={view} setView={setView} />}
       />
 
@@ -569,7 +575,7 @@ function EventCard({ stop, onClick }) {
       )}
     >
       {time && (
-        <p className="font-mono text-[11px] text-gray-700 dark:text-gray-300 leading-tight">{time}</p>
+        <p className="tabular-nums text-[11px] text-gray-700 dark:text-gray-300 leading-tight">{time}</p>
       )}
       <p className={cn(
         'text-[13px] font-semibold text-gray-900 dark:text-gray-100 leading-snug line-clamp-2 mt-0.5',
@@ -636,7 +642,7 @@ function TodayRow({ stop, onClick }) {
       className="block w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
     >
       <div className="flex items-center gap-4">
-        <p className="font-mono text-sm text-emerald-700 dark:text-emerald-400 w-12 shrink-0">
+        <p className="tabular-nums text-sm text-emerald-700 dark:text-emerald-400 w-12 shrink-0">
           {time || '—'}
         </p>
         <div className="flex-1 min-w-0">
