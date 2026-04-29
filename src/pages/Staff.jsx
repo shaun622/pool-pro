@@ -1,6 +1,4 @@
 import { useState, useRef } from 'react'
-import Header from '../components/layout/Header'
-import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -186,14 +184,9 @@ export default function Staff() {
 
   if (loading) {
     return (
-      <>
-        <Header title="Staff" backTo="/settings" />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
-      </>
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
@@ -202,19 +195,11 @@ export default function Staff() {
 
   return (
     <>
-      <Header
-        title="Staff"
-        backTo="/settings"
-        right={
-          <button
-            onClick={openAdd}
-            className="text-pool-500 font-medium text-sm min-h-[44px] flex items-center px-2"
-          >
-            + Add
-          </button>
-        }
-      />
-      <PageWrapper>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Staff</h2>
+        <Button onClick={openAdd} size="sm">+ Add staff</Button>
+      </div>
+      <div>
         {/* Staff limit indicator */}
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -389,7 +374,7 @@ export default function Staff() {
             )}
           </div>
         </Modal>
-      </PageWrapper>
+      </div>
     </>
   )
 }

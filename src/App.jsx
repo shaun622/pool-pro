@@ -147,21 +147,26 @@ export default function App() {
                   <Route path="/quotes" element={<Quotes />} />
                   <Route path="/quotes/new" element={<QuoteBuilder />} />
                   <Route path="/quotes/:id" element={<QuoteBuilder />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/settings/business" element={<BusinessDetails />} />
-                  <Route path="/settings/staff" element={<Staff />} />
-                  <Route path="/settings/chemicals" element={<ChemicalLibrary />} />
-                  <Route path="/settings/templates" element={<CommunicationTemplates />} />
-                  <Route path="/settings/job-types" element={<JobTypeTemplates />} />
-                  <Route path="/settings/automations" element={<Automations />} />
-                  <Route path="/settings/surveys" element={<SurveyResults />} />
-                  <Route path="/settings/integrations" element={<Integrations />} />
-                  <Route path="/settings/import" element={<ImportData />} />
+                  {/* Settings — nested shell. Sub-pages render into <Outlet />. */}
+                  <Route path="/settings" element={<Settings />}>
+                    <Route index               element={<BusinessDetails />} />
+                    <Route path="staff"        element={<Staff />} />
+                    <Route path="chemicals"    element={<ChemicalLibrary />} />
+                    <Route path="templates"    element={<CommunicationTemplates />} />
+                    <Route path="job-types"    element={<JobTypeTemplates />} />
+                    <Route path="automations"  element={<Automations />} />
+                    <Route path="surveys"      element={<SurveyResults />} />
+                    <Route path="integrations" element={<Integrations />} />
+                    <Route path="import"       element={<ImportData />} />
+                    <Route path="billing"      element={<Subscription />} />
+                  </Route>
+                  {/* Redirects for cached bookmarks / PWA installs */}
+                  <Route path="/settings/business" element={<Navigate to="/settings" replace />} />
+                  <Route path="/subscription"      element={<Navigate to="/settings/billing" replace />} />
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/invoices/new" element={<InvoiceBuilder />} />
                   <Route path="/invoices/:id" element={<InvoiceBuilder />} />
                   <Route path="/reports" element={<Reports />} />
-                  <Route path="/subscription" element={<Subscription />} />
                 </Route>
               </Route>
 

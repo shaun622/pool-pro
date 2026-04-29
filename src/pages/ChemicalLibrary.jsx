@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import Header from '../components/layout/Header'
-import PageWrapper from '../components/layout/PageWrapper'
+import { Plus } from 'lucide-react'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
@@ -204,33 +203,19 @@ export default function ChemicalLibrary() {
   if (loading) {
     return (
       <>
-        <Header title="Chemical Library" backTo="/settings" />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+        </div>
       </>
     )
   }
 
   return (
     <>
-      <Header
-        title="Chemical Library"
-        backTo="/settings"
-        right={
-          <button
-            onClick={openAdd}
-            className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors"
-          >
-            <svg className="w-6 h-6 text-pool-600 dark:text-pool-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-        }
-      />
-      <PageWrapper>
+      <div className="flex items-center justify-end mb-3">
+        <Button onClick={openAdd} size="sm" leftIcon={Plus}>Add chemical</Button>
+      </div>
+      <div>
         {products.length === 0 && !showSuggestions ? (
           <EmptyState
             icon={
@@ -340,7 +325,7 @@ export default function ChemicalLibrary() {
             </div>
           </div>
         )}
-      </PageWrapper>
+      </div>
 
       {/* Add/Edit Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingProduct ? 'Edit Chemical' : 'Add Chemical'}>

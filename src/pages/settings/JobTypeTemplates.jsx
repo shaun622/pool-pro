@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react'
-import Header from '../../components/layout/Header'
-import PageWrapper from '../../components/layout/PageWrapper'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input, { TextArea, Select } from '../../components/ui/Input'
@@ -202,28 +200,19 @@ export default function JobTypeTemplates() {
   if (loading) {
     return (
       <>
-        <Header title="Job Types" backTo="/settings" />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+        </div>
       </>
     )
   }
 
   return (
     <>
-      <Header
-        title="Job Types"
-        backTo="/settings"
-        right={
-          <button onClick={openAdd} className="min-h-tap min-w-tap flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 dark:bg-gray-800 transition-colors">
-            <Plus className="w-6 h-6 text-pool-600 dark:text-pool-400" strokeWidth={2} />
-          </button>
-        }
-      />
-      <PageWrapper>
+      <div className="flex items-center justify-end mb-3">
+        <Button onClick={openAdd} size="sm" leftIcon={Plus}>Add job type</Button>
+      </div>
+      <div>
         {templates.length === 0 && !showSuggestions ? (
           <EmptyState
             icon={
@@ -312,7 +301,7 @@ export default function JobTypeTemplates() {
             </div>
           </div>
         )}
-      </PageWrapper>
+      </div>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Job Type' : 'New Job Type'}>
         <form onSubmit={handleSave} className="space-y-4">

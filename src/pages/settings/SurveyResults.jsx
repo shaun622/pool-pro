@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react'
-import Header from '../../components/layout/Header'
-import PageWrapper from '../../components/layout/PageWrapper'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
@@ -92,21 +90,14 @@ export default function SurveyResults() {
 
   if (loading) {
     return (
-      <>
-        <Header title="Survey Results" backTo="/settings" />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
-      </>
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
   return (
-    <>
-      <Header title="Survey Results" backTo="/settings" />
-      <PageWrapper>
+    <div>
         {surveys.length === 0 ? (
           <EmptyState
             icon={
@@ -182,7 +173,6 @@ export default function SurveyResults() {
             </div>
           </>
         )}
-      </PageWrapper>
-    </>
+    </div>
   )
 }

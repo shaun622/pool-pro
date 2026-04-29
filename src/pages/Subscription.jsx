@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from '../components/layout/Header'
-import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -131,22 +129,15 @@ export default function Subscription() {
 
   if (bizLoading) {
     return (
-      <>
-        <Header title="Subscription" backTo="/settings" />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
-      </>
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
   return (
-    <>
-      <Header title="Subscription" backTo="/settings" />
-      <PageWrapper>
-        <div className="space-y-5">
+    <div>
+      <div className="space-y-5">
           {/* Trial countdown */}
           {trialDaysLeft !== null && (
             <Card className={cn('p-4 text-center', trialDaysLeft <= 3 ? 'border-red-200 bg-red-50 dark:bg-red-950/40' : 'border-amber-200 bg-amber-50 dark:bg-amber-950/40')}>
@@ -210,8 +201,7 @@ export default function Subscription() {
               </Card>
             )
           })}
-        </div>
-      </PageWrapper>
-    </>
+      </div>
+    </div>
   )
 }

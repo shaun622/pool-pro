@@ -1,5 +1,3 @@
-import Header from '../../components/layout/Header'
-import PageWrapper from '../../components/layout/PageWrapper'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 
@@ -50,10 +48,8 @@ const INTEGRATIONS = [
 
 export default function Integrations() {
   return (
-    <>
-      <Header title="Integrations" backTo="/settings" />
-      <PageWrapper>
-        <div className="mb-5">
+    <div>
+      <div className="mb-5">
           <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
             Connect PoolPro with your favourite tools to streamline your workflow.
           </p>
@@ -89,7 +85,6 @@ export default function Integrations() {
             <a href="mailto:info@poolmateapp.online" className="text-pool-600 dark:text-pool-400">info@poolmateapp.online</a>
           </p>
         </div>
-      </PageWrapper>
-    </>
+    </div>
   )
 }

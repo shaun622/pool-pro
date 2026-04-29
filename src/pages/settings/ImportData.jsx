@@ -1,6 +1,4 @@
 import { useState, useRef } from 'react'
-import Header from '../../components/layout/Header'
-import PageWrapper from '../../components/layout/PageWrapper'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
@@ -118,10 +116,8 @@ export default function ImportData() {
   }
 
   return (
-    <>
-      <Header title="Import Data" backTo="/settings" />
-      <PageWrapper>
-        <div className="space-y-5">
+    <div>
+      <div className="space-y-5">
           {/* Type selector */}
           <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
             {IMPORT_TYPES.map(t => (
@@ -243,8 +239,7 @@ export default function ImportData() {
               )}
             </Card>
           )}
-        </div>
-      </PageWrapper>
-    </>
+      </div>
+    </div>
   )
 }

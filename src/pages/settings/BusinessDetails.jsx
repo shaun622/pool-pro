@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, Image as ImageIcon, Trash2 } from 'lucide-react'
-import Header from '../../components/layout/Header'
-import PageWrapper from '../../components/layout/PageWrapper'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input, { Select } from '../../components/ui/Input'
@@ -131,22 +129,15 @@ export default function BusinessDetails() {
 
   if (bizLoading) {
     return (
-      <>
-        <Header title="Business Details" backTo="/settings" />
-        <PageWrapper>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageWrapper>
-      </>
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
   return (
     <>
-      <Header title="Business Details" backTo="/settings" />
-      <PageWrapper>
-        <Card className="space-y-4">
+      <Card className="space-y-4">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-10 h-10 rounded-xl bg-pool-50 dark:bg-pool-950/40 text-pool-600 dark:text-pool-400 flex items-center justify-center">
               <Building2 className="w-5 h-5" strokeWidth={2} />
@@ -211,11 +202,10 @@ export default function BusinessDetails() {
             </div>
           </div>
 
-          <Button onClick={handleSave} loading={saving} className={cn('w-full', saved && '!bg-gradient-success')}>
-            {saved ? 'Saved!' : 'Save Changes'}
-          </Button>
-        </Card>
-      </PageWrapper>
+        <Button onClick={handleSave} loading={saving} className={cn('w-full', saved && '!bg-gradient-success')}>
+          {saved ? 'Saved!' : 'Save Changes'}
+        </Button>
+      </Card>
     </>
   )
 }
