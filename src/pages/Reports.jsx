@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import Header from '../components/layout/Header'
+import { BarChart3 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
+import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
@@ -246,9 +247,18 @@ export default function Reports() {
   }
 
   return (
-    <>
-      <Header title="Reports" />
-      <PageWrapper>
+    <PageWrapper>
+      <PageHero
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <BarChart3 className="w-3.5 h-3.5" strokeWidth={2.5} />
+            Analytics
+          </span>
+        }
+        title="Reports"
+        subtitle="Revenue · jobs · crew utilisation"
+      />
+      <>
         {/* Date range selector */}
         <div className="flex gap-1.5 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
           {DATE_RANGES.map(range => (
@@ -437,7 +447,7 @@ export default function Reports() {
             </Card>
           </div>
         )}
-      </PageWrapper>
-    </>
+      </>
+    </PageWrapper>
   )
 }
