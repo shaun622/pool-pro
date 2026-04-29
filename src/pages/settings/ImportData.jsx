@@ -137,7 +137,7 @@ export default function ImportData() {
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Upload CSV File</h3>
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
               Expected columns: {typeDef.columns.map(c => (
-                <span key={c} className={cn('font-mono', typeDef.required.includes(c) && 'font-bold text-gray-600 dark:text-gray-400')}>
+                <span key={c} className={cn('font-semibold uppercase tracking-wider text-[11px]', typeDef.required.includes(c) && 'font-bold text-gray-600 dark:text-gray-400')}>
                   {c}{typeDef.required.includes(c) ? '*' : ''}{', '}
                 </span>
               ))}

@@ -183,7 +183,7 @@ export default function Onboarding() {
                   onChange={(e) => setBrandColour(e.target.value)}
                   className="w-12 h-12 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer p-0.5 shadow-inner-soft"
                 />
-                <span className="text-sm text-gray-400 dark:text-gray-500 font-mono">{brandColour}</span>
+                <span className="text-sm text-gray-400 dark:text-gray-500 tabular-nums">{brandColour}</span>
               </div>
             </div>
 

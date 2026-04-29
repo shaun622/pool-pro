@@ -198,7 +198,7 @@ export default function BusinessDetails() {
                 onChange={(e) => updateField('brand_colour', e.target.value)}
                 className="w-11 h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer p-0.5 shadow-inner-soft"
               />
-              <span className="text-sm text-gray-400 dark:text-gray-500 font-mono">{form.brand_colour}</span>
+              <span className="text-sm text-gray-400 dark:text-gray-500 tabular-nums">{form.brand_colour}</span>
             </div>
           </div>
 
