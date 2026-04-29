@@ -9,8 +9,8 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
 import {
-  Calendar, Check, ChevronRight, Sparkles,
-  Wallet, AlertTriangle, Briefcase, FileText,
+  Calendar, CalendarDays, Check, CheckCircle2, ChevronRight, Sparkles,
+  AlertTriangle, Briefcase,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -19,10 +19,10 @@ export default function Dashboard() {
   const location = useLocation()
 
   const [stats, setStats] = useState({
+    scheduledThisWeek: 0,
     servicedThisWeek: 0,
     overduePools: 0,
-    activeJobs: 0,
-    pendingQuotes: 0,
+    workOrdersInProgress: 0,
   })
   const [todaySummary, setTodaySummary] = useState({ overdue: 0, dueToday: 0, completed: 0, total: 0, notes: [] })
   const [recentActivity, setRecentActivity] = useState([])
@@ -40,20 +40,27 @@ export default function Dashboard() {
       startOfWeek.setDate(now.getDate() - now.getDay())
       startOfWeek.setHours(0, 0, 0, 0)
 
+      const endOfWeek = new Date(startOfWeek)
+      endOfWeek.setDate(startOfWeek.getDate() + 6)
+      endOfWeek.setHours(23, 59, 59, 999)
+
       const endOfToday = new Date(now)
       endOfToday.setHours(23, 59, 59, 999)
 
       const startOfToday = new Date(now)
       startOfToday.setHours(0, 0, 0, 0)
 
+      const ymd = (d) => d.toISOString().split('T')[0]
+
       const [
         servicedRes,
+        scheduledPoolsThisWeekRes,
+        scheduledJobsThisWeekRes,
         overduePoolsRes,
         dueTodayPoolsRes,
         todayJobsRes,
         completedTodayRes,
-        jobsRes,
-        quotesRes,
+        workOrdersInProgressRes,
         activityRes,
         clientCountRes,
         poolCountRes,
@@ -64,6 +71,22 @@ export default function Dashboard() {
           .select('id', { count: 'exact', head: true })
           .eq('business_id', business.id)
           .gte('serviced_at', startOfWeek.toISOString()),
+
+        // Pool services scheduled this week — next_due_at within week window
+        supabase
+          .from('pools')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', business.id)
+          .gte('next_due_at', startOfWeek.toISOString())
+          .lte('next_due_at', endOfWeek.toISOString()),
+
+        // Jobs scheduled this week — scheduled_date within week window
+        supabase
+          .from('jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', business.id)
+          .gte('scheduled_date', ymd(startOfWeek))
+          .lte('scheduled_date', ymd(endOfWeek)),
 
         // Overdue pools: next_due_at < start of today
         supabase
@@ -85,7 +108,7 @@ export default function Dashboard() {
           .from('jobs')
           .select('id, title, notes, scheduled_date, clients(name)')
           .eq('business_id', business.id)
-          .eq('scheduled_date', startOfToday.toISOString().split('T')[0])
+          .eq('scheduled_date', ymd(startOfToday))
           .in('status', ['scheduled', 'in_progress']),
 
         // Services completed today
@@ -97,17 +120,12 @@ export default function Dashboard() {
           .gte('completed_at', startOfToday.toISOString())
           .lte('completed_at', endOfToday.toISOString()),
 
+        // Work orders strictly in progress
         supabase
           .from('jobs')
           .select('id', { count: 'exact', head: true })
           .eq('business_id', business.id)
-          .in('status', ['scheduled', 'in_progress']),
-
-        supabase
-          .from('quotes')
-          .select('id', { count: 'exact', head: true })
-          .eq('business_id', business.id)
-          .eq('status', 'sent'),
+          .eq('status', 'in_progress'),
 
         supabase
           .from('service_records')
@@ -157,10 +175,10 @@ export default function Dashboard() {
       }
 
       setStats({
+        scheduledThisWeek: (scheduledPoolsThisWeekRes.count || 0) + (scheduledJobsThisWeekRes.count || 0),
         servicedThisWeek: servicedRes.count || 0,
         overduePools: overdueCount,
-        activeJobs: jobsRes.count || 0,
-        pendingQuotes: quotesRes.count || 0,
+        workOrdersInProgress: workOrdersInProgressRes.count || 0,
       })
 
       setCounts({
@@ -278,36 +296,36 @@ export default function Dashboard() {
         {/* KPI strip — AWC StatCards with right-side icon-boxes */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
           <StatCard
-            label="Serviced"
-            value={stats.servicedThisWeek}
-            icon={Wallet}
+            label="Scheduled"
+            value={stats.scheduledThisWeek}
+            icon={CalendarDays}
             iconTone="brand"
             trendLabel="this week"
             onClick={() => navigate('/schedule')}
           />
           <StatCard
-            label="Overdue"
+            label="Serviced"
+            value={stats.servicedThisWeek}
+            icon={CheckCircle2}
+            iconTone="brand"
+            trendLabel="this week"
+            onClick={() => navigate('/schedule')}
+          />
+          <StatCard
+            label="Services Overdue"
             value={stats.overduePools}
             icon={AlertTriangle}
             iconTone={stats.overduePools > 0 ? 'red' : 'gray'}
-            trendLabel="pools"
+            trendLabel="this week"
             onClick={() => navigate('/schedule')}
           />
           <StatCard
             label="Work Orders"
-            value={stats.activeJobs}
+            value={stats.workOrdersInProgress}
             icon={Briefcase}
             iconTone="brand"
             trendLabel="in progress"
             onClick={() => navigate('/work-orders')}
-          />
-          <StatCard
-            label="Quotes"
-            value={stats.pendingQuotes}
-            icon={FileText}
-            iconTone="brand"
-            trendLabel="pending"
-            onClick={() => navigate('/work-orders?tab=quotes')}
           />
         </div>
 
