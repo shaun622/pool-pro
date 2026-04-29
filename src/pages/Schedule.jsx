@@ -9,7 +9,7 @@ import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
-import { CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone } from 'lucide-react'
+import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Users } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -431,10 +431,14 @@ function Schedule({ business }) {
       ) : loading ? (
         <LoadingSpinner />
       ) : view === 'day' ? (
-        <TodayList stops={todayStops} onStopSelect={handleStopSelect} variant="standalone" />
+        <>
+          {todayStops.length > 0 && <TechsOnService stops={todayStops} />}
+          <TodayList stops={todayStops} onStopSelect={handleStopSelect} variant="standalone" />
+        </>
       ) : (
         <>
           <WeekGrid weekDays={weekDays} stopsByDay={stopsByDay} onStopSelect={handleStopSelect} />
+          {todayStops.length > 0 && <TechsOnService stops={todayStops} />}
           <TodayList stops={todayStops} onStopSelect={handleStopSelect} />
         </>
       )}
@@ -574,6 +578,85 @@ function EventCard({ stop, onClick }) {
         <p className="text-[10.5px] text-gray-500 dark:text-gray-400 leading-tight truncate">{sub}</p>
       )}
     </button>
+  )
+}
+
+// ─── On service today (techs working today + their stop counts) ──
+function TechsOnService({ stops }) {
+  const byTech = new Map()
+  let unassigned = 0
+  for (const stop of stops) {
+    if (stop.assigned_staff_id) {
+      const key = stop.assigned_staff_id
+      if (!byTech.has(key)) {
+        byTech.set(key, {
+          id: key,
+          name: stop.tech_name || 'Tech',
+          photo: stop.tech_photo,
+          count: 0,
+        })
+      }
+      byTech.get(key).count += 1
+    } else {
+      unassigned += 1
+    }
+  }
+  const techs = Array.from(byTech.values()).sort((a, b) => b.count - a.count)
+
+  if (techs.length === 0 && unassigned === 0) return null
+
+  return (
+    <Card className="!p-0 overflow-hidden mb-4">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400 inline-flex items-center gap-2">
+          <Users className="w-3.5 h-3.5" strokeWidth={2.5} />
+          On service today
+        </p>
+        <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+          {techs.length}
+        </span>
+      </div>
+      <div className="px-4 py-3 flex flex-wrap gap-2">
+        {techs.map(t => (
+          <span
+            key={t.id}
+            className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700"
+          >
+            <TechAvatar photo={t.photo} name={t.name} />
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none">
+              {t.name.split(' ')[0]}
+            </span>
+            <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400 leading-none">
+              · {t.count} stop{t.count !== 1 ? 's' : ''}
+            </span>
+          </span>
+        ))}
+        {unassigned > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 text-amber-700 dark:text-amber-300 text-xs font-semibold">
+            <AlertCircle className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span className="tabular-nums">{unassigned}</span> unassigned
+          </span>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function TechAvatar({ photo, name }) {
+  const initials = (name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  if (photo) {
+    return (
+      <img
+        src={photo}
+        alt={name}
+        className="w-7 h-7 rounded-full object-cover ring-1 ring-white dark:ring-gray-900 shrink-0"
+      />
+    )
+  }
+  return (
+    <span className="w-7 h-7 rounded-full bg-pool-100 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 flex items-center justify-center text-[10px] font-bold ring-1 ring-white dark:ring-gray-900 shrink-0">
+      {initials}
+    </span>
   )
 }
 
