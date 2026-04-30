@@ -372,11 +372,11 @@ export default function Clients() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <div className="grid grid-cols-[1fr_8rem_4rem_6rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   <span>Client</span>
-                  <span className="w-24 text-left">Status</span>
-                  <span className="w-14 text-right">Pools</span>
-                  <span className="w-24 text-right">Services YTD</span>
+                  <span className="text-left">Status</span>
+                  <span className="text-right">Pools</span>
+                  <span className="text-right">Services YTD</span>
                 </div>
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                   {filtered.map(client => {
@@ -388,7 +388,7 @@ export default function Clients() {
                           onClick={() => setSelectedClientId(client.id)}
                           onDoubleClick={() => navigate(`/clients/${client.id}`)}
                           className={cn(
-                            'w-full grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-3 text-left transition-colors',
+                            'w-full grid grid-cols-[1fr_8rem_4rem_6rem] gap-3 px-4 py-3 text-left transition-colors items-center',
                             isSelected
                               ? 'bg-pool-50 dark:bg-pool-950/30'
                               : 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
@@ -400,13 +400,13 @@ export default function Clients() {
                           )}>
                             {client.name}
                           </span>
-                          <span className="w-24 text-left">
-                            <Badge variant={st.badge}>{st.label}</Badge>
+                          <span className={cn('text-left text-sm font-medium', st.text)}>
+                            {st.label}
                           </span>
-                          <span className="w-14 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
+                          <span className="text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
                             {client._pools.length || <span className="text-gray-300 dark:text-gray-600">—</span>}
                           </span>
-                          <span className="w-24 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
+                          <span className="text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
                             {client._servicesYtd > 0 ? client._servicesYtd : <span className="text-gray-300 dark:text-gray-600">—</span>}
                           </span>
                         </button>
