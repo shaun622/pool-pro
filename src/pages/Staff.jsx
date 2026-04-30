@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 
@@ -51,6 +52,7 @@ export default function Staff() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [resetSending, setResetSending] = useState(false)
   const fileRef = useRef()
 
   // The business owner lives in `businesses.owner_id`, NOT `staff_members`.
@@ -240,6 +242,23 @@ export default function Staff() {
     }
   }
 
+  async function handleSendPasswordReset() {
+    if (!editing?.email) return
+    setResetSending(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(editing.email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
+      toast.success(`Reset link sent to ${editing.email}`)
+    } catch (err) {
+      console.error('Error sending password reset:', err)
+      toast.error(err.message || 'Failed to send reset email.')
+    } finally {
+      setResetSending(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -414,11 +433,28 @@ export default function Staff() {
             </div>
           )}
           {editing && editing.user_id && (
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 px-3 py-2 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={2.25} />
-              <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                Login active — they can sign in with their email
-              </span>
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={2.25} />
+                <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                  Login active — they sign in with this email
+                </span>
+              </div>
+              {editing.email && (
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                    Forgotten password? Send them a reset link.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSendPasswordReset}
+                    disabled={resetSending}
+                    className="inline-flex items-center gap-1 h-7 px-3 rounded-full bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  >
+                    {resetSending ? 'Sending…' : 'Send reset email'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <TextArea
