@@ -358,7 +358,7 @@ export default function Clients() {
             {/* DESKTOP: master-detail (table + sticky detail panel) */}
             <div className="hidden md:grid md:grid-cols-12 gap-4">
               {/* Table */}
-              <Card className="!p-0 md:col-span-7 xl:col-span-8 overflow-hidden">
+              <Card className="!p-0 md:col-span-7 overflow-hidden">
                 {/* Search bar inside the card */}
                 <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
                   <div className="relative">
@@ -372,7 +372,7 @@ export default function Clients() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-[1fr_8rem_4rem_6rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <div className="grid grid-cols-[minmax(0,1fr)_9rem_5rem_7rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   <span>Client</span>
                   <span className="text-left">Status</span>
                   <span className="text-right">Pools</span>
@@ -388,7 +388,7 @@ export default function Clients() {
                           onClick={() => setSelectedClientId(client.id)}
                           onDoubleClick={() => navigate(`/clients/${client.id}`)}
                           className={cn(
-                            'w-full grid grid-cols-[1fr_8rem_4rem_6rem] gap-3 px-4 py-3 text-left transition-colors items-center',
+                            'w-full grid grid-cols-[minmax(0,1fr)_9rem_5rem_7rem] gap-3 px-4 py-3 text-left transition-colors items-center',
                             isSelected
                               ? 'bg-pool-50 dark:bg-pool-950/30'
                               : 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
@@ -417,7 +417,7 @@ export default function Clients() {
               </Card>
 
               {/* Detail panel */}
-              <div className="md:col-span-5 xl:col-span-4">
+              <div className="md:col-span-5">
                 {selectedClient && (
                   <Card className="!p-5 sticky top-24">
                     <div className="flex items-start justify-between mb-3">
