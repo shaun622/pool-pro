@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Clock,
+  ArrowRight, CheckCircle2, ChevronLeft, ChevronRight,
   FileText, Plus, Send, Wallet,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -100,12 +100,12 @@ export default function Quotes() {
     () => enriched.filter(q => q._stage !== 'declined' && q._stage !== 'expired').reduce((sum, q) => sum + q._total, 0),
     [enriched],
   )
-  const outForReviewCount = useMemo(
+  const sentCount = useMemo(
     () => enriched.filter(q => q._stage === 'sent' || q._stage === 'viewed').length,
     [enriched],
   )
-  const followUpsDueCount = useMemo(
-    () => enriched.filter(q => q._stage === 'follow_up').length,
+  const acceptedCount = useMemo(
+    () => enriched.filter(q => q._stage === 'accepted').length,
     [enriched],
   )
 
@@ -191,13 +191,8 @@ export default function Quotes() {
               </div>
             </div>
           </Card>
-          <StatCard label="Out for review" value={outForReviewCount} icon={Send}  iconTone="gray" />
-          <StatCard
-            label="Follow-ups due"
-            value={followUpsDueCount}
-            icon={Clock}
-            iconTone={followUpsDueCount > 0 ? 'amber' : 'gray'}
-          />
+          <StatCard label="Sent"     value={sentCount}     icon={Send}         iconTone="gray" />
+          <StatCard label="Accepted" value={acceptedCount} icon={CheckCircle2} iconTone={acceptedCount > 0 ? 'brand' : 'gray'} />
         </div>
       )}
 
