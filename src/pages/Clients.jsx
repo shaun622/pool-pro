@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Briefcase, Plus, Users, Wallet } from 'lucide-react'
+import { ArrowRight, Briefcase, CheckCircle2, Plus, Search, Users } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -15,7 +15,7 @@ import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { supabase } from '../lib/supabase'
-import { formatCurrency, formatDate, cn } from '../lib/utils'
+import { formatDate, cn } from '../lib/utils'
 
 // ─── STATUS LOGIC ──────────────────────────────────
 const STATUS = {
@@ -101,30 +101,23 @@ export default function Clients() {
   const [saving, setSaving] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [jobs, setJobs] = useState([])
-  const [invoices, setInvoices] = useState([])
 
   const loading = clientsLoading || poolsLoading
 
-  // Fetch jobs + paid invoices YTD for KPI strip + per-client YTD spend
+  // Fetch jobs for KPI strip + per-client services YTD + recent jobs panel
   useEffect(() => {
     if (!business?.id) return
-    const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString()
-    Promise.all([
-      supabase
-        .from('jobs')
-        .select('id, client_id, status, scheduled_date, title')
-        .eq('business_id', business.id),
-      supabase
-        .from('invoices')
-        .select('id, client_id, total, status, issued_date')
-        .eq('business_id', business.id)
-        .eq('status', 'paid')
-        .gte('issued_date', startOfYear),
-    ]).then(([jobsRes, invoicesRes]) => {
-      setJobs(jobsRes.data || [])
-      setInvoices(invoicesRes.data || [])
-    })
+    supabase
+      .from('jobs')
+      .select('id, client_id, status, scheduled_date, title')
+      .eq('business_id', business.id)
+      .then(({ data }) => setJobs(data || []))
   }, [business?.id])
+
+  const startOfYear = useMemo(
+    () => new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10),
+    [],
+  )
 
   const poolsByClient = useMemo(() => {
     const map = {}
@@ -135,14 +128,17 @@ export default function Clients() {
     return map
   }, [pools])
 
-  const ytdSpendByClient = useMemo(() => {
+  // Per-client completed-jobs count this calendar year
+  const servicesYtdByClient = useMemo(() => {
     const map = {}
-    for (const inv of invoices) {
-      if (!inv.client_id) continue
-      map[inv.client_id] = (map[inv.client_id] || 0) + (Number(inv.total) || 0)
+    for (const j of jobs) {
+      if (j.status !== 'completed') continue
+      if (!j.client_id) continue
+      if (!j.scheduled_date || j.scheduled_date < startOfYear) continue
+      map[j.client_id] = (map[j.client_id] || 0) + 1
     }
     return map
-  }, [invoices])
+  }, [jobs, startOfYear])
 
   const recentJobsByClient = useMemo(() => {
     const map = {}
@@ -162,9 +158,10 @@ export default function Clients() {
     [jobs],
   )
 
-  const ytdRevenue = useMemo(
-    () => invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0),
-    [invoices],
+  // Total completed services YTD (across all clients) — drives the KPI tile
+  const servicesYtdTotal = useMemo(
+    () => Object.values(servicesYtdByClient).reduce((sum, n) => sum + n, 0),
+    [servicesYtdByClient],
   )
 
   const enriched = useMemo(() => {
@@ -174,11 +171,10 @@ export default function Clients() {
         ...c,
         _pools: cp,
         _status: computeStatus(cp),
-        _ytd: ytdSpendByClient[c.id] || 0,
-        _activeJobs: jobs.filter(j => j.client_id === c.id && (j.status === 'scheduled' || j.status === 'in_progress')).length,
+        _servicesYtd: servicesYtdByClient[c.id] || 0,
       }
     })
-  }, [clients, poolsByClient, ytdSpendByClient, jobs])
+  }, [clients, poolsByClient, servicesYtdByClient])
 
   const counts = useMemo(() => ({
     all: enriched.length,
@@ -266,8 +262,8 @@ export default function Clients() {
           }
         />
 
-        {/* Search */}
-        <div className="mb-3">
+        {/* Mobile-only search (desktop search lives inside the table card) */}
+        <div className="md:hidden mb-3">
           <Input
             placeholder="Search by name, email, phone, or address..."
             value={search}
@@ -275,29 +271,27 @@ export default function Clients() {
           />
         </div>
 
-        {/* Status filter pills */}
-        <div className="flex flex-wrap gap-1.5 mb-4">
+        {/* Status filter pills — uniform shape, single brand-tinted active */}
+        <div className="flex flex-wrap gap-2 mb-4">
           {filters.map(f => {
             const active = filter === f.key
             const count = counts[f.key]
-            const st = f.key === 'all' ? null : STATUS[f.key]
-            const activeClass = f.key === 'all'
-              ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
-              : st.pillActive
-            const idleClass = f.key === 'all'
-              ? 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
-              : st.pillIdle
             return (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  'px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all flex items-center gap-1.5',
-                  active ? activeClass : idleClass
+                  'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors',
+                  active
+                    ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200 dark:border-pool-800/60 text-pool-700 dark:text-pool-300 ring-1 ring-pool-300/40'
+                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
                 )}
               >
                 <span>{f.label}</span>
-                <span className={cn('text-[10px] font-bold opacity-80')}>{count}</span>
+                <span className={cn(
+                  'tabular-nums text-[11px]',
+                  active ? 'text-pool-600 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500',
+                )}>{count}</span>
               </button>
             )
           })}
@@ -306,18 +300,19 @@ export default function Clients() {
         {/* KPI strip */}
         {!loading && counts.all > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-4">
-            <StatCard label="Total clients"  value={counts.all}      icon={Users}     iconTone="gray" />
-            <StatCard label="Active jobs"    value={activeJobsCount} icon={Briefcase} iconTone="gray" />
+            <StatCard label="Total clients" value={counts.all}      icon={Users}     iconTone="gray" />
+            <StatCard label="Active jobs"   value={activeJobsCount} icon={Briefcase} iconTone="gray" />
             <Card tinted className="!p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">YTD revenue</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Services YTD</p>
                   <p className="mt-2 text-2xl sm:text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
-                    {formatCurrency(ytdRevenue)}
+                    {servicesYtdTotal}
                   </p>
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Completed this year</p>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-pool-100 dark:bg-pool-900/50 text-pool-600 dark:text-pool-400 flex items-center justify-center shrink-0">
-                  <Wallet className="w-5 h-5" strokeWidth={2} />
+                  <CheckCircle2 className="w-5 h-5" strokeWidth={2} />
                 </div>
               </div>
             </Card>
@@ -364,11 +359,24 @@ export default function Clients() {
             <div className="hidden md:grid md:grid-cols-12 gap-4">
               {/* Table */}
               <Card className="!p-0 md:col-span-7 xl:col-span-8 overflow-hidden">
+                {/* Search bar inside the card */}
+                <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" strokeWidth={2} />
+                    <input
+                      type="search"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="Search clients..."
+                      className="w-full pl-9 pr-3 h-9 rounded-lg bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-pool-500/30"
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   <span>Client</span>
                   <span className="w-24 text-left">Status</span>
                   <span className="w-14 text-right">Pools</span>
-                  <span className="w-24 text-right">YTD spend</span>
+                  <span className="w-24 text-right">Services YTD</span>
                 </div>
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                   {filtered.map(client => {
@@ -399,7 +407,7 @@ export default function Clients() {
                             {client._pools.length || <span className="text-gray-300 dark:text-gray-600">—</span>}
                           </span>
                           <span className="w-24 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
-                            {client._ytd > 0 ? formatCurrency(client._ytd) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                            {client._servicesYtd > 0 ? client._servicesYtd : <span className="text-gray-300 dark:text-gray-600">—</span>}
                           </span>
                         </button>
                       </li>
@@ -439,9 +447,9 @@ export default function Clients() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">YTD spend</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Services YTD</p>
                         <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">
-                          {formatCurrency(selectedClient._ytd)}
+                          {selectedClient._servicesYtd}
                         </p>
                       </div>
                     </div>
