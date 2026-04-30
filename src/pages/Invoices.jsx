@@ -50,6 +50,7 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true)
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
   const [page, setPage] = useState(0)
+  const [stateFilter, setStateFilter] = useState('all')
 
   useEffect(() => {
     if (!business?.id) return
@@ -84,16 +85,33 @@ export default function Invoices() {
     [enriched],
   )
 
-  const pageCount = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE))
+  // Per-state counts for the filter pills
+  const stateCounts = useMemo(() => ({
+    all:     enriched.length,
+    draft:   enriched.filter(i => i.status === 'draft').length,
+    sent:    enriched.filter(i => i.status === 'sent').length,
+    paid:    enriched.filter(i => i.status === 'paid').length,
+    overdue: enriched.filter(i => i.status === 'overdue').length,
+  }), [enriched])
+
+  const filteredInvoices = useMemo(() => {
+    if (stateFilter === 'all') return enriched
+    return enriched.filter(inv => inv.status === stateFilter)
+  }, [enriched, stateFilter])
+
+  // Reset to page 0 when the filter changes (otherwise we could land out of range)
+  useEffect(() => { setPage(0) }, [stateFilter])
+
+  const pageCount = Math.max(1, Math.ceil(filteredInvoices.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
   const pageStart = safePage * PAGE_SIZE
-  const pageEnd = Math.min(pageStart + PAGE_SIZE, enriched.length)
-  const pagedInvoices = useMemo(() => enriched.slice(pageStart, pageEnd), [enriched, pageStart, pageEnd])
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, filteredInvoices.length)
+  const pagedInvoices = useMemo(() => filteredInvoices.slice(pageStart, pageEnd), [filteredInvoices, pageStart, pageEnd])
 
   const selectedInvoice = useMemo(() => {
-    if (!enriched.length) return null
-    return enriched.find(i => i.id === selectedInvoiceId) || enriched[0]
-  }, [enriched, selectedInvoiceId])
+    if (!filteredInvoices.length) return null
+    return filteredInvoices.find(i => i.id === selectedInvoiceId) || filteredInvoices[0]
+  }, [filteredInvoices, selectedInvoiceId])
 
   const heroTitle = enriched.length === 0
     ? 'No invoices yet'
@@ -177,9 +195,41 @@ export default function Invoices() {
         />
       ) : (
         <>
+          {/* State filter pills — uniform shape, single brand-tinted active */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {[
+              { key: 'all',     label: 'All' },
+              { key: 'draft',   label: 'Draft' },
+              { key: 'sent',    label: 'Sent' },
+              { key: 'paid',    label: 'Paid' },
+              { key: 'overdue', label: 'Overdue' },
+            ].map(f => {
+              const active = stateFilter === f.key
+              const count = stateCounts[f.key] || 0
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setStateFilter(f.key)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors',
+                    active
+                      ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200 dark:border-pool-800/60 text-pool-700 dark:text-pool-300 ring-1 ring-pool-300/40'
+                      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
+                  )}
+                >
+                  <span>{f.label}</span>
+                  <span className={cn(
+                    'tabular-nums text-[11px]',
+                    active ? 'text-pool-600 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500',
+                  )}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+
           {/* MOBILE: stacked card list */}
           <div className="md:hidden space-y-2.5">
-            {enriched.map(inv => (
+            {filteredInvoices.map(inv => (
               <Card key={inv.id} onClick={() => navigate(`/invoices/${inv.id}`)}>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] font-semibold tabular-nums text-pool-600 dark:text-pool-400 shrink-0">
@@ -246,7 +296,7 @@ export default function Invoices() {
               {pageCount > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/40">
                   <p className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                    Showing {pageStart + 1}–{pageEnd} of {enriched.length}
+                    Showing {pageStart + 1}–{pageEnd} of {filteredInvoices.length}
                   </p>
                   <div className="flex items-center gap-1">
                     <button
