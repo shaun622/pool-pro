@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Briefcase, CheckCircle2, Plus, Search, Users } from 'lucide-react'
+import { ArrowRight, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, Plus, Search, Users } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -88,6 +88,7 @@ function ClientCard({ client, clientPools, status, onClick }) {
 
 // ─── MAIN COMPONENT ────────────────────────────────
 const emptyClient = { name: '', email: '', phone: '', address: '', notes: '' }
+const PAGE_SIZE = 25
 
 export default function Clients() {
   const navigate = useNavigate()
@@ -101,6 +102,7 @@ export default function Clients() {
   const [saving, setSaving] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [jobs, setJobs] = useState([])
+  const [page, setPage] = useState(0)
 
   const loading = clientsLoading || poolsLoading
 
@@ -243,6 +245,22 @@ export default function Clients() {
     return found || filtered[0]
   }, [filtered, selectedClientId])
 
+  // ─── Pagination (desktop table only; mobile cards remain unpaged) ──
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageStart = safePage * PAGE_SIZE
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, filtered.length)
+  const pagedClients = useMemo(
+    () => filtered.slice(pageStart, pageEnd),
+    [filtered, pageStart, pageEnd],
+  )
+
+  // Reset to page 0 whenever the filtered set shrinks or the user changes
+  // search / filter — keeps the user on a valid page.
+  useEffect(() => {
+    setPage(0)
+  }, [search, filter])
+
   return (
     <>
       <PageWrapper width="wide">
@@ -379,7 +397,7 @@ export default function Clients() {
                   <span className="text-right">Services YTD</span>
                 </div>
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {filtered.map(client => {
+                  {pagedClients.map(client => {
                     const st = STATUS[client._status]
                     const isSelected = selectedClient && client.id === selectedClient.id
                     return (
@@ -414,6 +432,36 @@ export default function Clients() {
                     )
                   })}
                 </ul>
+
+                {/* Pagination footer — only when more than one page */}
+                {pageCount > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/40">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                      Showing {pageStart + 1}–{pageEnd} of {filtered.length}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setPage(p => Math.max(0, p - 1))}
+                        disabled={safePage === 0}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+                      </button>
+                      <span className="px-3 h-8 inline-flex items-center text-xs font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
+                        {safePage + 1} / {pageCount}
+                      </span>
+                      <button
+                        onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                        disabled={safePage >= pageCount - 1}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Next page"
+                      >
+                        <ChevronRight className="w-4 h-4" strokeWidth={2} />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </Card>
 
               {/* Detail panel */}
