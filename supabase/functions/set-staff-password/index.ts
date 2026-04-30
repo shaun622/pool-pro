@@ -110,7 +110,11 @@ serve(async (req) => {
           error: 'Staff member has no email — add an email first, then set the password',
         }, 400)
       }
-      // Create the auth user (email-confirmed, since the admin is vouching)
+      // Create the auth user (email-confirmed, since the admin is vouching).
+      // If the email is already registered (customer portal account, owner
+      // of another business, prior signup, etc.) this returns an error and
+      // we MUST surface it — never silently link an existing auth user to
+      // a new staff_members row.
       const { data: createData, error: createErr } = await adminClient.auth.admin.createUser({
         email: staff.email,
         password: newPassword,
@@ -118,10 +122,18 @@ serve(async (req) => {
         user_metadata: { role: 'staff' },
       })
       if (createErr) {
-        // If the email already exists in auth.users (e.g. from a prior signup
-        // that wasn't linked), surface a clearer error so the admin can
-        // resolve it manually.
-        return jsonResponse({ error: createErr.message }, 500)
+        const msg = createErr.message || ''
+        // 422 Conflict-style for "email already registered"; everything
+        // else is a 500.
+        const isDup = /already/i.test(msg) || /registered/i.test(msg)
+        return jsonResponse(
+          {
+            error: isDup
+              ? `That email is already registered to another account. Use a different email — never reuse a customer or portal email for staff logins.`
+              : msg || 'Failed to create login.',
+          },
+          isDup ? 409 : 500,
+        )
       }
       const newUserId = createData?.user?.id
       if (!newUserId) {

@@ -144,7 +144,18 @@ export default function Staff() {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  // Helper — creates auth account using a separate client so admin session isn't replaced
+  // Helper — creates a brand new auth account for the staff member.
+  //
+  // SECURITY: This function MUST refuse to link the new staff_members row
+  // to an existing auth user. The previous behaviour fell back to
+  // signInWithPassword on signup failure, which silently attached the
+  // staff role to whatever account already had that email — including
+  // customer portal accounts on other businesses. That was a serious
+  // cross-tenant identity leak (a tech "login" would actually sign the
+  // person in as someone's customer).
+  //
+  // Now: signUp only. If the email is already registered, throw a clear
+  // error and let the admin pick a different email.
   async function createAuthForStaff(email, password) {
     const { createClient } = await import('@supabase/supabase-js')
     const authClient = createClient(
@@ -157,16 +168,18 @@ export default function Staff() {
       password,
       options: { data: { role: 'staff' } },
     })
-    let userId = null
-    if (!signupErr && authData.user?.id) {
-      userId = authData.user.identities?.length > 0 ? authData.user.id : null
+    if (signupErr) {
+      // "User already registered", network error, etc — surface it.
+      throw new Error(signupErr.message || 'Failed to create login. Try a different email.')
     }
-    // Email already exists — try to sign in to get the existing user's ID
-    if (!userId) {
-      const { data: signInData } = await authClient.auth.signInWithPassword({ email, password })
-      userId = signInData?.user?.id || null
+    // Supabase quirk: when an email is already registered, signUp returns
+    // success with a user object whose `identities` array is empty (the
+    // "phantom signup" behaviour designed to not leak which emails are
+    // registered). We treat that as "email already in use".
+    if (!authData.user?.id || (authData.user.identities && authData.user.identities.length === 0)) {
+      throw new Error(`That email is already in use. Choose a different email — never reuse a customer/portal email for staff logins.`)
     }
-    return userId
+    return authData.user.id
   }
 
   async function handleSave() {
@@ -188,28 +201,23 @@ export default function Staff() {
       const payload = { ...staffFields, photo_url, is_active: true }
 
       if (editing) {
-        // If we need to create an auth account for this existing staff, do it first
+        // If we need to create an auth account for this existing staff, do it first.
+        // If it fails (e.g. email already in use), STOP — don't update the staff
+        // record. The admin needs to fix the email or drop the password field.
         let userIdUpdate = {}
         if (needsAuthSetup) {
-          try {
-            const userId = await createAuthForStaff(form.email, form.password)
-            if (userId) {
-              userIdUpdate = { user_id: userId, invite_status: 'accepted' }
-            }
-          } catch (authErr) {
-            console.warn('Auth account creation failed (staff still updated):', authErr)
-          }
+          const userId = await createAuthForStaff(form.email, form.password)
+          userIdUpdate = { user_id: userId, invite_status: 'accepted' }
         }
         await updateStaff(editing.id, { ...payload, ...userIdUpdate })
       } else {
-        // Create auth account first, then staff record
+        // Create auth account first, then staff record. If auth creation
+        // fails, do NOT create the staff_members row at all — better to
+        // surface the error and let the admin retry than leave a partial
+        // half-broken record behind.
         let userId = null
         if (form.email && form.password) {
-          try {
-            userId = await createAuthForStaff(form.email, form.password)
-          } catch (authErr) {
-            console.warn('Auth account creation failed (staff still added):', authErr)
-          }
+          userId = await createAuthForStaff(form.email, form.password)
         }
         await createStaff({
           ...payload,
@@ -219,7 +227,9 @@ export default function Staff() {
       setShowModal(false)
     } catch (err) {
       console.error('Error saving staff:', err)
-      toast.error('Failed to save. Please try again.')
+      // Surface the actual error message — typically "email already in use"
+      // or "password too weak" — so the admin can fix and retry.
+      toast.error(err?.message || 'Failed to save. Please try again.')
     } finally {
       setSaving(false)
     }
