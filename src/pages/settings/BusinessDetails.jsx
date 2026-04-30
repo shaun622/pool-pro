@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Building2, Image as ImageIcon, Trash2 } from 'lucide-react'
+import { Building2, Check, Image as ImageIcon, Palette, Trash2, Upload } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input, { Select } from '../../components/ui/Input'
@@ -19,13 +18,30 @@ const AUSTRALIAN_TIMEZONES = [
   { value: 'Australia/Perth', label: 'Perth (AWST)' },
 ]
 
+// Preset brand colours — pool-leaning palette + a few neutrals
+const PRESET_COLOURS = [
+  { hex: '#0EA5E9', label: 'Pool blue' },
+  { hex: '#0284C7', label: 'Deep blue' },
+  { hex: '#14B8A6', label: 'Teal' },
+  { hex: '#10B981', label: 'Emerald' },
+  { hex: '#F59E0B', label: 'Amber' },
+  { hex: '#EF4444', label: 'Red' },
+  { hex: '#0F172A', label: 'Slate' },
+]
+
+function normalizeHex(input) {
+  // Ensure leading #, uppercase, 6 chars
+  let v = (input || '').trim().replace(/^#/, '').toUpperCase()
+  v = v.replace(/[^0-9A-F]/g, '')
+  return v
+}
+
 export default function BusinessDetails() {
   const toast = useToast()
   const { business, loading: bizLoading, updateBusiness } = useBusiness()
-  const navigate = useNavigate()
 
   const [form, setForm] = useState({
-    name: '', abn: '', phone: '', email: '', logo_url: '', brand_colour: '#0891b2', timezone: 'Australia/Sydney',
+    name: '', abn: '', phone: '', email: '', logo_url: '', brand_colour: '#0EA5E9', timezone: 'Australia/Sydney',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -40,7 +56,7 @@ export default function BusinessDetails() {
         phone: business.phone || '',
         email: business.email || '',
         logo_url: business.logo_url || '',
-        brand_colour: business.brand_colour || '#0891b2',
+        brand_colour: business.brand_colour || '#0EA5E9',
         timezone: business.timezone || 'Australia/Sydney',
       })
     }
@@ -56,9 +72,10 @@ export default function BusinessDetails() {
       setSaving(true)
       await updateBusiness(form)
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      setTimeout(() => setSaved(false), 2500)
     } catch (err) {
       console.error('Error updating business:', err)
+      toast.error('Failed to save changes')
     } finally {
       setSaving(false)
     }
@@ -68,7 +85,7 @@ export default function BusinessDetails() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return }
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2MB'); return }
+    if (file.size > 4 * 1024 * 1024) { toast.error('Logo must be under 4MB'); return }
     setUploading(true)
     try {
       const resized = await resizeImage(file, 400, 200)
@@ -135,77 +152,184 @@ export default function BusinessDetails() {
     )
   }
 
+  const hexInput = form.brand_colour.replace(/^#/, '').toUpperCase()
+
   return (
-    <>
-      <Card className="space-y-4">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-pool-50 dark:bg-pool-950/40 text-pool-600 dark:text-pool-400 flex items-center justify-center">
-              <Building2 className="w-5 h-5" strokeWidth={2} />
+    <div className="space-y-6">
+      {/* ── BRANDING ── */}
+      <section>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0 flex-1">
+            <p className="eyebrow mb-1.5">
+              <Building2 className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Branding · what your customers see
+            </p>
+            <p className="text-[13.5px] text-gray-500 dark:text-gray-400 max-w-prose">
+              Trading name, contact details and your brand colours appear on every quote, invoice, and customer-facing page.
+            </p>
+          </div>
+          {saved && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold uppercase tracking-wider shrink-0">
+              <Check className="w-3 h-3" strokeWidth={2.5} />
+              Saved
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Trading name"
+            value={form.name}
+            onChange={(e) => updateField('name', e.target.value)}
+            placeholder="Crystal Clear Pools"
+          />
+          <Input
+            label="Public email"
+            type="email"
+            value={form.email}
+            onChange={(e) => updateField('email', e.target.value)}
+            placeholder="hello@example.com"
+          />
+          <Input
+            label="ABN"
+            value={form.abn}
+            onChange={(e) => updateField('abn', e.target.value)}
+            placeholder="XX XXX XXX XXX"
+          />
+          <Input
+            label="Phone"
+            type="tel"
+            value={form.phone}
+            onChange={(e) => updateField('phone', e.target.value)}
+            placeholder="0400 000 000"
+          />
+          <Select
+            label="Timezone"
+            value={form.timezone}
+            onChange={(e) => updateField('timezone', e.target.value)}
+            options={AUSTRALIAN_TIMEZONES}
+          />
+        </div>
+      </section>
+
+      {/* ── LOGO ── */}
+      <section>
+        <p className="eyebrow mb-3">
+          <ImageIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
+          Logo · shown on PDFs, the customer portal, your invoices
+        </p>
+        <Card className="!p-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center overflow-hidden p-1.5 shrink-0">
+              {form.logo_url ? (
+                <img src={form.logo_url} alt="Logo" className="max-w-full max-h-full object-contain" />
+              ) : (
+                <ImageIcon className="w-6 h-6 text-gray-300 dark:text-gray-600" strokeWidth={1.5} />
+              )}
             </div>
-            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">Business Profile</h3>
-          </div>
-
-          <Input label="Business Name" value={form.name} onChange={(e) => updateField('name', e.target.value)} />
-          <Input label="ABN" value={form.abn} onChange={(e) => updateField('abn', e.target.value)} placeholder="XX XXX XXX XXX" />
-          <Input label="Phone" type="tel" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} />
-          <Input label="Email" type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)} />
-          <Select label="Timezone" value={form.timezone} onChange={(e) => updateField('timezone', e.target.value)} options={AUSTRALIAN_TIMEZONES} />
-
-          {/* Logo upload */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">Company Logo</label>
-            {form.logo_url ? (
-              <div className="flex items-center gap-4">
-                <div className="w-24 h-16 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center overflow-hidden p-2">
-                  <img src={form.logo_url} alt="Logo" className="max-w-full max-h-full object-contain" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs text-pool-600 dark:text-pool-400 font-semibold hover:text-pool-700 text-left">Change logo</button>
-                  <button type="button" onClick={handleRemoveLogo} className="text-xs text-red-500 dark:text-red-400 font-semibold hover:text-red-600 text-left flex items-center gap-1">
-                    <Trash2 className="w-3 h-3" strokeWidth={2.5} /> Remove
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {form.logo_url ? 'Logo uploaded' : 'No logo yet'}
+              </p>
+              <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
+                Square PNG or SVG works best · max 4 MB
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {form.logo_url && (
+                <button
+                  type="button"
+                  onClick={handleRemoveLogo}
+                  className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400 font-semibold hover:text-red-600 px-2 py-1 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  Remove
+                </button>
+              )}
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
+                leftIcon={Upload}
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="w-full flex flex-col items-center justify-center gap-2 py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl hover:border-pool-400 hover:bg-pool-50/30 dark:hover:bg-pool-950/20 transition-all cursor-pointer"
+                loading={uploading}
               >
-                {uploading ? (
-                  <div className="w-6 h-6 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                      <ImageIcon className="w-5 h-5 text-gray-400 dark:text-gray-500" strokeWidth={2} />
-                    </div>
-                    <span className="text-sm text-gray-400 dark:text-gray-500">Tap to upload logo</span>
-                    <span className="text-[11px] text-gray-300 dark:text-gray-600">Max 400x200px, under 2MB</span>
-                  </>
-                )}
-              </button>
-            )}
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                {form.logo_url ? 'Change logo' : 'Upload logo'}
+              </Button>
+            </div>
           </div>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+        </Card>
+      </section>
 
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">Brand Colour</label>
-            <div className="flex items-center gap-3">
+      {/* ── BRAND COLOUR ── */}
+      <section>
+        <p className="eyebrow mb-3">
+          <Palette className="w-3.5 h-3.5" strokeWidth={2.5} />
+          Brand colour · used on PDFs, the customer portal, your invoices
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          {PRESET_COLOURS.map(c => {
+            const active = form.brand_colour.toUpperCase() === c.hex.toUpperCase()
+            return (
+              <button
+                key={c.hex}
+                type="button"
+                onClick={() => updateField('brand_colour', c.hex)}
+                className={cn(
+                  'w-10 h-10 rounded-xl shrink-0 transition-all',
+                  active
+                    ? 'ring-2 ring-offset-2 ring-gray-900 dark:ring-gray-100 dark:ring-offset-gray-900 scale-110'
+                    : 'ring-1 ring-black/10 hover:scale-105',
+                )}
+                style={{ backgroundColor: c.hex }}
+                aria-label={c.label}
+                title={c.label}
+              />
+            )
+          })}
+          <span className="h-8 w-px bg-gray-200 dark:bg-gray-700 shrink-0" />
+          {/* Custom hex */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click() /* visually only — clicking opens picker via input */}
+              className="w-10 h-10 rounded-xl shrink-0 ring-1 ring-black/10 relative cursor-pointer overflow-hidden"
+              style={{ backgroundColor: form.brand_colour }}
+              aria-label="Custom colour"
+            >
               <input
                 type="color"
                 value={form.brand_colour}
-                onChange={(e) => updateField('brand_colour', e.target.value)}
-                className="w-11 h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer p-0.5 shadow-inner-soft"
+                onChange={(e) => updateField('brand_colour', e.target.value.toUpperCase())}
+                className="absolute inset-0 opacity-0 cursor-pointer"
               />
-              <span className="text-sm text-gray-400 dark:text-gray-500 tabular-nums">{form.brand_colour}</span>
-            </div>
+            </button>
+            <span className="text-sm text-gray-400 dark:text-gray-500">#</span>
+            <input
+              type="text"
+              maxLength={6}
+              value={hexInput}
+              onChange={(e) => {
+                const v = normalizeHex(e.target.value)
+                updateField('brand_colour', '#' + v.padEnd(6, '0').slice(0, 6))
+              }}
+              className="w-20 h-9 px-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm font-semibold uppercase tabular-nums tracking-wide text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-pool-500/30"
+              placeholder="0EA5E9"
+            />
           </div>
+          <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+            Selected · {form.brand_colour.toUpperCase()}
+          </span>
+        </div>
+      </section>
 
-        <Button onClick={handleSave} loading={saving} className={cn('w-full', saved && '!bg-gradient-success')}>
-          {saved ? 'Saved!' : 'Save Changes'}
+      {/* ── SAVE ── */}
+      <div className="pt-2">
+        <Button onClick={handleSave} loading={saving} className={cn(saved && '!bg-gradient-success')}>
+          {saved ? 'Saved!' : 'Save changes'}
         </Button>
-      </Card>
-    </>
+      </div>
+    </div>
   )
 }
