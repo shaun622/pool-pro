@@ -1,67 +1,88 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, LayoutGrid, List, FileText } from 'lucide-react'
+import {
+  ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Clock,
+  FileText, Plus, Send, Wallet,
+} from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import StatCard from '../components/ui/StatCard'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, formatCurrency, cn } from '../lib/utils'
+import { formatCurrency, cn } from '../lib/utils'
 
-const QUOTE_STATUS_BADGE = {
-  draft: 'default',
-  sent: 'primary',
-  accepted: 'success',
+// Status display in the table column (typed text, no pill — matches Clients pattern)
+const STATE_TEXT = {
+  draft:    'text-gray-500 dark:text-gray-400',
+  sent:     'text-gray-700 dark:text-gray-300',
+  viewed:   'text-sky-600 dark:text-sky-400',
+  follow_up:'text-amber-600 dark:text-amber-400',
+  accepted: 'text-emerald-600 dark:text-emerald-400',
+  declined: 'text-red-600 dark:text-red-400',
+  expired:  'text-gray-400 dark:text-gray-500',
+}
+const STATE_LABEL = {
+  draft: 'Draft', sent: 'Sent', viewed: 'Viewed', follow_up: 'Follow up',
+  accepted: 'Accepted', declined: 'Declined', expired: 'Expired',
+}
+// Detail-panel pill style (right-corner) — solid for accepted, neutral for the rest
+const STATE_BADGE = {
+  draft: 'neutral',
+  sent: 'neutral',
+  viewed: 'info',
+  follow_up: 'warning',
+  accepted: 'success-solid',
   declined: 'danger',
-  expired: 'default',
+  expired: 'neutral',
 }
 
-const QUOTE_STATUS_LABEL = {
-  draft: 'Draft',
-  sent: 'Sent',
-  accepted: 'Accepted',
-  declined: 'Declined',
-  expired: 'Expired',
-}
-
-const PIPELINE_STAGES = [
-  { key: 'draft', label: 'Draft', color: 'bg-gray-400', textColor: 'text-gray-600 dark:text-gray-400' },
-  { key: 'sent', label: 'Sent', color: 'bg-blue-500', textColor: 'text-blue-700' },
-  { key: 'viewed', label: 'Viewed', color: 'bg-cyan-500', textColor: 'text-cyan-700' },
-  { key: 'follow_up', label: 'Follow Up', color: 'bg-amber-500', textColor: 'text-amber-700' },
-  { key: 'accepted', label: 'Accepted', color: 'bg-emerald-500', textColor: 'text-emerald-700' },
-  { key: 'converted', label: 'Converted', color: 'bg-green-600', textColor: 'text-green-700' },
-  { key: 'declined', label: 'Declined', color: 'bg-red-500', textColor: 'text-red-700' },
-]
-
-function getQuoteStage(quote) {
-  if (quote.pipeline_stage && quote.pipeline_stage !== 'draft') return quote.pipeline_stage
-  if (quote.status === 'accepted') return 'accepted'
-  if (quote.status === 'declined') return 'declined'
-  if (quote.status === 'sent') return quote.viewed_at ? 'viewed' : 'sent'
+function getQuoteStage(q) {
+  if (q.pipeline_stage && q.pipeline_stage !== 'draft') return q.pipeline_stage
+  if (q.status === 'accepted') return 'accepted'
+  if (q.status === 'declined') return 'declined'
+  if (q.status === 'sent') return q.viewed_at ? 'viewed' : 'sent'
   return 'draft'
 }
 
-function getQuoteTotal(quote) {
-  return (quote.line_items || []).reduce((s, i) => s + (i.amount || i.quantity * i.unit_price || 0), 0)
+function getQuoteTotal(q) {
+  return (q.line_items || []).reduce((s, i) => s + (i.amount || (i.quantity * i.unit_price) || 0), 0)
 }
+
+function getQuoteRef(q) {
+  if (q.quote_number) return q.quote_number
+  // Fall back to first 4 hex chars of UUID, prefixed PM-
+  const head = (q.id || '').replace(/-/g, '').slice(0, 4).toUpperCase()
+  return head ? `PM-${head}` : 'PM-????'
+}
+
+function getQuoteWork(q) {
+  if (q.title) return q.title
+  const first = (q.line_items || [])[0]
+  if (first?.description) return first.description
+  return 'Quote'
+}
+
+const PAGE_SIZE = 25
 
 export default function Quotes() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState('list') // 'list' | 'pipeline'
-  const [stageFilter, setStageFilter] = useState('all')
+  const [selectedQuoteId, setSelectedQuoteId] = useState(null)
+  const [page, setPage] = useState(0)
 
   useEffect(() => {
     if (!business?.id) return
     async function fetch() {
       setLoading(true)
-      const { data } = await supabase.from('quotes').select('*, clients(name)')
+      const { data } = await supabase
+        .from('quotes')
+        .select('*, clients(name)')
         .eq('business_id', business.id)
         .order('created_at', { ascending: false })
       setQuotes(data || [])
@@ -70,47 +91,57 @@ export default function Quotes() {
     fetch()
   }, [business?.id])
 
-  // Group for pipeline view
-  const grouped = {}
-  PIPELINE_STAGES.forEach(s => { grouped[s.key] = [] })
-  quotes.forEach(q => {
-    const stage = getQuoteStage(q)
-    if (grouped[stage]) grouped[stage].push(q)
-    else grouped.draft.push(q)
-  })
-
-  const totalValue = quotes
-    .filter(q => getQuoteStage(q) !== 'declined')
-    .reduce((sum, q) => sum + getQuoteTotal(q), 0)
-
-  const filteredQuotes = stageFilter === 'all' ? quotes : quotes.filter(q => getQuoteStage(q) === stageFilter)
-
-  // Hero
-  const pendingCount = quotes.filter(q => ['sent', 'viewed', 'follow_up'].includes(getQuoteStage(q))).length
-  const acceptedCount = quotes.filter(q => getQuoteStage(q) === 'accepted').length
-  const heroSubtitle = quotes.length === 0
-    ? 'No quotes yet'
-    : `${quotes.length} ${quotes.length === 1 ? 'quote' : 'quotes'}${pendingCount > 0 ? ` · ${pendingCount} pending` : ''}${acceptedCount > 0 ? ` · ${acceptedCount} accepted` : ''}`
-
-  const heroAction = (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={() => setView(v => v === 'list' ? 'pipeline' : 'list')}
-        className="min-h-tap min-w-tap flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-        aria-label="Toggle view"
-      >
-        {view === 'list'
-          ? <LayoutGrid className="w-4 h-4 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-          : <List className="w-4 h-4 text-gray-600 dark:text-gray-400" strokeWidth={2} />
-        }
-      </button>
-      <Button leftIcon={Plus} onClick={() => navigate('/quotes/new')}>New Quote</Button>
-    </div>
+  const enriched = useMemo(
+    () => quotes.map(q => ({ ...q, _stage: getQuoteStage(q), _total: getQuoteTotal(q), _ref: getQuoteRef(q), _work: getQuoteWork(q) })),
+    [quotes],
   )
+
+  const pipelineValue = useMemo(
+    () => enriched.filter(q => q._stage !== 'declined' && q._stage !== 'expired').reduce((sum, q) => sum + q._total, 0),
+    [enriched],
+  )
+  const outForReviewCount = useMemo(
+    () => enriched.filter(q => q._stage === 'sent' || q._stage === 'viewed').length,
+    [enriched],
+  )
+  const followUpsDueCount = useMemo(
+    () => enriched.filter(q => q._stage === 'follow_up').length,
+    [enriched],
+  )
+
+  // Pagination
+  const pageCount = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageStart = safePage * PAGE_SIZE
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, enriched.length)
+  const pagedQuotes = useMemo(
+    () => enriched.slice(pageStart, pageEnd),
+    [enriched, pageStart, pageEnd],
+  )
+
+  const selectedQuote = useMemo(() => {
+    if (!enriched.length) return null
+    return enriched.find(q => q.id === selectedQuoteId) || enriched[0]
+  }, [enriched, selectedQuoteId])
+
+  const heroTitle = enriched.length === 0
+    ? 'No quotes yet'
+    : `${enriched.length} ${enriched.length === 1 ? 'quote' : 'quotes'} · ${formatCurrency(pipelineValue)} in pipeline`
+
+  async function markAccepted(quote) {
+    if (!quote) return
+    const { error } = await supabase
+      .from('quotes')
+      .update({ status: 'accepted', pipeline_stage: 'accepted' })
+      .eq('id', quote.id)
+    if (!error) {
+      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, status: 'accepted', pipeline_stage: 'accepted' } : q))
+    }
+  }
 
   if (bizLoading || loading) {
     return (
-      <PageWrapper>
+      <PageWrapper width="wide">
         <PageHero
           eyebrow={
             <span className="inline-flex items-center gap-2">
@@ -128,152 +159,245 @@ export default function Quotes() {
   }
 
   return (
-    <>
-      <PageWrapper>
-        <PageHero
-          eyebrow={
-            <span className="inline-flex items-center gap-2">
-              <FileText className="w-3.5 h-3.5" strokeWidth={2.5} />
-              Sales pipeline
-            </span>
-          }
-          title="Quotes"
-          subtitle={heroSubtitle}
-          action={heroAction}
-        />
-        {/* Pipeline summary bar */}
-        {quotes.length > 0 && (
-          <Card className="mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">Pipeline Value</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalValue)}</p>
+    <PageWrapper width="wide">
+      <PageHero
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <FileText className="w-3.5 h-3.5" strokeWidth={2.5} />
+            Sales pipeline
+          </span>
+        }
+        title={heroTitle}
+        action={
+          <Button leftIcon={Plus} onClick={() => navigate('/quotes/new')}>
+            New quote
+          </Button>
+        }
+      />
+
+      {/* KPI strip */}
+      {enriched.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-4">
+          <Card tinted className="!p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pipeline value</p>
+                <p className="mt-2 text-2xl sm:text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
+                  {formatCurrency(pipelineValue)}
+                </p>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">Total</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{quotes.length}</p>
+              <div className="w-10 h-10 rounded-xl bg-pool-100 dark:bg-pool-900/50 text-pool-600 dark:text-pool-400 flex items-center justify-center shrink-0">
+                <Wallet className="w-5 h-5" strokeWidth={2} />
               </div>
-            </div>
-            {/* Mini stage indicators */}
-            <div className="flex gap-1 pt-2 border-t border-gray-100 dark:border-gray-800">
-              {PIPELINE_STAGES.map(stage => (
-                <div key={stage.key} className="flex-1 text-center">
-                  <div className={cn('w-2 h-2 rounded-full mx-auto mb-0.5', stage.color,
-                    grouped[stage.key].length === 0 && 'opacity-20')} />
-                  <p className="text-[9px] font-bold text-gray-500 dark:text-gray-400">{grouped[stage.key].length}</p>
-                </div>
-              ))}
             </div>
           </Card>
-        )}
+          <StatCard label="Out for review" value={outForReviewCount} icon={Send}  iconTone="gray" />
+          <StatCard
+            label="Follow-ups due"
+            value={followUpsDueCount}
+            icon={Clock}
+            iconTone={followUpsDueCount > 0 ? 'amber' : 'gray'}
+          />
+        </div>
+      )}
 
-        {view === 'pipeline' ? (
-          /* ─── PIPELINE VIEW (vertical grouped list) ─── */
-          <>
-            {PIPELINE_STAGES.map(stage => {
-              const stageQuotes = grouped[stage.key]
-              if (stageQuotes.length === 0) return null
-              const stageValue = stageQuotes.reduce((sum, q) => sum + getQuoteTotal(q), 0)
-              return (
-                <div key={stage.key} className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={cn('w-2.5 h-2.5 rounded-full', stage.color)} />
-                    <h3 className={cn('text-sm font-bold', stage.textColor)}>{stage.label}</h3>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">{stageQuotes.length}</span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">{formatCurrency(stageValue)}</span>
+      {enriched.length === 0 ? (
+        <EmptyState
+          icon={<FileText className="w-8 h-8" strokeWidth={1.5} />}
+          title="No quotes yet"
+          description="Create your first quote"
+          action="New quote"
+          onAction={() => navigate('/quotes/new')}
+        />
+      ) : (
+        <>
+          {/* MOBILE: stacked card list */}
+          <div className="md:hidden space-y-2.5">
+            {enriched.map(q => (
+              <Card key={q.id} onClick={() => navigate(`/quotes/${q.id}`)}>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-semibold tabular-nums text-pool-600 dark:text-pool-400 shrink-0">
+                    {q._ref}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{q.clients?.name || 'Unknown'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{q._work}</p>
                   </div>
-                  <div className="space-y-2">
-                    {stageQuotes.map(quote => (
-                      <Card key={quote.id} onClick={() => navigate(`/quotes/${quote.id}`)} className="py-3">
-                        <div className="flex items-center justify-between">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{quote.clients?.name || 'Unknown'}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{formatDate(quote.created_at)}</p>
-                          </div>
-                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100 ml-3">{formatCurrency(getQuoteTotal(quote))}</p>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
+                  <Badge variant={STATE_BADGE[q._stage] || 'neutral'} className="shrink-0">{STATE_LABEL[q._stage]}</Badge>
+                  <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-gray-100 shrink-0 ml-2">
+                    {formatCurrency(q._total)}
+                  </p>
                 </div>
-              )
-            })}
-            {quotes.length === 0 && (
-              <EmptyState
-                icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-                title="No quotes yet"
-                description="Create your first quote"
-                action="Create Quote"
-                onAction={() => navigate('/quotes/new')}
-              />
-            )}
-          </>
-        ) : (
-          /* ─── LIST VIEW ─── */
-          <>
-            {/* Stage filter pills */}
-            <div className="flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
-              {[
-                { key: 'all', label: `All (${quotes.length})` },
-                ...PIPELINE_STAGES.filter(s => grouped[s.key].length > 0).map(s => ({
-                  key: s.key, label: `${s.label} (${grouped[s.key].length})`
-                }))
-              ].map(f => (
-                <button key={f.key} onClick={() => setStageFilter(f.key)}
-                  className={cn('shrink-0 px-4 py-2 rounded-xl text-xs font-semibold min-h-tap transition-all duration-200',
-                    stageFilter === f.key ? 'bg-gradient-brand text-white shadow-md shadow-pool-500/20'
-                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 shadow-card')}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
+              </Card>
+            ))}
+          </div>
 
-            {filteredQuotes.length === 0 ? (
-              <EmptyState
-                icon={<svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-                title="No quotes yet"
-                description="Create your first quote"
-                action="Create Quote"
-                onAction={() => navigate('/quotes/new')}
-              />
-            ) : (
-              <div className="space-y-2.5">
-                {filteredQuotes.map(quote => {
-                  const stage = getQuoteStage(quote)
-                  const stageDef = PIPELINE_STAGES.find(s => s.key === stage) || PIPELINE_STAGES[0]
+          {/* DESKTOP: master-detail */}
+          <div className="hidden md:grid md:grid-cols-12 gap-4">
+            {/* Table */}
+            <Card className="!p-0 md:col-span-7 overflow-hidden">
+              <div className="grid grid-cols-[6rem_minmax(0,1fr)_8rem_7rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <span>Ref</span>
+                <span>Client / Work</span>
+                <span className="text-left">State</span>
+                <span className="text-right">Value</span>
+              </div>
+              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                {pagedQuotes.map(q => {
+                  const isSelected = selectedQuote && q.id === selectedQuote.id
                   return (
-                    <Card key={quote.id} onClick={() => navigate(`/quotes/${quote.id}`)}>
-                      <div className="flex items-center gap-3">
-                        <div className={cn('w-2 h-full min-h-[40px] rounded-full shrink-0', stageDef.color)} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{quote.clients?.name}</p>
-                            <Badge variant={QUOTE_STATUS_BADGE[quote.status]} className="ml-2 shrink-0 text-[10px]">
-                              {QUOTE_STATUS_LABEL[quote.status]}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-bold text-gray-700 dark:text-gray-300">{formatCurrency(getQuoteTotal(quote))}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500">{formatDate(quote.created_at)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
+                    <li key={q.id}>
+                      <button
+                        onClick={() => setSelectedQuoteId(q.id)}
+                        onDoubleClick={() => navigate(`/quotes/${q.id}`)}
+                        className={cn(
+                          'w-full grid grid-cols-[6rem_minmax(0,1fr)_8rem_7rem] gap-3 px-4 py-3 text-left transition-colors items-center',
+                          isSelected
+                            ? 'bg-pool-50 dark:bg-pool-950/30'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
+                        )}
+                      >
+                        <span className={cn(
+                          'text-[11px] font-semibold tabular-nums truncate',
+                          isSelected ? 'text-pool-700 dark:text-pool-300' : 'text-pool-600 dark:text-pool-400',
+                        )}>
+                          {q._ref}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{q.clients?.name || 'Unknown'}</span>
+                          <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">{q._work}</span>
+                        </span>
+                        <span className={cn('text-left text-sm font-medium', STATE_TEXT[q._stage])}>
+                          {STATE_LABEL[q._stage]}
+                        </span>
+                        <span className="text-right text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                          {formatCurrency(q._total)}
+                        </span>
+                      </button>
+                    </li>
                   )
                 })}
-              </div>
-            )}
-          </>
-        )}
+              </ul>
 
-        {/* FAB */}
-        <button onClick={() => navigate('/quotes/new')}
-          className="fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20">
-          <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      </PageWrapper>
-    </>
+              {pageCount > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/40">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                    Showing {pageStart + 1}–{pageEnd} of {enriched.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      disabled={safePage === 0}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                    <span className="px-3 h-8 inline-flex items-center text-xs font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
+                      {safePage + 1} / {pageCount}
+                    </span>
+                    <button
+                      onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                      disabled={safePage >= pageCount - 1}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Detail panel */}
+            <div className="md:col-span-5">
+              {selectedQuote && (
+                <Card className="!p-5 sticky top-24">
+                  <div className="flex items-start justify-between mb-3">
+                    <p className="text-[11px] font-semibold tabular-nums text-pool-600 dark:text-pool-400">
+                      {selectedQuote._ref}
+                    </p>
+                    <Badge variant={STATE_BADGE[selectedQuote._stage] || 'neutral'}>
+                      {STATE_LABEL[selectedQuote._stage]}
+                    </Badge>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                    {selectedQuote.clients?.name || 'Unknown'}
+                  </h3>
+                  {selectedQuote._work && selectedQuote._work !== 'Quote' && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                      {selectedQuote._work}
+                    </p>
+                  )}
+
+                  {/* Line items */}
+                  <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                      Line items
+                    </p>
+                    {(selectedQuote.line_items || []).length === 0 ? (
+                      <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+                        <span>—</span>
+                        <span className="tabular-nums">{formatCurrency(0)}</span>
+                      </div>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {(selectedQuote.line_items || []).slice(0, 4).map((item, i) => (
+                          <li key={i} className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-gray-700 dark:text-gray-300 truncate">
+                              {item.description || item.name || 'Item'}
+                              {item.quantity > 1 && (
+                                <span className="text-gray-400 dark:text-gray-500"> · ×{item.quantity}</span>
+                              )}
+                            </span>
+                            <span className="tabular-nums text-gray-900 dark:text-gray-100 shrink-0">
+                              {formatCurrency(item.amount || (item.quantity * item.unit_price) || 0)}
+                            </span>
+                          </li>
+                        ))}
+                        {(selectedQuote.line_items || []).length > 4 && (
+                          <li className="text-xs text-gray-400 dark:text-gray-500 italic">
+                            +{selectedQuote.line_items.length - 4} more
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Total */}
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Total</p>
+                    <p className="text-2xl font-bold tabular-nums text-pool-700 dark:text-pool-300">
+                      {formatCurrency(selectedQuote._total)}
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-5 flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => navigate(`/quotes/${selectedQuote.id}`)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
+                    >
+                      Open quote
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
+                    </button>
+                    {selectedQuote._stage !== 'accepted' && selectedQuote._stage !== 'declined' && (
+                      <Button
+                        size="sm"
+                        leftIcon={CheckCircle2}
+                        onClick={() => markAccepted(selectedQuote)}
+                        className="!bg-emerald-500 !shadow-emerald-500/20 hover:!brightness-110"
+                      >
+                        Mark accepted
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </PageWrapper>
   )
 }
