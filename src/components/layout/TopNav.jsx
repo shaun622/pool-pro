@@ -7,11 +7,11 @@ import { cn } from '../../lib/utils'
 const tabs = [
   { path: '/',                label: 'Home',        Icon: Home },
   { path: '/schedule',        label: 'Schedule',    Icon: Calendar },
+  { path: '/recurring-jobs',  label: 'Recurring',   Icon: Repeat },
   { path: '/work-orders',     label: 'Work Orders', Icon: ClipboardList },
   { path: '/clients',         label: 'Clients',     Icon: Users },
   { path: '/quotes',          label: 'Quotes',      Icon: FileText },
   { path: '/invoices',        label: 'Invoices',    Icon: Receipt },
-  { path: '/recurring-jobs',  label: 'Recurring',   Icon: Repeat },
   { path: '/reports',         label: 'Analytics',   Icon: BarChart3 },
   { path: '/settings',        label: 'Settings',    Icon: SettingsIcon },
 ]
