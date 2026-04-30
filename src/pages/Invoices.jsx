@@ -1,134 +1,118 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Receipt } from 'lucide-react'
+import {
+  AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight,
+  Plus, Receipt, Send, Wallet,
+} from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import StatCard from '../components/ui/StatCard'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, formatCurrency, cn } from '../lib/utils'
+import { formatCurrency, cn } from '../lib/utils'
 
-const STATUS_TABS = ['all', 'draft', 'sent', 'paid', 'overdue']
-
-const STATUS_BADGE = {
-  draft: 'default',
-  sent: 'primary',
-  paid: 'success',
+// Typed status colour for the table column (no pill — matches Clients/Quotes)
+const STATE_TEXT = {
+  draft:    'text-gray-500 dark:text-gray-400',
+  sent:     'text-gray-700 dark:text-gray-300',
+  paid:     'text-emerald-600 dark:text-emerald-400',
+  overdue:  'text-red-600 dark:text-red-400',
+  void:     'text-gray-400 dark:text-gray-500',
+}
+const STATE_LABEL = {
+  draft: 'Draft', sent: 'Sent', paid: 'Paid', overdue: 'Overdue', void: 'Void',
+}
+// Detail-panel pill — solid for paid, soft for everything else
+const STATE_BADGE = {
+  draft: 'neutral',
+  sent: 'neutral',
+  paid: 'success-solid',
   overdue: 'danger',
-  void: 'warning',
+  void: 'neutral',
 }
 
-const STATUS_LABEL = {
-  draft: 'Draft',
-  sent: 'Invoice Sent',
-  paid: 'Paid',
-  overdue: 'Overdue',
-  void: 'Void',
+function getInvoiceRef(inv) {
+  if (inv.invoice_number) return inv.invoice_number
+  const head = (inv.id || '').replace(/-/g, '').slice(0, 4).toUpperCase()
+  return head ? `INV-${head}` : 'INV-????'
 }
 
-function InvoiceCard({ invoice, onClick }) {
-  return (
-    <Card onClick={onClick}>
-      <div className="flex items-center gap-3.5">
-        <div className={cn(
-          'w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm',
-          invoice.status === 'paid'
-            ? 'bg-emerald-500 shadow-emerald-500/20'
-            : invoice.status === 'overdue'
-            ? 'bg-red-500 shadow-red-500/20'
-            : 'bg-gradient-brand shadow-pool-500/20'
-        )}>
-          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{invoice.invoice_number}</h3>
-            <Badge variant={STATUS_BADGE[invoice.status] || 'default'}>
-              {STATUS_LABEL[invoice.status] || invoice.status}
-            </Badge>
-          </div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
-            {invoice.clients?.name || 'Unknown client'}
-          </p>
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(invoice.total)}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-            {formatDate(invoice.issued_date || invoice.created_at)}
-          </p>
-        </div>
-        <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </div>
-    </Card>
-  )
-}
+const PAGE_SIZE = 25
 
 export default function Invoices() {
-  const { business } = useBusiness()
+  const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('all')
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState(null)
+  const [page, setPage] = useState(0)
 
   useEffect(() => {
     if (!business?.id) return
-
     async function fetchInvoices() {
       setLoading(true)
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('invoices')
         .select('*, clients(name)')
         .eq('business_id', business.id)
         .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching invoices:', error)
-      } else {
-        setInvoices(data || [])
-      }
+      setInvoices(data || [])
       setLoading(false)
     }
-
     fetchInvoices()
   }, [business?.id])
 
-  const filtered = useMemo(() => {
-    if (activeTab === 'all') return invoices
-    return invoices.filter(inv => inv.status === activeTab)
-  }, [invoices, activeTab])
+  const enriched = useMemo(
+    () => invoices.map(inv => ({ ...inv, _ref: getInvoiceRef(inv), _total: Number(inv.total) || 0 })),
+    [invoices],
+  )
 
-  // Summary stats
-  const outstanding = useMemo(() => {
-    return invoices
-      .filter(inv => inv.status === 'sent' || inv.status === 'overdue')
-      .reduce((sum, inv) => sum + (inv.total || 0), 0)
-  }, [invoices])
+  const outstanding = useMemo(
+    () => enriched.filter(inv => inv.status === 'sent' || inv.status === 'overdue').reduce((s, inv) => s + inv._total, 0),
+    [enriched],
+  )
+  const sentCount = useMemo(
+    () => enriched.filter(inv => inv.status === 'sent').length,
+    [enriched],
+  )
+  const overdueCount = useMemo(
+    () => enriched.filter(inv => inv.status === 'overdue').length,
+    [enriched],
+  )
 
-  const paidThisMonth = useMemo(() => {
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    return invoices
-      .filter(inv => inv.status === 'paid' && inv.paid_date >= startOfMonth)
-      .reduce((sum, inv) => sum + (inv.paid_amount || inv.total || 0), 0)
-  }, [invoices])
+  const pageCount = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageStart = safePage * PAGE_SIZE
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, enriched.length)
+  const pagedInvoices = useMemo(() => enriched.slice(pageStart, pageEnd), [enriched, pageStart, pageEnd])
 
-  // Subtitle
-  const heroSubtitle = invoices.length === 0
+  const selectedInvoice = useMemo(() => {
+    if (!enriched.length) return null
+    return enriched.find(i => i.id === selectedInvoiceId) || enriched[0]
+  }, [enriched, selectedInvoiceId])
+
+  const heroTitle = enriched.length === 0
     ? 'No invoices yet'
-    : outstanding > 0
-      ? `${formatCurrency(outstanding)} outstanding`
-      : `${invoices.length} ${invoices.length === 1 ? 'invoice' : 'invoices'}`
+    : `${enriched.length} ${enriched.length === 1 ? 'invoice' : 'invoices'} · ${formatCurrency(outstanding)} outstanding`
 
-  return (
-    <>
-      <PageWrapper>
+  async function markPaid(invoice) {
+    if (!invoice) return
+    const { error } = await supabase
+      .from('invoices')
+      .update({ status: 'paid', paid_date: new Date().toISOString() })
+      .eq('id', invoice.id)
+    if (!error) {
+      setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, status: 'paid' } : i))
+    }
+  }
+
+  if (bizLoading || loading) {
+    return (
+      <PageWrapper width="wide">
         <PageHero
           eyebrow={
             <span className="inline-flex items-center gap-2">
@@ -137,81 +121,242 @@ export default function Invoices() {
             </span>
           }
           title="Invoices"
-          subtitle={heroSubtitle}
-          action={<Button leftIcon={Plus} onClick={() => navigate('/invoices/new')}>New Invoice</Button>}
         />
-
-        {/* Summary stats */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <div className="card p-4">
-            <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Outstanding</p>
-            <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1 tabular-nums">{formatCurrency(outstanding)}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Paid This Month</p>
-            <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">{formatCurrency(paidThisMonth)}</p>
-          </div>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
         </div>
+      </PageWrapper>
+    )
+  }
 
-        {/* Status filter tabs */}
-        <div className="flex gap-1.5 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
-          {STATUS_TABS.map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                'px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors min-h-tap',
-                activeTab === tab
-                  ? 'bg-pool-500 text-white shadow-sm'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200'
-              )}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+  return (
+    <PageWrapper width="wide">
+      <PageHero
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <Receipt className="w-3.5 h-3.5" strokeWidth={2.5} />
+            Billing
+          </span>
+        }
+        title={heroTitle}
+        action={
+          <Button leftIcon={Plus} onClick={() => navigate('/invoices/new')}>
+            New invoice
+          </Button>
+        }
+      />
+
+      {/* KPI strip */}
+      {enriched.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-4">
+          <Card tinted className="!p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Outstanding</p>
+                <p className="mt-2 text-2xl sm:text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
+                  {formatCurrency(outstanding)}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-pool-100 dark:bg-pool-900/50 text-pool-600 dark:text-pool-400 flex items-center justify-center shrink-0">
+                <Wallet className="w-5 h-5" strokeWidth={2} />
+              </div>
+            </div>
+          </Card>
+          <StatCard label="Sent"    value={sentCount}    icon={Send}           iconTone="gray" />
+          <StatCard label="Overdue" value={overdueCount} icon={AlertTriangle}  iconTone={overdueCount > 0 ? 'red' : 'gray'} />
         </div>
+      )}
 
-        {/* Invoice list */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={
-              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            }
-            title={activeTab === 'all' ? 'No invoices yet' : `No ${activeTab} invoices`}
-            description={activeTab === 'all' ? 'Create your first invoice to get started' : `No invoices with status "${activeTab}"`}
-            action={activeTab === 'all' ? 'Create Invoice' : undefined}
-            onAction={activeTab === 'all' ? () => navigate('/invoices/new') : undefined}
-          />
-        ) : (
-          <div className="space-y-2.5">
-            {filtered.map(invoice => (
-              <InvoiceCard
-                key={invoice.id}
-                invoice={invoice}
-                onClick={() => navigate(`/invoices/${invoice.id}`)}
-              />
+      {enriched.length === 0 ? (
+        <EmptyState
+          icon={<Receipt className="w-8 h-8" strokeWidth={1.5} />}
+          title="No invoices yet"
+          description="Create your first invoice"
+          action="New invoice"
+          onAction={() => navigate('/invoices/new')}
+        />
+      ) : (
+        <>
+          {/* MOBILE: stacked card list */}
+          <div className="md:hidden space-y-2.5">
+            {enriched.map(inv => (
+              <Card key={inv.id} onClick={() => navigate(`/invoices/${inv.id}`)}>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-semibold tabular-nums text-pool-600 dark:text-pool-400 shrink-0">
+                    {inv._ref}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{inv.clients?.name || 'Unknown'}</p>
+                  </div>
+                  <Badge variant={STATE_BADGE[inv.status] || 'neutral'} className="shrink-0">{STATE_LABEL[inv.status] || inv.status}</Badge>
+                  <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-gray-100 shrink-0 ml-2">
+                    {formatCurrency(inv._total)}
+                  </p>
+                </div>
+              </Card>
             ))}
           </div>
-        )}
 
-        {/* FAB */}
-        {!loading && invoices.length > 0 && (
-          <button
-            onClick={() => navigate('/invoices/new')}
-            className="fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20"
-          >
-            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-        )}
-      </PageWrapper>
-    </>
+          {/* DESKTOP: master-detail */}
+          <div className="hidden md:grid md:grid-cols-12 gap-4">
+            {/* Table */}
+            <Card className="!p-0 md:col-span-7 overflow-hidden">
+              <div className="grid grid-cols-[6rem_minmax(0,1fr)_8rem_7rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <span>Ref</span>
+                <span>Client</span>
+                <span className="text-left">State</span>
+                <span className="text-right">Value</span>
+              </div>
+              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                {pagedInvoices.map(inv => {
+                  const isSelected = selectedInvoice && inv.id === selectedInvoice.id
+                  return (
+                    <li key={inv.id}>
+                      <button
+                        onClick={() => setSelectedInvoiceId(inv.id)}
+                        onDoubleClick={() => navigate(`/invoices/${inv.id}`)}
+                        className={cn(
+                          'w-full grid grid-cols-[6rem_minmax(0,1fr)_8rem_7rem] gap-3 px-4 py-3 text-left transition-colors items-center',
+                          isSelected
+                            ? 'bg-pool-50 dark:bg-pool-950/30'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
+                        )}
+                      >
+                        <span className={cn(
+                          'text-[11px] font-semibold tabular-nums truncate',
+                          isSelected ? 'text-pool-700 dark:text-pool-300' : 'text-pool-600 dark:text-pool-400',
+                        )}>
+                          {inv._ref}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          {inv.clients?.name || 'Unknown'}
+                        </span>
+                        <span className={cn('text-left text-sm font-medium', STATE_TEXT[inv.status] || 'text-gray-500')}>
+                          {STATE_LABEL[inv.status] || inv.status}
+                        </span>
+                        <span className="text-right text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                          {formatCurrency(inv._total)}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+
+              {pageCount > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/40">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                    Showing {pageStart + 1}–{pageEnd} of {enriched.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      disabled={safePage === 0}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                    <span className="px-3 h-8 inline-flex items-center text-xs font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
+                      {safePage + 1} / {pageCount}
+                    </span>
+                    <button
+                      onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                      disabled={safePage >= pageCount - 1}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Detail panel */}
+            <div className="md:col-span-5">
+              {selectedInvoice && (
+                <Card className="!p-5 sticky top-24">
+                  <div className="flex items-start justify-between mb-3">
+                    <p className="text-[11px] font-semibold tabular-nums text-pool-600 dark:text-pool-400">
+                      {selectedInvoice._ref}
+                    </p>
+                    <Badge variant={STATE_BADGE[selectedInvoice.status] || 'neutral'}>
+                      {STATE_LABEL[selectedInvoice.status] || selectedInvoice.status}
+                    </Badge>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                    {selectedInvoice.clients?.name || 'Unknown'}
+                  </h3>
+
+                  {/* Line items */}
+                  <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                      Line items
+                    </p>
+                    {(selectedInvoice.line_items || []).length === 0 ? (
+                      <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+                        <span>—</span>
+                        <span className="tabular-nums">{formatCurrency(0)}</span>
+                      </div>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {(selectedInvoice.line_items || []).slice(0, 4).map((item, i) => (
+                          <li key={i} className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-gray-700 dark:text-gray-300 truncate">
+                              {item.description || item.name || 'Item'}
+                              {item.quantity > 1 && (
+                                <span className="text-gray-400 dark:text-gray-500"> · ×{item.quantity}</span>
+                              )}
+                            </span>
+                            <span className="tabular-nums text-gray-900 dark:text-gray-100 shrink-0">
+                              {formatCurrency(item.amount || (item.quantity * item.unit_price) || 0)}
+                            </span>
+                          </li>
+                        ))}
+                        {(selectedInvoice.line_items || []).length > 4 && (
+                          <li className="text-xs text-gray-400 dark:text-gray-500 italic">
+                            +{selectedInvoice.line_items.length - 4} more
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Total */}
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Total</p>
+                    <p className="text-2xl font-bold tabular-nums text-pool-700 dark:text-pool-300">
+                      {formatCurrency(selectedInvoice._total)}
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-5 flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => navigate(`/invoices/${selectedInvoice.id}`)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
+                    >
+                      Open invoice
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
+                    </button>
+                    {selectedInvoice.status !== 'paid' && selectedInvoice.status !== 'void' && (
+                      <Button
+                        size="sm"
+                        leftIcon={CheckCircle2}
+                        onClick={() => markPaid(selectedInvoice)}
+                        className="!bg-emerald-500 !shadow-emerald-500/20 hover:!brightness-110"
+                      >
+                        Mark paid
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </PageWrapper>
   )
 }
