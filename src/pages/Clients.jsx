@@ -1,18 +1,21 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Users } from 'lucide-react'
+import { ArrowRight, Briefcase, Plus, Users, Wallet } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import StatCard from '../components/ui/StatCard'
 import Input, { TextArea } from '../components/ui/Input'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
+import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
-import { cn } from '../lib/utils'
+import { supabase } from '../lib/supabase'
+import { formatCurrency, formatDate, cn } from '../lib/utils'
 
 // ─── STATUS LOGIC ──────────────────────────────────
 const STATUS = {
@@ -88,6 +91,7 @@ const emptyClient = { name: '', email: '', phone: '', address: '', notes: '' }
 
 export default function Clients() {
   const navigate = useNavigate()
+  const { business } = useBusiness()
   const { clients, loading: clientsLoading, createClient } = useClients()
   const { pools, loading: poolsLoading } = usePools()
   const [search, setSearch] = useState('')
@@ -95,8 +99,32 @@ export default function Clients() {
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyClient)
   const [saving, setSaving] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState(null)
+  const [jobs, setJobs] = useState([])
+  const [invoices, setInvoices] = useState([])
 
   const loading = clientsLoading || poolsLoading
+
+  // Fetch jobs + paid invoices YTD for KPI strip + per-client YTD spend
+  useEffect(() => {
+    if (!business?.id) return
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString()
+    Promise.all([
+      supabase
+        .from('jobs')
+        .select('id, client_id, status, scheduled_date, title')
+        .eq('business_id', business.id),
+      supabase
+        .from('invoices')
+        .select('id, client_id, total, status, issued_date')
+        .eq('business_id', business.id)
+        .eq('status', 'paid')
+        .gte('issued_date', startOfYear),
+    ]).then(([jobsRes, invoicesRes]) => {
+      setJobs(jobsRes.data || [])
+      setInvoices(invoicesRes.data || [])
+    })
+  }, [business?.id])
 
   const poolsByClient = useMemo(() => {
     const map = {}
@@ -107,12 +135,50 @@ export default function Clients() {
     return map
   }, [pools])
 
+  const ytdSpendByClient = useMemo(() => {
+    const map = {}
+    for (const inv of invoices) {
+      if (!inv.client_id) continue
+      map[inv.client_id] = (map[inv.client_id] || 0) + (Number(inv.total) || 0)
+    }
+    return map
+  }, [invoices])
+
+  const recentJobsByClient = useMemo(() => {
+    const map = {}
+    const sorted = [...jobs].sort((a, b) =>
+      (b.scheduled_date || '').localeCompare(a.scheduled_date || '')
+    )
+    for (const j of sorted) {
+      if (!j.client_id) continue
+      if (!map[j.client_id]) map[j.client_id] = []
+      if (map[j.client_id].length < 4) map[j.client_id].push(j)
+    }
+    return map
+  }, [jobs])
+
+  const activeJobsCount = useMemo(
+    () => jobs.filter(j => j.status === 'scheduled' || j.status === 'in_progress').length,
+    [jobs],
+  )
+
+  const ytdRevenue = useMemo(
+    () => invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0),
+    [invoices],
+  )
+
   const enriched = useMemo(() => {
     return clients.map(c => {
       const cp = poolsByClient[c.id] || []
-      return { ...c, _pools: cp, _status: computeStatus(cp) }
+      return {
+        ...c,
+        _pools: cp,
+        _status: computeStatus(cp),
+        _ytd: ytdSpendByClient[c.id] || 0,
+        _activeJobs: jobs.filter(j => j.client_id === c.id && (j.status === 'scheduled' || j.status === 'in_progress')).length,
+      }
     })
-  }, [clients, poolsByClient])
+  }, [clients, poolsByClient, ytdSpendByClient, jobs])
 
   const counts = useMemo(() => ({
     all: enriched.length,
@@ -173,6 +239,14 @@ export default function Clients() {
     ? 'No clients yet'
     : `${counts.all} ${counts.all === 1 ? 'client' : 'clients'}${counts.overdue > 0 ? ` · ${counts.overdue} overdue` : ''}`
 
+  // Default detail-panel selection: first filtered client.
+  // Reset if the current selection isn't in the filtered set.
+  const selectedClient = useMemo(() => {
+    if (!filtered.length) return null
+    const found = filtered.find(c => c.id === selectedClientId)
+    return found || filtered[0]
+  }, [filtered, selectedClientId])
+
   return (
     <>
       <PageWrapper width="wide">
@@ -229,6 +303,27 @@ export default function Clients() {
           })}
         </div>
 
+        {/* KPI strip */}
+        {!loading && counts.all > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-4">
+            <StatCard label="Total clients"  value={counts.all}      icon={Users}     iconTone="gray" />
+            <StatCard label="Active jobs"    value={activeJobsCount} icon={Briefcase} iconTone="gray" />
+            <Card tinted className="!p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">YTD revenue</p>
+                  <p className="mt-2 text-2xl sm:text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
+                    {formatCurrency(ytdRevenue)}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-pool-100 dark:bg-pool-900/50 text-pool-600 dark:text-pool-400 flex items-center justify-center shrink-0">
+                  <Wallet className="w-5 h-5" strokeWidth={2} />
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* List */}
         {loading ? (
           <div className="flex justify-center py-12">
@@ -251,17 +346,139 @@ export default function Clients() {
             />
           )
         ) : (
-          <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
-            {filtered.map(client => (
-              <ClientCard
-                key={client.id}
-                client={client}
-                clientPools={client._pools}
-                status={client._status}
-                onClick={() => navigate(`/clients/${client.id}`)}
-              />
-            ))}
-          </div>
+          <>
+            {/* MOBILE: stacked card list */}
+            <div className="md:hidden space-y-2.5">
+              {filtered.map(client => (
+                <ClientCard
+                  key={client.id}
+                  client={client}
+                  clientPools={client._pools}
+                  status={client._status}
+                  onClick={() => navigate(`/clients/${client.id}`)}
+                />
+              ))}
+            </div>
+
+            {/* DESKTOP: master-detail (table + sticky detail panel) */}
+            <div className="hidden md:grid md:grid-cols-12 gap-4">
+              {/* Table */}
+              <Card className="!p-0 md:col-span-7 xl:col-span-8 overflow-hidden">
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  <span>Client</span>
+                  <span className="w-24 text-left">Status</span>
+                  <span className="w-14 text-right">Pools</span>
+                  <span className="w-24 text-right">YTD spend</span>
+                </div>
+                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {filtered.map(client => {
+                    const st = STATUS[client._status]
+                    const isSelected = selectedClient && client.id === selectedClient.id
+                    return (
+                      <li key={client.id}>
+                        <button
+                          onClick={() => setSelectedClientId(client.id)}
+                          onDoubleClick={() => navigate(`/clients/${client.id}`)}
+                          className={cn(
+                            'w-full grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-3 text-left transition-colors',
+                            isSelected
+                              ? 'bg-pool-50 dark:bg-pool-950/30'
+                              : 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
+                          )}
+                        >
+                          <span className={cn(
+                            'text-sm font-semibold truncate',
+                            isSelected ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100',
+                          )}>
+                            {client.name}
+                          </span>
+                          <span className="w-24 text-left">
+                            <Badge variant={st.badge}>{st.label}</Badge>
+                          </span>
+                          <span className="w-14 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
+                            {client._pools.length || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                          </span>
+                          <span className="w-24 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
+                            {client._ytd > 0 ? formatCurrency(client._ytd) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </Card>
+
+              {/* Detail panel */}
+              <div className="md:col-span-5 xl:col-span-4">
+                {selectedClient && (
+                  <Card className="!p-5 sticky top-24">
+                    <div className="flex items-start justify-between mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-pool-600 dark:text-pool-400 inline-flex items-center gap-2">
+                        <Users className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        Client detail
+                      </p>
+                      <Badge variant={STATUS[selectedClient._status].badge}>
+                        {STATUS[selectedClient._status].label}
+                      </Badge>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                      {selectedClient.name}
+                    </h3>
+                    {selectedClient.email && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">{selectedClient.email}</p>
+                    )}
+                    {selectedClient.phone && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{selectedClient.phone}</p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4 mt-5">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pools</p>
+                        <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">
+                          {selectedClient._pools.length}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">YTD spend</p>
+                        <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">
+                          {formatCurrency(selectedClient._ytd)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 inline-flex items-center gap-2 mb-2">
+                        <Briefcase className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        Recent jobs
+                      </p>
+                      {(recentJobsByClient[selectedClient.id] || []).length === 0 ? (
+                        <p className="text-sm text-gray-400 dark:text-gray-500 italic">No jobs yet</p>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {(recentJobsByClient[selectedClient.id] || []).map(j => (
+                            <li key={j.id} className="flex items-center justify-between gap-3 text-sm">
+                              <span className="text-gray-900 dark:text-gray-100 truncate">{j.title || 'Job'}</span>
+                              <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 tabular-nums">
+                                {j.scheduled_date ? formatDate(j.scheduled_date) : '—'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => navigate(`/clients/${selectedClient.id}`)}
+                      className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
+                    >
+                      Open profile
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
+                    </button>
+                  </Card>
+                )}
+              </div>
+            </div>
+          </>
         )}
 
         {/* FAB */}
