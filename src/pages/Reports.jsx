@@ -387,25 +387,42 @@ export default function Reports() {
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-gray-800">
             {crewLeaderboard.map((c, i) => (
-              <li
-                key={c.id}
-                className="grid grid-cols-[2.5rem_minmax(0,1fr)_8rem_5rem_7rem] gap-3 px-4 py-3 items-center"
-              >
-                <span className="tabular-nums text-[11px] font-semibold text-pool-600 dark:text-pool-400">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  {c.name}
-                </span>
-                <span className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                  {c.jobs > 0 ? c.role : <span className="text-gray-300 dark:text-gray-600">—</span>}
-                </span>
-                <span className="text-sm tabular-nums text-gray-700 dark:text-gray-300 text-right">
-                  {c.jobs} {c.jobs === 1 ? 'job' : 'jobs'}
-                </span>
-                <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100 text-right">
-                  {c.value > 0 ? formatCurrency(c.value) : <span className="text-gray-300 dark:text-gray-600 font-normal">—</span>}
-                </span>
+              <li key={c.id} className="px-4 py-3">
+                {/* Desktop: 5-column grid */}
+                <div className="hidden md:grid grid-cols-[2.5rem_minmax(0,1fr)_8rem_5rem_7rem] gap-3 items-center">
+                  <span className="tabular-nums text-[11px] font-semibold text-pool-600 dark:text-pool-400">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                    {c.name}
+                  </span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                    {c.jobs > 0 ? c.role : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  </span>
+                  <span className="text-sm tabular-nums text-gray-700 dark:text-gray-300 text-right">
+                    {c.jobs} {c.jobs === 1 ? 'job' : 'jobs'}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100 text-right">
+                    {c.value > 0 ? formatCurrency(c.value) : <span className="text-gray-300 dark:text-gray-600 font-normal">—</span>}
+                  </span>
+                </div>
+                {/* Mobile: stacked card-style row */}
+                <div className="md:hidden flex items-center gap-3">
+                  <span className="tabular-nums text-[11px] font-semibold text-pool-600 dark:text-pool-400 w-6 shrink-0">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                      {c.name}
+                    </p>
+                    <p className="text-[11.5px] text-gray-500 dark:text-gray-400 truncate">
+                      {c.jobs > 0 ? c.role : '—'} · {c.jobs} {c.jobs === 1 ? 'job' : 'jobs'}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100 shrink-0">
+                    {c.value > 0 ? formatCurrency(c.value) : <span className="text-gray-300 dark:text-gray-600 font-normal">—</span>}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

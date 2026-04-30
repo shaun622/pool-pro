@@ -446,7 +446,7 @@ function Schedule({ business }) {
         title={heroTitle}
         subtitle={null}
         action={
-          <div className="flex items-center gap-3 flex-wrap justify-end">
+          <div className="flex items-center gap-2 flex-wrap md:justify-end">
             {view !== 'map' && (
               <NavPills
                 isThisWeek={isThisWeek}
@@ -478,7 +478,14 @@ function Schedule({ business }) {
         </>
       ) : (
         <>
-          <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} />
+          {/* Desktop: 7-column grid */}
+          <div className="hidden md:block">
+            <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} />
+          </div>
+          {/* Mobile: stacked-by-day list */}
+          <div className="md:hidden">
+            <WeekStack weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} />
+          </div>
           {allWeekStops.length > 0 && (
             <TechsOnService
               stops={allWeekStops}
@@ -487,7 +494,10 @@ function Schedule({ business }) {
               onSelect={(id) => setTechFilter(prev => prev === id ? null : id)}
             />
           )}
-          <TodayList stops={filteredTodayStops} onStopSelect={handleStopSelect} />
+          {/* TodayList only on desktop — mobile already shows today inline in the stack */}
+          <div className="hidden md:block">
+            <TodayList stops={filteredTodayStops} onStopSelect={handleStopSelect} />
+          </div>
         </>
       )}
 
@@ -565,6 +575,95 @@ function WeekGrid({ weekDays, stopsByDay, onStopSelect }) {
         })}
       </div>
     </div>
+  )
+}
+
+// ─── Mobile: stacked-by-day list (one section per day) ──
+// Each day renders an inline header (DOW + date + stop count) and the stops
+// list below it. Past days collapse to a single "no stops" line if empty.
+function WeekStack({ weekDays, stopsByDay, onStopSelect }) {
+  return (
+    <div className="space-y-3 mb-4">
+      {weekDays.map(day => {
+        const stops = stopsByDay.get(ymd(day)) || []
+        const isToday = sameYMD(day, new Date())
+        const dow = day.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+        return (
+          <div key={ymd(day)}>
+            <div className="flex items-center gap-2 px-1 mb-1.5">
+              <p className={cn(
+                'text-[11px] font-semibold uppercase tracking-wider',
+                isToday ? 'text-pool-600 dark:text-pool-400' : 'text-gray-500 dark:text-gray-400',
+              )}>
+                {isToday ? 'Today' : dow}
+              </p>
+              <div className={cn(
+                'flex-1 h-px',
+                isToday ? 'bg-pool-200/70 dark:bg-pool-800/50' : 'bg-gray-100 dark:bg-gray-800',
+              )} />
+              {stops.length > 0 && (
+                <span className="text-[10px] font-semibold tabular-nums text-gray-500 dark:text-gray-400">
+                  {stops.length}
+                </span>
+              )}
+            </div>
+            {stops.length === 0 ? (
+              <p className="text-[12px] text-gray-400 dark:text-gray-600 px-1 italic">No stops</p>
+            ) : (
+              <Card className="!p-0 overflow-hidden">
+                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {stops.map(stop => (
+                    <li key={stop.id}>
+                      <StackRow stop={stop} onClick={() => onStopSelect(stop)} />
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function StackRow({ stop, onClick }) {
+  const meta = statusMeta(stop)
+  const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
+  const sub = stop.address || stop.client_name
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'block w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors border-l-[3px]',
+        meta.accent,
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <p className="tabular-nums text-[12px] font-semibold text-pool-700 dark:text-pool-400 w-12 shrink-0 leading-tight pt-0.5">
+          {time || '—'}
+        </p>
+        <div className="flex-1 min-w-0">
+          <p className={cn(
+            'text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate',
+            stop.status === 'cancelled' && 'line-through text-gray-500',
+          )}>
+            {stop.title}
+          </p>
+          {sub && (
+            <p className="text-[11.5px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+              {sub}{stop.client_name && stop.address ? ` · ${stop.client_name}` : ''}
+            </p>
+          )}
+        </div>
+        <span className={cn(
+          'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider shrink-0 self-center',
+          meta.badge,
+        )}>
+          {meta.label}
+        </span>
+      </div>
+    </button>
   )
 }
 
@@ -890,14 +989,14 @@ function MapView({ pools, onSelect }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Overdue</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Due Today</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pool-500" />Upcoming</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-400" />Unscheduled</span>
       </div>
 
-      <div className="h-[560px] rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-card">
+      <div className="h-[420px] md:h-[560px] rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-card">
         <MapContainer center={center} zoom={11} style={{ height: '100%', width: '100%' }}>
           <TileLayer url={MAPBOX_TILE_URL} attribution={MAPBOX_ATTRIBUTION} />
           <FitBounds stops={withCoords.map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }))} />
