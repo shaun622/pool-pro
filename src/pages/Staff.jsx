@@ -8,6 +8,7 @@ import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
+import { useAuth } from '../hooks/useAuth'
 import { cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 
@@ -39,7 +40,8 @@ const emptyForm = {
 
 export default function Staff() {
   const toast = useToast()
-  const { business } = useBusiness()
+  const { business, userRole } = useBusiness()
+  const { user } = useAuth()
   const { staff, loading, staffLimit, canAddStaff, createStaff, updateStaff, deleteStaff, uploadPhoto } = useStaff()
 
   const [showModal, setShowModal] = useState(false)
@@ -51,20 +53,47 @@ export default function Staff() {
   const [deleting, setDeleting] = useState(false)
   const fileRef = useRef()
 
+  // The business owner lives in `businesses.owner_id`, NOT `staff_members`.
+  // Synthesise a virtual row so they appear in the admin list. Only renders
+  // when the current viewer is the owner (we have their email from auth).
+  // We could later denormalise owner_email onto businesses to show this for
+  // non-owner viewers too.
+  const ownerVirtual = useMemo(() => {
+    if (userRole !== 'owner' || !user || !business?.owner_id) return null
+    return {
+      id: `__owner__:${business.owner_id}`,
+      name: user.email,
+      role: 'owner',
+      email: user.email,
+      phone: null,
+      photo_url: null,
+      bio: null,
+      is_active: true,
+      user_id: business.owner_id, // drives the "Login" pill
+      _virtual: true,
+    }
+  }, [userRole, user, business?.owner_id])
+
   // Group staff into admin / tech / inactive
   const { admins, technicians, inactive } = useMemo(() => {
-    const admins = []
+    const admins = ownerVirtual ? [ownerVirtual] : []
     const technicians = []
     const inactive = []
     for (const m of staff) {
+      // Skip any staff_members row that's actually the owner (in case one was
+      // ever created with role='owner' or matching user_id) — owner is rendered
+      // via ownerVirtual.
+      if (ownerVirtual && m.user_id === business?.owner_id) continue
       if (!m.is_active) { inactive.push(m); continue }
       if (isAdminRole(m.role)) admins.push(m)
       else technicians.push(m)
     }
     return { admins, technicians, inactive }
-  }, [staff])
+  }, [staff, ownerVirtual, business?.owner_id])
 
-  const activeCount = admins.length + technicians.length
+  // Active count for the seat indicator — exclude the owner since they
+  // don't consume a seat against the plan limit.
+  const activeCount = admins.filter(m => !m._virtual).length + technicians.length
 
   function openAdd(roleHint = 'tech') {
     if (!canAddStaff) {
@@ -79,6 +108,8 @@ export default function Staff() {
   }
 
   function openEdit(member) {
+    // Virtual owner row isn't editable — there's no staff_members record to update.
+    if (member?._virtual) return
     setEditing(member)
     setForm({
       name: member.name || '',
@@ -474,16 +505,24 @@ function RoleSection({ icon: Icon, label, description, members, onAdd, onEdit, e
 
 // ─── A single member row ─────────────────
 function MemberRow({ member, onClick, dimmed }) {
-  const roleLabel = ROLE_LABELS[member.role] || member.role
+  const isOwner = member._virtual || member.role === 'owner'
+  const roleLabel = isOwner ? 'Account owner' : (ROLE_LABELS[member.role] || member.role)
   const initials = (member.name || '?')
     .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
   const hasLogin = !!member.user_id
 
+  // Virtual owner is read-only (rendered as a div, no hover affordance, no
+  // click handler). Other rows are clickable buttons.
+  const Tag = member._virtual ? 'div' : 'button'
+
   return (
-    <button
-      onClick={onClick}
+    <Tag
+      onClick={member._virtual ? undefined : onClick}
       className={cn(
-        'w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors',
+        'w-full text-left px-4 py-3 flex items-center gap-3 transition-colors',
+        member._virtual
+          ? 'cursor-default'
+          : 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
         dimmed && 'opacity-60',
       )}
     >
@@ -495,15 +534,25 @@ function MemberRow({ member, onClick, dimmed }) {
           className="w-10 h-10 rounded-full object-cover ring-1 ring-white dark:ring-gray-900 shrink-0"
         />
       ) : (
-        <span className="w-10 h-10 rounded-full bg-pool-100 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 flex items-center justify-center text-[11px] font-bold ring-1 ring-white dark:ring-gray-900 shrink-0">
+        <span className={cn(
+          'w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-bold ring-1 ring-white dark:ring-gray-900 shrink-0',
+          isOwner
+            ? 'bg-gradient-brand text-white'
+            : 'bg-pool-100 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300',
+        )}>
           {initials}
         </span>
       )}
 
       {/* Name + meta */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{member.name}</p>
+          {isOwner && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 text-[9.5px] font-semibold uppercase tracking-wider ring-1 ring-pool-200/70 dark:ring-pool-800/50 shrink-0">
+              Owner
+            </span>
+          )}
           {hasLogin && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-[9.5px] font-semibold uppercase tracking-wider ring-1 ring-emerald-200/60 dark:ring-emerald-800/40 shrink-0">
               <CheckCircle2 className="w-2.5 h-2.5" strokeWidth={2.5} />
@@ -513,24 +562,27 @@ function MemberRow({ member, onClick, dimmed }) {
         </div>
         <p className="text-[11.5px] text-gray-500 dark:text-gray-400 truncate">
           {roleLabel}
-          {member.email && ` · ${member.email}`}
+          {!isOwner && member.email && ` · ${member.email}`}
         </p>
       </div>
 
-      {/* Quick contact chips */}
-      <div className="hidden sm:flex items-center gap-1 shrink-0">
-        {member.phone && (
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-            <Phone className="w-3.5 h-3.5" strokeWidth={2} />
-          </span>
-        )}
-        {member.email && (
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-            <Mail className="w-3.5 h-3.5" strokeWidth={2} />
-          </span>
-        )}
-      </div>
-    </button>
+      {/* Quick contact chips — hidden for the virtual owner since their email
+          is already shown as the primary identifier */}
+      {!member._virtual && (
+        <div className="hidden sm:flex items-center gap-1 shrink-0">
+          {member.phone && (
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+              <Phone className="w-3.5 h-3.5" strokeWidth={2} />
+            </span>
+          )}
+          {member.email && (
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+              <Mail className="w-3.5 h-3.5" strokeWidth={2} />
+            </span>
+          )}
+        </div>
+      )}
+    </Tag>
   )
 }
 
