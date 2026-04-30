@@ -1,11 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
+import { Plus, Shield, Wrench, CheckCircle2, Phone, Mail } from 'lucide-react'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
-import StaffCard, { ROLE_LABELS } from '../components/ui/StaffCard'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
 import { cn } from '../lib/utils'
@@ -15,6 +15,18 @@ const ROLE_OPTIONS = [
   { value: 'tech', label: 'Technician' },
   { value: 'admin', label: 'Admin' },
 ]
+
+const ROLE_LABELS = {
+  tech: 'Technician',
+  technician: 'Technician',
+  senior_tech: 'Senior Technician',
+  admin: 'Admin',
+  manager: 'Manager',
+  owner: 'Owner',
+}
+
+const ADMIN_ROLES = new Set(['admin', 'manager', 'owner'])
+const isAdminRole = (role) => ADMIN_ROLES.has((role || '').toLowerCase())
 
 const emptyForm = {
   name: '',
@@ -39,13 +51,28 @@ export default function Staff() {
   const [deleting, setDeleting] = useState(false)
   const fileRef = useRef()
 
-  function openAdd() {
+  // Group staff into admin / tech / inactive
+  const { admins, technicians, inactive } = useMemo(() => {
+    const admins = []
+    const technicians = []
+    const inactive = []
+    for (const m of staff) {
+      if (!m.is_active) { inactive.push(m); continue }
+      if (isAdminRole(m.role)) admins.push(m)
+      else technicians.push(m)
+    }
+    return { admins, technicians, inactive }
+  }, [staff])
+
+  const activeCount = admins.length + technicians.length
+
+  function openAdd(roleHint = 'tech') {
     if (!canAddStaff) {
       toast.error(`Your ${business?.plan || 'trial'} plan allows up to ${staffLimit} staff member${staffLimit !== 1 ? 's' : ''}. Upgrade to add more.`)
       return
     }
     setEditing(null)
-    setForm(emptyForm)
+    setForm({ ...emptyForm, role: roleHint })
     setPhotoFile(null)
     setPhotoPreview(null)
     setShowModal(true)
@@ -190,191 +217,320 @@ export default function Staff() {
     )
   }
 
-  const activeStaff = staff.filter(s => s.is_active)
-  const inactiveStaff = staff.filter(s => !s.is_active)
-
   return (
     <>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Staff</h2>
-        <Button onClick={openAdd} size="sm">+ Add staff</Button>
-      </div>
-      <div>
-        {/* Staff limit indicator */}
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {activeStaff.length} / {staffLimit} staff
+      {/* Page header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Team & roles</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 tabular-nums">
+            {activeCount} of {staffLimit} {staffLimit === 1 ? 'seat' : 'seats'} used
           </p>
-          <Badge variant={canAddStaff ? 'success' : 'warning'}>
-            {business?.plan || 'trial'} plan
-          </Badge>
         </div>
-
-        {staff.length === 0 ? (
-          <EmptyState
-            title="No staff members"
-            description="Add your team members so they appear on service reports and the client portal."
-            actionLabel="Add Staff Member"
-            onAction={openAdd}
-          />
-        ) : (
-          <div className="space-y-3">
-            {activeStaff.map(member => (
-              <Card key={member.id} onClick={() => openEdit(member)} className="p-4">
-                <StaffCard staff={member} variant="compact" />
-              </Card>
-            ))}
-
-            {inactiveStaff.length > 0 && (
-              <>
-                <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mt-6 mb-2">
-                  Inactive
-                </h3>
-                {inactiveStaff.map(member => (
-                  <Card key={member.id} onClick={() => openEdit(member)} className="p-4 opacity-60">
-                    <StaffCard staff={member} variant="compact" />
-                  </Card>
-                ))}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Add/Edit Modal */}
-        <Modal
-          open={showModal}
-          onClose={() => setShowModal(false)}
-          title={editing ? 'Edit Staff Member' : 'Add Staff Member'}
-        >
-          <div className="space-y-4">
-            {/* Photo upload */}
-            <div className="flex flex-col items-center gap-3">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="relative group"
-              >
-                {photoPreview ? (
-                  <img
-                    src={photoPreview}
-                    alt="Staff photo"
-                    className="w-24 h-24 rounded-full object-cover ring-2 ring-gray-200"
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center ring-2 ring-gray-200">
-                    <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                )}
-                <span className="absolute bottom-0 right-0 w-7 h-7 bg-pool-500 rounded-full flex items-center justify-center text-white shadow">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </span>
-              </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoSelect}
-              />
-              <p className="text-xs text-gray-400 dark:text-gray-500">Tap to upload photo</p>
-            </div>
-
-            <Input
-              label="Full Name"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              placeholder="e.g. Matt Wilson"
-            />
-            <Select
-              label="Role"
-              name="role"
-              value={form.role}
-              onChange={handleChange}
-              options={ROLE_OPTIONS}
-            />
-            <Input
-              label="Phone"
-              name="phone"
-              type="tel"
-              value={form.phone}
-              onChange={handleChange}
-              placeholder="0400 000 000"
-            />
-            <Input
-              label="Email"
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="matt@example.com"
-            />
-            {form.email && (!editing || !editing.user_id) && (
-              <div className="space-y-1">
-                <Input
-                  label={editing ? 'Set Password (creates their login)' : 'Password (for their login)'}
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="At least 6 characters"
-                  autoComplete="new-password"
-                />
-                {editing && !editing.user_id && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    This staff member doesn't have a login yet. Set a password so they can log in with their email.
-                  </p>
-                )}
-              </div>
-            )}
-            {editing && editing.user_id && (
-              <div className="rounded-xl bg-green-50 dark:bg-green-950/40 border border-green-200 px-3 py-2 flex items-center gap-2">
-                <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="text-xs text-green-700 font-medium">Login active — they can sign in with their email</span>
-              </div>
-            )}
-            <TextArea
-              label="Bio"
-              name="bio"
-              value={form.bio}
-              onChange={handleChange}
-              placeholder="Brief intro shown to customers..."
-              rows={3}
-            />
-
-            <Button onClick={handleSave} loading={saving} className="w-full min-h-tap">
-              {editing ? 'Save Changes' : 'Add Staff Member'}
-            </Button>
-
-            {editing && (
-              <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => handleToggleActive(editing)}
-                  className="flex-1 min-h-tap"
-                >
-                  {editing.is_active ? 'Deactivate' : 'Reactivate'}
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleDelete}
-                  loading={deleting}
-                  className="flex-1 min-h-tap"
-                >
-                  Delete
-                </Button>
-              </div>
-            )}
-          </div>
-        </Modal>
+        <Badge variant={canAddStaff ? 'success' : 'warning'}>
+          {business?.plan || 'trial'} plan
+        </Badge>
       </div>
+
+      {staff.length === 0 ? (
+        <EmptyState
+          title="No team members yet"
+          description="Add admins so your business owners and managers can log in, or technicians for field workers using the tech app."
+          actionLabel="Add team member"
+          onAction={() => openAdd('tech')}
+        />
+      ) : (
+        <div className="space-y-4">
+          {/* ── ADMIN & STAFF ── */}
+          <RoleSection
+            icon={Shield}
+            label="Admin & staff"
+            description="People who log in to manage clients, jobs, and billing"
+            members={admins}
+            onAdd={() => openAdd('admin')}
+            onEdit={openEdit}
+            emptyText="No admins yet. Owners and managers go here."
+            canAdd={canAddStaff}
+          />
+
+          {/* ── TECHNICIANS ── */}
+          <RoleSection
+            icon={Wrench}
+            label="Technicians"
+            description="Field workers using the mobile tech app for service stops"
+            members={technicians}
+            onAdd={() => openAdd('tech')}
+            onEdit={openEdit}
+            emptyText="No technicians yet. Add the people who service pools in the field."
+            canAdd={canAddStaff}
+          />
+
+          {/* ── INACTIVE ── */}
+          {inactive.length > 0 && (
+            <Card className="!p-0 overflow-hidden opacity-90">
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400 inline-flex items-center gap-2">
+                  Inactive
+                  <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold tabular-nums text-gray-600 dark:text-gray-400">
+                    {inactive.length}
+                  </span>
+                </p>
+              </div>
+              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                {inactive.map(member => (
+                  <li key={member.id}>
+                    <MemberRow member={member} onClick={() => openEdit(member)} dimmed />
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={
+          editing
+            ? 'Edit team member'
+            : isAdminRole(form.role) ? 'Add admin' : 'Add technician'
+        }
+      >
+        <div className="space-y-4">
+          {/* Photo upload */}
+          <div className="flex flex-col items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="relative group"
+            >
+              {photoPreview ? (
+                <img
+                  src={photoPreview}
+                  alt="Staff photo"
+                  className="w-24 h-24 rounded-full object-cover ring-2 ring-gray-200"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center ring-2 ring-gray-200">
+                  <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+              )}
+              <span className="absolute bottom-0 right-0 w-7 h-7 bg-pool-500 rounded-full flex items-center justify-center text-white shadow">
+                <Plus className="w-4 h-4" strokeWidth={2.5} />
+              </span>
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoSelect}
+            />
+            <p className="text-xs text-gray-400 dark:text-gray-500">Tap to upload photo</p>
+          </div>
+
+          <Input
+            label="Full name"
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            placeholder="e.g. Matt Wilson"
+          />
+          <Select
+            label="Role"
+            name="role"
+            value={form.role}
+            onChange={handleChange}
+            options={ROLE_OPTIONS}
+          />
+          <Input
+            label="Phone"
+            name="phone"
+            type="tel"
+            value={form.phone}
+            onChange={handleChange}
+            placeholder="0400 000 000"
+          />
+          <Input
+            label="Email"
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            placeholder="matt@example.com"
+          />
+          {form.email && (!editing || !editing.user_id) && (
+            <div className="space-y-1">
+              <Input
+                label={editing ? 'Set password (creates their login)' : 'Password (for their login)'}
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="At least 6 characters"
+                autoComplete="new-password"
+              />
+              {editing && !editing.user_id && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  This member doesn't have a login yet. Set a password so they can sign in with their email.
+                </p>
+              )}
+            </div>
+          )}
+          {editing && editing.user_id && (
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 px-3 py-2 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={2.25} />
+              <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                Login active — they can sign in with their email
+              </span>
+            </div>
+          )}
+          <TextArea
+            label="Bio"
+            name="bio"
+            value={form.bio}
+            onChange={handleChange}
+            placeholder="Brief intro shown to customers..."
+            rows={3}
+          />
+
+          <Button onClick={handleSave} loading={saving} className="w-full min-h-tap">
+            {editing ? 'Save changes' : 'Add team member'}
+          </Button>
+
+          {editing && (
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => handleToggleActive(editing)}
+                className="flex-1 min-h-tap"
+              >
+                {editing.is_active ? 'Deactivate' : 'Reactivate'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDelete}
+                loading={deleting}
+                className="flex-1 min-h-tap"
+              >
+                Delete
+              </Button>
+            </div>
+          )}
+        </div>
+      </Modal>
     </>
   )
 }
+
+// ─── Section card for a role group ─────────────────
+function RoleSection({ icon: Icon, label, description, members, onAdd, onEdit, emptyText, canAdd }) {
+  return (
+    <Card className="!p-0 overflow-hidden">
+      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-pool-600 dark:text-pool-400 inline-flex items-center gap-2">
+            <Icon className="w-3.5 h-3.5" strokeWidth={2.5} />
+            {label}
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-pool-50 dark:bg-pool-950/40 text-[10px] font-bold tabular-nums text-pool-700 dark:text-pool-300">
+              {members.length}
+            </span>
+          </p>
+          <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+        </div>
+        <button
+          onClick={onAdd}
+          disabled={!canAdd}
+          className={cn(
+            'inline-flex items-center gap-1 h-8 px-3 rounded-full text-xs font-semibold transition-colors shrink-0',
+            canAdd
+              ? 'bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 hover:bg-pool-100 dark:hover:bg-pool-950/60'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed',
+          )}
+        >
+          <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+          Add
+        </button>
+      </div>
+      {members.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-gray-400 dark:text-gray-600 italic">{emptyText}</p>
+      ) : (
+        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+          {members.map(member => (
+            <li key={member.id}>
+              <MemberRow member={member} onClick={() => onEdit(member)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+// ─── A single member row ─────────────────
+function MemberRow({ member, onClick, dimmed }) {
+  const roleLabel = ROLE_LABELS[member.role] || member.role
+  const initials = (member.name || '?')
+    .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  const hasLogin = !!member.user_id
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors',
+        dimmed && 'opacity-60',
+      )}
+    >
+      {/* Avatar */}
+      {member.photo_url ? (
+        <img
+          src={member.photo_url}
+          alt={member.name}
+          className="w-10 h-10 rounded-full object-cover ring-1 ring-white dark:ring-gray-900 shrink-0"
+        />
+      ) : (
+        <span className="w-10 h-10 rounded-full bg-pool-100 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 flex items-center justify-center text-[11px] font-bold ring-1 ring-white dark:ring-gray-900 shrink-0">
+          {initials}
+        </span>
+      )}
+
+      {/* Name + meta */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{member.name}</p>
+          {hasLogin && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 text-[9.5px] font-semibold uppercase tracking-wider ring-1 ring-emerald-200/60 dark:ring-emerald-800/40 shrink-0">
+              <CheckCircle2 className="w-2.5 h-2.5" strokeWidth={2.5} />
+              Login
+            </span>
+          )}
+        </div>
+        <p className="text-[11.5px] text-gray-500 dark:text-gray-400 truncate">
+          {roleLabel}
+          {member.email && ` · ${member.email}`}
+        </p>
+      </div>
+
+      {/* Quick contact chips */}
+      <div className="hidden sm:flex items-center gap-1 shrink-0">
+        {member.phone && (
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+            <Phone className="w-3.5 h-3.5" strokeWidth={2} />
+          </span>
+        )}
+        {member.email && (
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+            <Mail className="w-3.5 h-3.5" strokeWidth={2} />
+          </span>
+        )}
+      </div>
+    </button>
+  )
+}
+
