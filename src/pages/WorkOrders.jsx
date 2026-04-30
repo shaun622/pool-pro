@@ -1,87 +1,63 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
-import { Briefcase, Calendar, Clock, FileText, MapPin, Plus, User, X } from 'lucide-react'
+import {
+  ArrowRight, Briefcase, ChevronLeft, ChevronRight,
+  MapPin, Plus, User, Wallet, Wrench, X,
+} from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import StatCard from '../components/ui/StatCard'
 import Input, { Select, TextArea } from '../components/ui/Input'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
-import StopDetailModal from '../components/ui/StopDetailModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, formatCurrency, cn } from '../lib/utils'
+import { formatCurrency, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 
-const QUOTE_STATUS_BADGE = {
-  draft: 'default',
-  sent: 'primary',
-  accepted: 'success',
-  converted: 'default',
-  declined: 'danger',
-  expired: 'default',
-}
-
-const QUOTE_STATUS_LABEL = {
-  draft: 'Draft',
-  sent: 'Quote Sent',
-  accepted: 'Quote Accepted',
-  converted: 'Converted',
-  declined: 'Declined',
-  expired: 'Expired',
-}
-
-const JOB_STATUS_BADGE = {
-  scheduled: 'primary',
-  in_progress: 'warning',
-  on_hold: 'default',
-  completed: 'success',
-}
-
-const JOB_STATUS_LABEL = {
+const STATE_LABEL = {
   scheduled: 'Scheduled',
-  in_progress: 'In Progress',
-  on_hold: 'On Hold',
+  in_progress: 'In progress',
+  on_hold: 'On hold',
   completed: 'Completed',
 }
+const STATE_BADGE = {
+  scheduled: 'primary',
+  in_progress: 'warning',
+  on_hold: 'neutral',
+  completed: 'success-solid',
+}
+const STATE_TEXT = {
+  scheduled:   'text-pool-700 dark:text-pool-300',
+  in_progress: 'text-amber-600 dark:text-amber-400',
+  on_hold:     'text-gray-500 dark:text-gray-400',
+  completed:   'text-emerald-600 dark:text-emerald-400',
+}
+const FILTER_KEYS = ['all', 'scheduled', 'in_progress', 'on_hold', 'completed']
 
-const JOB_STATUSES = ['scheduled', 'in_progress', 'on_hold', 'completed']
+const PAGE_SIZE = 25
 
-// Convert a job row into the "stop" shape expected by StopDetailModal
-function jobToStop(j) {
-  const duration = j.estimated_duration_minutes || 60
-  let timeDisp = null
-  if (j.scheduled_time) {
-    const [h, m] = j.scheduled_time.split(':').map(Number)
-    const startD = new Date(); startD.setHours(h || 0, m || 0, 0, 0)
-    const endD = new Date(startD.getTime() + duration * 60000)
-    const fmt = x => x.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
-    timeDisp = `${fmt(startD)} – ${fmt(endD)}`
-  }
+function dateBadgeParts(dateStr) {
+  if (!dateStr) return null
+  const d = new Date(dateStr + 'T00:00:00')
+  if (isNaN(d.getTime())) return null
   return {
-    type: 'job',
-    id: j.id,
-    title: j.title || 'Job',
-    client_id: j.client_id,
-    pool_id: j.pool_id,
-    client_name: j.clients?.name,
-    address: j.pools?.address || null,
-    status: j.status,
-    scheduled_date: j.scheduled_date,
-    scheduled_time: j.scheduled_time,
-    time_display: timeDisp,
-    duration,
-    price: j.price,
-    notes: j.notes,
-    phone: j.clients?.phone,
-    email: j.clients?.email,
-    lat: j.pools?.latitude ? Number(j.pools.latitude) : null,
-    lng: j.pools?.longitude ? Number(j.pools.longitude) : null,
+    day: d.getDate(),
+    month: d.toLocaleDateString('en-AU', { month: 'short' }),
   }
+}
+
+function formatTime(timeStr) {
+  if (!timeStr) return null
+  const [h, m] = timeStr.split(':').map(Number)
+  const d = new Date()
+  d.setHours(h || 0, m || 0, 0, 0)
+  return d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
 }
 
 export default function WorkOrders() {
@@ -90,18 +66,12 @@ export default function WorkOrders() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [tab, setTab] = useState(searchParams.get('tab') === 'quotes' ? 'quotes' : 'jobs')
+
   const [jobs, setJobs] = useState([])
-  const [statusFilter, setStatusFilter] = useState('scheduled')
+  const [stateFilter, setStateFilter] = useState('all')
   const [loading, setLoading] = useState(true)
-
-  // Quotes
-  const [quotes, setQuotes] = useState([])
-  const [quotesLoading, setQuotesLoading] = useState(false)
-  const [quoteFilter, setQuoteFilter] = useState('all')
-
-  // Job detail modal
-  const [selectedJob, setSelectedJob] = useState(null)
+  const [page, setPage] = useState(0)
+  const [selectedJobId, setSelectedJobId] = useState(null)
 
   // Create job modal
   const [jobModalOpen, setJobModalOpen] = useState(false)
@@ -169,7 +139,7 @@ export default function WorkOrders() {
       .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff_members(name)')
       .eq('business_id', business.id)
       .is('recurring_profile_id', null)
-      .order('scheduled_date', { ascending: true, nullsFirst: false })
+      .order('scheduled_date', { ascending: false, nullsFirst: false })
     setJobs(data || [])
     setLoading(false)
   }
@@ -187,33 +157,6 @@ export default function WorkOrders() {
 
     return () => { supabase.removeChannel(channel) }
   }, [business?.id, location.key])
-
-  // Fetch quotes
-  useEffect(() => {
-    if (!business?.id) return
-    async function fetchQuotes() {
-      setQuotesLoading(true)
-      const { data } = await supabase.from('quotes').select('*, clients(name)')
-        .eq('business_id', business.id)
-        .order('created_at', { ascending: false })
-      setQuotes(data || [])
-      setQuotesLoading(false)
-    }
-    fetchQuotes()
-  }, [business?.id])
-
-  function getQuoteTotal(quote) {
-    return (quote.line_items || []).reduce((s, i) => s + (i.amount || i.quantity * i.unit_price || 0), 0)
-  }
-
-  // Active quotes = sent + accepted (actionable). "All" shows these, not truly all.
-  const activeQuotes = quotes.filter(q => q.status === 'sent' || q.status === 'accepted')
-  const convertedQuotes = quotes.filter(q => q.status === 'converted')
-  const quoteSentCount = quotes.filter(q => q.status === 'sent').length
-  const quoteAcceptedCount = quotes.filter(q => q.status === 'accepted').length
-  const filteredQuotes = quoteFilter === 'converted' ? convertedQuotes
-    : quoteFilter === 'all' ? activeQuotes
-    : quotes.filter(q => q.status === quoteFilter)
 
   // Pre-fill from query params (from Quote → Add as Work Order)
   useEffect(() => {
@@ -357,24 +300,55 @@ export default function WorkOrders() {
     }
   }
 
-  const filteredJobs = jobs.filter(j => j.status === statusFilter)
+  // ─── Derived state for the page ─────────────────────
+  const stateCounts = useMemo(() => ({
+    all:         jobs.length,
+    scheduled:   jobs.filter(j => j.status === 'scheduled').length,
+    in_progress: jobs.filter(j => j.status === 'in_progress').length,
+    on_hold:     jobs.filter(j => j.status === 'on_hold').length,
+    completed:   jobs.filter(j => j.status === 'completed').length,
+  }), [jobs])
 
-  // Subtitle for hero
-  const scheduledCount = jobs.filter(j => j.status === 'scheduled').length
-  const inProgressCount = jobs.filter(j => j.status === 'in_progress').length
-  const heroSubtitle = tab === 'jobs'
-    ? (jobs.length === 0 ? 'No work orders yet' : `${scheduledCount} scheduled${inProgressCount > 0 ? ` · ${inProgressCount} in progress` : ''}`)
-    : (activeQuotes.length === 0 ? 'No active quotes' : `${activeQuotes.length} active ${activeQuotes.length === 1 ? 'quote' : 'quotes'}`)
+  const filtered = useMemo(() => {
+    if (stateFilter === 'all') return jobs
+    return jobs.filter(j => j.status === stateFilter)
+  }, [jobs, stateFilter])
 
-  const heroAction = tab === 'jobs' ? (
-    <Button leftIcon={Plus} onClick={() => setJobModalOpen(true)}>New Work Order</Button>
-  ) : (
-    <Button leftIcon={Plus} onClick={() => navigate('/quotes/new')}>New Quote</Button>
+  // KPI metrics
+  const scheduledValue = useMemo(
+    () => jobs.filter(j => j.status === 'scheduled').reduce((s, j) => s + (Number(j.price) || 0), 0),
+    [jobs],
   )
+  const inProgressCount = stateCounts.in_progress
+
+  // Completed this calendar month
+  const completedThisMonth = useMemo(() => {
+    const now = new Date()
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return jobs.filter(j => j.status === 'completed' && j.scheduled_date?.startsWith(ym)).length
+  }, [jobs])
+
+  // Pagination — reset to page 0 when filter changes
+  useEffect(() => { setPage(0) }, [stateFilter])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageStart = safePage * PAGE_SIZE
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, filtered.length)
+  const pagedJobs = useMemo(() => filtered.slice(pageStart, pageEnd), [filtered, pageStart, pageEnd])
+
+  const selectedJob = useMemo(() => {
+    if (!filtered.length) return null
+    return filtered.find(j => j.id === selectedJobId) || filtered[0]
+  }, [filtered, selectedJobId])
+
+  // Hero title
+  const heroTitle = jobs.length === 0
+    ? 'No work orders yet'
+    : `${stateCounts.scheduled} scheduled${inProgressCount > 0 ? ` · ${inProgressCount} in progress` : ''}`
 
   if (bizLoading || loading) {
     return (
-      <PageWrapper>
+      <PageWrapper width="wide">
         <PageHero
           eyebrow={
             <span className="inline-flex items-center gap-2">
@@ -401,139 +375,207 @@ export default function WorkOrders() {
               Jobs board
             </span>
           }
-          title="Work Orders"
-          subtitle={heroSubtitle}
-          action={heroAction}
+          title={heroTitle}
+          action={
+            <Button leftIcon={Plus} onClick={() => setJobModalOpen(true)}>
+              New work order
+            </Button>
+          }
         />
-        {/* Jobs / Quotes tab toggle */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
-          <button onClick={() => setTab('jobs')}
-            className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all',
-              tab === 'jobs' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-            Jobs
-          </button>
-          <button onClick={() => setTab('quotes')}
-            className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all relative',
-              tab === 'quotes' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400')}>
-            Quotes
-            {activeQuotes.length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-pool-100 text-pool-700">
-                {activeQuotes.length}
-              </span>
-            )}
-          </button>
-        </div>
 
-        {tab === 'jobs' ? (
-        <div>
-        {/* Status filter — wraps on mobile, no horizontal scroll */}
-        <div className="flex flex-wrap gap-1.5 pb-3">
-          {JOB_STATUSES.map(status => (
-            <button key={status} onClick={() => setStatusFilter(status)}
-              className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
-                statusFilter === status ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
-                  : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 shadow-card')}>
-              {`${JOB_STATUS_LABEL[status]} (${jobs.filter(j => j.status === status).length})`}
-            </button>
-          ))}
-        </div>
+        {/* KPI strip — hidden when there's nothing to show */}
+        {jobs.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-4">
+            <Card tinted className="!p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Scheduled work</p>
+                  <p className="mt-2 text-2xl sm:text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
+                    {formatCurrency(scheduledValue)}
+                  </p>
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {stateCounts.scheduled} {stateCounts.scheduled === 1 ? 'job' : 'jobs'}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-pool-100 dark:bg-pool-900/50 text-pool-600 dark:text-pool-400 flex items-center justify-center shrink-0">
+                  <Wallet className="w-5 h-5" strokeWidth={2} />
+                </div>
+              </div>
+            </Card>
+            <StatCard
+              label="In progress"
+              value={inProgressCount}
+              icon={Wrench}
+              iconTone={inProgressCount > 0 ? 'amber' : 'gray'}
+            />
+            <StatCard
+              label="Completed this month"
+              value={completedThisMonth}
+              icon={Briefcase}
+              iconTone={completedThisMonth > 0 ? 'brand' : 'gray'}
+            />
+          </div>
+        )}
 
-        {filteredJobs.length === 0 ? (
+        {jobs.length === 0 ? (
           <EmptyState
-            icon={<Briefcase className="w-8 h-8" strokeWidth={2} />}
+            icon={<Briefcase className="w-8 h-8" strokeWidth={1.5} />}
             title="No work orders"
             description="Create a work order to track one-off repairs and extra work"
+            action="New work order"
+            onAction={() => setJobModalOpen(true)}
           />
         ) : (
-          <div className="space-y-2.5 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3">
-            {filteredJobs.map(job => (
-              <JobListCard key={job.id} job={job} onClick={() => navigate(`/work-orders/${job.id}`)} />
-            ))}
-          </div>
-        )}
-
-        {/* FAB */}
-        <button onClick={() => setJobModalOpen(true)}
-          className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20">
-          <Plus className="w-7 h-7" strokeWidth={2.5} />
-        </button>
-        </div>
-        ) : (
-        <div>
-          {/* Quote filter pills */}
-          <div className="flex flex-wrap gap-1.5 pb-3">
-            {[
-              { key: 'all', label: `All (${activeQuotes.length})` },
-              { key: 'sent', label: `Quote Sent (${quoteSentCount})` },
-              { key: 'accepted', label: `Quote Accepted (${quoteAcceptedCount})` },
-              ...(convertedQuotes.length > 0 ? [{ key: 'converted', label: `Converted (${convertedQuotes.length})` }] : []),
-            ].map(f => (
-              <button key={f.key} onClick={() => setQuoteFilter(f.key)}
-                className={cn('px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all duration-200 whitespace-nowrap',
-                  quoteFilter === f.key ? 'bg-gradient-brand text-white shadow-sm shadow-pool-500/20'
-                    : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 shadow-card')}>
-                {f.label}
-              </button>
-            ))}
-          </div>
-
-          {quotesLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+          <>
+            {/* State filter pills */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {FILTER_KEYS.map(key => {
+                const active = stateFilter === key
+                const count = stateCounts[key] || 0
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setStateFilter(key)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors',
+                      active
+                        ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200 dark:border-pool-800/60 text-pool-700 dark:text-pool-300 ring-1 ring-pool-300/40'
+                        : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
+                    )}
+                  >
+                    <span>{key === 'all' ? 'All' : STATE_LABEL[key]}</span>
+                    <span className={cn(
+                      'tabular-nums text-[11px]',
+                      active ? 'text-pool-600 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500',
+                    )}>{count}</span>
+                  </button>
+                )
+              })}
             </div>
-          ) : filteredQuotes.length === 0 ? (
-            <EmptyState
-              icon={<FileText className="w-8 h-8" strokeWidth={2} />}
-              title="No quotes yet"
-              description="Create your first quote"
-              action="Create Quote"
-              onAction={() => navigate('/quotes/new')}
-            />
-          ) : (
-            <div className="space-y-2.5">
-              {filteredQuotes.map(quote => (
-                <Card key={quote.id} onClick={() => navigate(`/quotes/${quote.id}`)}>
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{quote.clients?.name || 'Unknown'}</p>
-                        <Badge variant={QUOTE_STATUS_BADGE[quote.status]} className="ml-2 shrink-0 text-[10px]">
-                          {QUOTE_STATUS_LABEL[quote.status] || quote.status}
-                        </Badge>
-                      </div>
-                      {(quote.line_items || []).filter(li => li.description).length > 0 && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">
-                          {(quote.line_items || []).filter(li => li.description).map(li => li.description).join(', ')}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-bold text-gray-700 dark:text-gray-300">{formatCurrency(getQuoteTotal(quote))}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{formatDate(quote.created_at)}</p>
-                      </div>
+
+            {filtered.length === 0 ? (
+              <Card className="!p-12 text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No {stateFilter === 'all' ? 'work orders' : STATE_LABEL[stateFilter]?.toLowerCase()} {stateFilter !== 'all' && 'work orders'}
+                </p>
+              </Card>
+            ) : (
+              <>
+                {/* MOBILE: stacked card list */}
+                <div className="md:hidden space-y-2.5">
+                  {filtered.map(job => (
+                    <MobileJobCard
+                      key={job.id}
+                      job={job}
+                      onClick={() => navigate(`/work-orders/${job.id}`)}
+                    />
+                  ))}
+                </div>
+
+                {/* DESKTOP: master-detail */}
+                <div className="hidden md:grid md:grid-cols-12 gap-4">
+                  {/* Table */}
+                  <Card className="!p-0 md:col-span-7 overflow-hidden">
+                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_7rem_5.5rem_5rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                      <span>Job / Client</span>
+                      <span>Date</span>
+                      <span>Tech</span>
+                      <span>State</span>
+                      <span className="text-right">Price</span>
                     </div>
+                    <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {pagedJobs.map(job => {
+                        const isSelected = selectedJob && job.id === selectedJob.id
+                        const dateStr = job.scheduled_date
+                          ? new Date(job.scheduled_date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+                          : null
+                        return (
+                          <li key={job.id}>
+                            <button
+                              onClick={() => setSelectedJobId(job.id)}
+                              onDoubleClick={() => navigate(`/work-orders/${job.id}`)}
+                              className={cn(
+                                'w-full grid grid-cols-[minmax(0,1fr)_5.5rem_7rem_5.5rem_5rem] gap-3 px-4 py-3 text-left transition-colors items-center',
+                                isSelected
+                                  ? 'bg-pool-50 dark:bg-pool-950/30'
+                                  : 'hover:bg-gray-50 dark:hover:bg-gray-800/40',
+                              )}
+                            >
+                              <span className="min-w-0">
+                                <span className={cn(
+                                  'block text-sm font-semibold truncate',
+                                  isSelected ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100',
+                                )}>
+                                  {job.title || 'Job'}
+                                </span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">
+                                  {job.clients?.name || 'Unknown'}
+                                </span>
+                              </span>
+                              <span className="text-sm tabular-nums text-gray-700 dark:text-gray-300 truncate">
+                                {dateStr || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                              </span>
+                              <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                                {job.staff_members?.name || <span className="text-gray-300 dark:text-gray-600">Unassigned</span>}
+                              </span>
+                              <span className={cn('text-sm font-medium', STATE_TEXT[job.status])}>
+                                {STATE_LABEL[job.status] || 'Scheduled'}
+                              </span>
+                              <span className="text-right text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                                {job.price ? formatCurrency(job.price) : <span className="text-gray-300 dark:text-gray-600 font-normal">—</span>}
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+
+                    {pageCount > 1 && (
+                      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/40">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                          Showing {pageStart + 1}–{pageEnd} of {filtered.length}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setPage(p => Math.max(0, p - 1))}
+                            disabled={safePage === 0}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Previous page"
+                          >
+                            <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+                          </button>
+                          <span className="px-3 h-8 inline-flex items-center text-xs font-semibold text-gray-700 dark:text-gray-300 tabular-nums">
+                            {safePage + 1} / {pageCount}
+                          </span>
+                          <button
+                            onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                            disabled={safePage >= pageCount - 1}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Next page"
+                          >
+                            <ChevronRight className="w-4 h-4" strokeWidth={2} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* Detail panel */}
+                  <div className="md:col-span-5">
+                    {selectedJob && (
+                      <DetailPanel
+                        job={selectedJob}
+                        onOpen={() => navigate(`/work-orders/${selectedJob.id}`)}
+                      />
+                    )}
                   </div>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* FAB for new quote */}
-          <button onClick={() => navigate('/quotes/new')}
-            className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-gradient-brand text-white rounded-2xl shadow-elevated shadow-pool-500/30 flex items-center justify-center hover:shadow-glow active:scale-95 transition-all duration-200 z-20">
-            <Plus className="w-7 h-7" strokeWidth={2.5} />
-          </button>
-        </div>
+                </div>
+              </>
+            )}
+          </>
         )}
-      </PageWrapper>
 
-      {/* Job Detail Modal */}
-      <StopDetailModal
-        open={!!selectedJob}
-        onClose={() => setSelectedJob(null)}
-        stop={selectedJob ? jobToStop(selectedJob) : null}
-        stopNumber={1}
-        onUpdated={() => { fetchData(); setSelectedJob(null) }}
-      />
+      </PageWrapper>
 
       {/* Create Job Modal */}
       <Modal open={jobModalOpen} onClose={() => setJobModalOpen(false)} title="New Work Order">
@@ -761,85 +803,141 @@ export default function WorkOrders() {
   )
 }
 
-// ─── Rich job list card (with date badge + icons) ──────────
-function JobListCard({ job, onClick }) {
-  const statusVariant = JOB_STATUS_BADGE[job.status] || 'default'
-  const statusLabel = JOB_STATUS_LABEL[job.status] || 'Scheduled'
+// ─── Mobile job card (matches Clients/Quotes/Recurring style) ───────
+function MobileJobCard({ job, onClick }) {
+  const dateBadge = dateBadgeParts(job.scheduled_date)
+  const timeStr = formatTime(job.scheduled_time)
+  return (
+    <Card onClick={onClick}>
+      <div className="flex items-center gap-3">
+        {/* Date badge — pool gradient when scheduled, gray when not */}
+        <div className={cn(
+          'flex flex-col items-center justify-center px-3 py-2 rounded-xl shrink-0 w-[60px]',
+          dateBadge
+            ? 'bg-gradient-brand text-white'
+            : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500',
+        )}>
+          {dateBadge ? (
+            <>
+              <span className="text-[18px] font-bold leading-none tabular-nums">{dateBadge.day}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider mt-0.5">{dateBadge.month}</span>
+            </>
+          ) : (
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-center leading-tight">No date</span>
+          )}
+        </div>
 
-  // Format date for badge: "10 Apr"
-  const dateBadge = (() => {
-    if (!job.scheduled_date) return null
-    const d = new Date(job.scheduled_date + 'T00:00:00')
-    if (isNaN(d.getTime())) return null
-    const day = d.getDate()
-    const month = d.toLocaleDateString('en-AU', { month: 'short' })
-    return { day, month }
-  })()
+        {/* Title + client */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+            {job.title || 'Job'}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+            {job.clients?.name || 'Unknown'}
+          </p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+            {timeStr ? `${timeStr} · ` : ''}{job.staff_members?.name || 'Unassigned'}
+          </p>
+        </div>
 
-  // Format time: "10:03 pm"
-  const timeDisplay = (() => {
-    if (!job.scheduled_time) return null
-    const [h, m] = job.scheduled_time.split(':').map(Number)
-    const d = new Date()
-    d.setHours(h || 0, m || 0, 0, 0)
-    return d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()
-  })()
+        {/* State + price */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Badge variant={STATE_BADGE[job.status] || 'neutral'}>
+            {STATE_LABEL[job.status] || 'Scheduled'}
+          </Badge>
+          {job.price ? (
+            <span className="text-sm font-bold tabular-nums text-gray-900 dark:text-gray-100">
+              {formatCurrency(job.price)}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </Card>
+  )
+}
 
+// ─── Sticky desktop detail panel ────────────────────
+function DetailPanel({ job, onOpen }) {
+  const dateBadge = dateBadgeParts(job.scheduled_date)
+  const timeStr = formatTime(job.scheduled_time)
   const duration = job.estimated_duration_minutes || 60
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-card hover:shadow-card-hover active:scale-[0.99] transition-all overflow-hidden flex"
-    >
-      {/* Left date badge */}
-      <div className={`flex flex-col items-center justify-center px-4 py-3 shrink-0 w-[72px] ${dateBadge ? 'bg-gradient-brand text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'}`}>
-        <Calendar className="w-5 h-5 mb-0.5" strokeWidth={2} />
-        {dateBadge ? (
-          <span className="text-xs font-bold leading-tight">{dateBadge.day} {dateBadge.month}</span>
-        ) : (
-          <span className="text-[10px] font-semibold">Not scheduled</span>
-        )}
+    <Card className="!p-5 sticky top-24">
+      <div className="flex items-start justify-between mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-pool-600 dark:text-pool-400 inline-flex items-center gap-2">
+          <Briefcase className="w-3.5 h-3.5" strokeWidth={2.5} />
+          Work order
+        </p>
+        <Badge variant={STATE_BADGE[job.status] || 'neutral'}>
+          {STATE_LABEL[job.status] || 'Scheduled'}
+        </Badge>
       </div>
+      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+        {job.title || 'Job'}
+      </h3>
+      {job.clients?.name && (
+        <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5 flex items-center gap-1.5">
+          <User className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+          {job.clients.name}
+        </p>
+      )}
+      {job.pools?.address && (
+        <p className="text-xs text-pool-600 dark:text-pool-400 truncate mt-0.5 flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+          {job.pools.address}
+        </p>
+      )}
 
-      {/* Right content */}
-      <div className="flex-1 min-w-0 p-3.5">
-        <div className="flex items-start justify-between gap-2 mb-1.5">
-          <h3 className="font-bold text-gray-900 dark:text-gray-100 truncate">{job.title || 'Job'}</h3>
-          <div className="flex flex-col items-end gap-0.5 shrink-0">
-            <Badge variant={statusVariant} className="text-[10px]">{statusLabel}</Badge>
-            <span className={cn('text-[10px] font-medium', job.staff_members?.name ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500')}>
-              {job.staff_members?.name || 'Unassigned'}
-            </span>
-          </div>
+      {/* Mini grid */}
+      <div className="grid grid-cols-2 gap-4 mt-5">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Date</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1 tabular-nums">
+            {dateBadge ? `${dateBadge.day} ${dateBadge.month}` : '—'}
+          </p>
         </div>
-
-        {/* Client */}
-        {job.clients?.name && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 mb-1">
-            <User className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" strokeWidth={2} />
-            <span className="truncate">{job.clients.name}</span>
-          </div>
-        )}
-
-        {/* Address */}
-        {job.pools?.address && (
-          <div className="flex items-center gap-1.5 text-xs text-pool-600 dark:text-pool-400 mb-1">
-            <MapPin className="w-3.5 h-3.5 text-pool-500 shrink-0" strokeWidth={2} />
-            <span className="truncate">{job.pools.address}</span>
-          </div>
-        )}
-
-        {/* Time · duration */}
-        {timeDisplay && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-            <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" strokeWidth={2} />
-            <span>{timeDisplay}</span>
-            <span className="text-gray-300 dark:text-gray-600">·</span>
-            <span>{duration}m</span>
-          </div>
-        )}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Time</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1 tabular-nums">
+            {timeStr ? (
+              <>
+                {timeStr} <span className="text-gray-400 dark:text-gray-500 font-normal">· {duration}m</span>
+              </>
+            ) : '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Tech</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1 truncate">
+            {job.staff_members?.name || <span className="text-gray-400 dark:text-gray-500 font-normal">Unassigned</span>}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Price</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1 tabular-nums">
+            {job.price ? formatCurrency(job.price) : '—'}
+          </p>
+        </div>
       </div>
-    </button>
+
+      {job.notes && (
+        <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Notes</p>
+          <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 line-clamp-3">{job.notes}</p>
+        </div>
+      )}
+
+      {/* Quick actions */}
+      <div className="mt-5 flex items-center justify-end gap-2">
+        <button
+          onClick={onOpen}
+          className="inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
+        >
+          Open work order
+          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
+        </button>
+      </div>
+    </Card>
   )
 }
