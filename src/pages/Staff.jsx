@@ -53,6 +53,9 @@ export default function Staff() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [resetSending, setResetSending] = useState(false)
+  const [showSetPassword, setShowSetPassword] = useState(false)
+  const [newDirectPassword, setNewDirectPassword] = useState('')
+  const [settingPassword, setSettingPassword] = useState(false)
   const fileRef = useRef()
 
   // The business owner lives in `businesses.owner_id`, NOT `staff_members`.
@@ -112,6 +115,8 @@ export default function Staff() {
   function openEdit(member) {
     // Virtual owner row isn't editable — there's no staff_members record to update.
     if (member?._virtual) return
+    setShowSetPassword(false)
+    setNewDirectPassword('')
     setEditing(member)
     setForm({
       name: member.name || '',
@@ -256,6 +261,35 @@ export default function Staff() {
       toast.error(err.message || 'Failed to send reset email.')
     } finally {
       setResetSending(false)
+    }
+  }
+
+  async function handleSetPasswordDirectly() {
+    if (!editing) return
+    if (!newDirectPassword || newDirectPassword.length < 6) {
+      toast.error('Password must be at least 6 characters.')
+      return
+    }
+    setSettingPassword(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('set-staff-password', {
+        body: { staff_id: editing.id, new_password: newDirectPassword },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      // If a new auth user was created, refresh the staff record so the row
+      // picks up the new user_id and the LOGIN pill appears.
+      if (data?.action === 'created') {
+        setEditing(prev => prev ? { ...prev, user_id: data.user_id } : prev)
+      }
+      toast.success(`Password ${data?.action === 'created' ? 'set' : 'updated'} for ${editing.name}`)
+      setNewDirectPassword('')
+      setShowSetPassword(false)
+    } catch (err) {
+      console.error('Error setting password directly:', err)
+      toast.error(err.message || 'Failed to update password.')
+    } finally {
+      setSettingPassword(false)
     }
   }
 
@@ -433,23 +467,68 @@ export default function Staff() {
             </div>
           )}
           {editing && editing.user_id && (
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={2.25} />
-                <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                  Login active — they sign in with this email
-                </span>
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 p-3 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={2.25} />
+                  <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium truncate">
+                    Login active — they sign in with this email
+                  </span>
+                </div>
+                {!showSetPassword && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSetPassword(true)}
+                    className="inline-flex items-center gap-1 h-7 px-3 rounded-full bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors shrink-0"
+                  >
+                    Set new password
+                  </button>
+                )}
               </div>
-              {editing.email && (
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
-                    Forgotten password? Send them a reset link.
+
+              {showSetPassword && (
+                <div className="pt-1 space-y-2">
+                  <Input
+                    label="New password for this user"
+                    type="password"
+                    value={newDirectPassword}
+                    onChange={e => setNewDirectPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    autoComplete="new-password"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowSetPassword(false); setNewDirectPassword('') }}
+                      className="h-8 px-3 rounded-lg text-[11px] font-semibold text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-900 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSetPasswordDirectly}
+                      disabled={settingPassword || newDirectPassword.length < 6}
+                      className="h-8 px-3 rounded-lg bg-emerald-500 text-white text-[11px] font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {settingPassword ? 'Updating…' : 'Update password'}
+                    </button>
+                    <span className="ml-auto text-[10px] text-emerald-700/70 dark:text-emerald-400/70">
+                      Tell them the new password
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {editing.email && !showSetPassword && (
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-emerald-200/40 dark:border-emerald-800/30">
+                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 pt-1.5">
+                    Or send them a reset link by email
                   </p>
                   <button
                     type="button"
                     onClick={handleSendPasswordReset}
                     disabled={resetSending}
-                    className="inline-flex items-center gap-1 h-7 px-3 rounded-full bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 underline decoration-dotted underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                   >
                     {resetSending ? 'Sending…' : 'Send reset email'}
                   </button>
