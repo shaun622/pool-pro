@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react'
 import { UserPlus, AlertTriangle } from 'lucide-react'
 import Modal from './Modal'
 import Button from './Button'
-import Input from './Input'
+import Input, { TextArea } from './Input'
 import AddressAutocomplete from './AddressAutocomplete'
 import { supabase } from '../../lib/supabase'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useToast } from '../../contexts/ToastContext'
 
-const EMPTY = { name: '', email: '', phone: '', address: '' }
+const EMPTY = { name: '', email: '', phone: '', address: '', notes: '' }
 
 /**
  * Quick "Add new client" modal — used as a nested modal from other create flows.
@@ -122,7 +122,8 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
         address: form.address.trim() || null,
-      }).select('id, name, email, phone, address').single()
+        notes: (form.notes || '').trim() || null,
+      }).select('id, name, email, phone, address, notes').single()
       if (error) throw error
       onCreated?.(data)
       onClose?.()
@@ -185,6 +186,12 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
           onChange={v => setForm(p => ({ ...p, address: v }))}
           onSelect={({ address }) => setForm(p => ({ ...p, address }))}
           placeholder="Start typing a street address..."
+        />
+        <TextArea
+          label="Notes"
+          value={form.notes}
+          onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+          placeholder="Any additional notes..."
         />
 
         <div className="flex gap-2 pt-2">

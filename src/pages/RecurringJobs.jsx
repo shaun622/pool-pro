@@ -14,6 +14,7 @@ import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
+import NewClientModal from '../components/ui/NewClientModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
@@ -112,8 +113,6 @@ export default function RecurringJobs() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [showNewClient, setShowNewClient] = useState(false)
-  const [newClientName, setNewClientName] = useState('')
-  const [newClientSaving, setNewClientSaving] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState(null)
   const [stateFilter, setStateFilter] = useState('all')
   const [page, setPage] = useState(0)
@@ -206,30 +205,20 @@ export default function RecurringJobs() {
     setModalOpen(true)
   }
 
-  async function handleQuickCreateClient() {
-    if (!newClientName.trim()) return
-    setNewClientSaving(true)
-    try {
-      // Quick-create only captures a name — no email/phone to dedupe
-      // against, and same-name clients are allowed by design (two
-      // legitimate "John Smith"s). Just create. The full create flows
-      // (NewClientModal, WorkOrders inline) enforce the email/phone
-      // uniqueness rule for the cases that matter.
-      const trimmed = newClientName.trim()
-      const { data, error } = await supabase.from('clients')
-        .insert({ name: trimmed, business_id: business.id })
-        .select('id, name, pools:pools(id, address)')
-        .single()
-      if (error) throw error
-      setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-      setForm(prev => ({ ...prev, client_id: data.id, pool_id: '' }))
-      setNewClientName('')
-      setShowNewClient(false)
-    } catch (err) {
-      toast.error(err.message || 'Failed to create client')
-    } finally {
-      setNewClientSaving(false)
-    }
+  // Client creation lives in <NewClientModal> — same modal used at
+  // /clients and inside AddRecurringModal. The legacy inline name-only
+  // "quick create" was removed because it skipped the email/phone
+  // duplicate guard and routinely produced phantom clients.
+  function handleNewClientCreated(client) {
+    // The modal returns the inserted row (or the existing client if
+    // the operator clicked "Use existing"). Fold it into the local
+    // clients list and select it on the form. The pools relation
+    // isn't included here, so refetchAll picks up that side after.
+    setClients(prev => prev.some(c => c.id === client.id)
+      ? prev
+      : [...prev, { ...client, pools: client.pools || [] }].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(prev => ({ ...prev, client_id: client.id, pool_id: '' }))
+    setShowNewClient(false)
   }
 
   function onJobTypeChange(templateId) {
@@ -649,18 +638,10 @@ export default function RecurringJobs() {
               onChange={e => setForm(prev => ({ ...prev, client_id: e.target.value, pool_id: '' }))}
               required
             />
-            {!showNewClient ? (
-              <button type="button" onClick={() => setShowNewClient(true)}
-                className="text-xs text-pool-600 dark:text-pool-400 font-semibold mt-1.5 hover:text-pool-700">
-                + Create new client
-              </button>
-            ) : (
-              <div className="flex gap-2 mt-2">
-                <Input placeholder="Client name" value={newClientName} onChange={e => setNewClientName(e.target.value)} className="flex-1" autoFocus />
-                <Button type="button" onClick={handleQuickCreateClient} loading={newClientSaving} className="text-xs px-3 shrink-0">Add</Button>
-                <button type="button" onClick={() => { setShowNewClient(false); setNewClientName('') }} className="text-xs text-gray-400 dark:text-gray-500 px-2 shrink-0 hover:text-gray-600">Cancel</button>
-              </div>
-            )}
+            <button type="button" onClick={() => setShowNewClient(true)}
+              className="text-xs text-pool-600 dark:text-pool-400 font-semibold mt-1.5 hover:text-pool-700">
+              + New Client
+            </button>
           </div>
           {clientPools.length > 0 && (
             <Select label="Pool" options={[{ value: '', label: 'Select pool...' }, ...clientPools.map(p => ({ value: p.id, label: p.address }))]} value={form.pool_id} onChange={e => setForm(prev => ({ ...prev, pool_id: e.target.value }))} />
@@ -720,6 +701,15 @@ export default function RecurringJobs() {
         destructive
         confirmLabel="Cancel Service"
         onConfirm={handleCancelService}
+      />
+
+      {/* Shared new-client modal (same one used at /clients and inside
+          AddRecurringModal). Nested above the edit modal via zLayer 70. */}
+      <NewClientModal
+        open={showNewClient}
+        onClose={() => setShowNewClient(false)}
+        onCreated={handleNewClientCreated}
+        zLayer={70}
       />
     </PageWrapper>
   )

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Search, X, Pencil, User, Droplet, Calendar as CalendarIcon, Repeat, Mail, Phone, MapPin, Plus } from 'lucide-react'
 import Modal from './Modal'
 import Button from './Button'
@@ -46,6 +46,27 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   // Client search dropdown
   const [clientSearch, setClientSearch] = useState('')
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
+  const clientDropdownRef = useRef(null)
+
+  // Close the search dropdown when the operator clicks anywhere
+  // outside it. Without this, the only way to dismiss it was to pick
+  // a result.
+  useEffect(() => {
+    if (!clientDropdownOpen) return
+    function onPointerDown(e) {
+      const node = clientDropdownRef.current
+      if (node && !node.contains(e.target)) setClientDropdownOpen(false)
+    }
+    function onKey(e) { if (e.key === 'Escape') setClientDropdownOpen(false) }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [clientDropdownOpen])
 
   // Schedule
   const [recurrenceRule, setRecurrenceRule] = useState('weekly')
@@ -209,7 +230,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
           <Section icon={User} iconColor="text-pool-600 dark:text-pool-400" iconBg="bg-pool-50 dark:bg-pool-950/40" label="Client">
             {!selectedClient ? (
               <div className="space-y-2">
-                <div className="relative">
+                <div className="relative" ref={clientDropdownRef}>
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" strokeWidth={2} />
                   <input
                     type="text"

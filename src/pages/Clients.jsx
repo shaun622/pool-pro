@@ -10,6 +10,7 @@ import StatCard from '../components/ui/StatCard'
 import Input, { TextArea } from '../components/ui/Input'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
+import NewClientModal from '../components/ui/NewClientModal'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
@@ -87,19 +88,16 @@ function ClientCard({ client, clientPools, status, onClick }) {
 }
 
 // ─── MAIN COMPONENT ────────────────────────────────
-const emptyClient = { name: '', email: '', phone: '', address: '', notes: '' }
 const PAGE_SIZE = 25
 
 export default function Clients() {
   const navigate = useNavigate()
   const { business } = useBusiness()
-  const { clients, loading: clientsLoading, createClient } = useClients()
+  const { clients, loading: clientsLoading } = useClients()
   const { pools, loading: poolsLoading } = usePools()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState(emptyClient)
-  const [saving, setSaving] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [jobs, setJobs] = useState([])
   const [page, setPage] = useState(0)
@@ -200,30 +198,10 @@ export default function Clients() {
     })
   }, [enriched, filter, search])
 
-  const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!form.name.trim()) return
-    setSaving(true)
-    try {
-      const created = await createClient({
-        name: form.name.trim(),
-        email: form.email.trim() || null,
-        phone: form.phone.trim() || null,
-        address: form.address.trim() || null,
-        notes: form.notes.trim() || null,
-      })
-      if (!created?.id) throw new Error('No client ID returned')
-      setModalOpen(false)
-      setForm(emptyClient)
-      navigate(`/clients/${created.id}?addPool=1`)
-    } catch (err) {
-      console.error('Error creating client:', err)
-    } finally {
-      setSaving(false)
-    }
-  }
+  // Add-Client modal is now <NewClientModal>; it owns its form state
+  // and the email/phone duplicate guard. handleSubmit / handleChange /
+  // setForm and saving/createClient bookkeeping all moved into the
+  // shared component, so they're gone from here.
 
   const filters = [
     { key: 'all',         label: 'All' },
@@ -551,27 +529,19 @@ export default function Clients() {
         )}
       </PageWrapper>
 
-      {/* Add Client Modal */}
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setForm(emptyClient) }} title="Add Client">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input label="Name" name="name" value={form.name} onChange={handleChange} required placeholder="Full name" />
-          <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="email@example.com" />
-          <Input label="Phone" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="0400 000 000" />
-          <AddressAutocomplete
-            label="Address"
-            value={form.address}
-            onChange={(v) => setForm(prev => ({ ...prev, address: v }))}
-            onSelect={({ address }) => setForm(prev => ({ ...prev, address }))}
-            placeholder="Start typing a street address..."
-          />
-          <TextArea label="Notes" name="notes" value={form.notes} onChange={handleChange} placeholder="Any additional notes..." />
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={() => { setModalOpen(false); setForm(emptyClient) }}>Cancel</Button>
-            <Button type="submit" className="flex-1" loading={saving}>Next</Button>
-          </div>
-          <p className="text-xs text-center text-gray-400 dark:text-gray-500">You'll be taken to add their pool next</p>
-        </form>
-      </Modal>
+      {/* Add Client — shared modal used everywhere a new client gets
+          created (here, AddRecurringModal, etc.). Identical UX
+          regardless of where it was opened from, including the
+          email/phone duplicate guard. */}
+      <NewClientModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={(client) => {
+          // Preserve the previous "go straight to add a pool" flow.
+          navigate(`/clients/${client.id}?addPool=1`)
+        }}
+        zLayer={50}
+      />
     </>
   )
 }
