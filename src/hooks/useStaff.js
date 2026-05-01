@@ -2,21 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useBusiness } from './useBusiness'
 
-const PLAN_STAFF_LIMITS = {
-  trial: 1,
-  starter: 2,
-  pro: 10,
-}
-
 export function useStaff() {
-  const { business } = useBusiness()
+  // staffLimit is derived inside useBusiness — combines the per-business
+  // staff_seat_override with the plans table's max_staff. Single source
+  // of truth; this hook just consumes it.
+  const { business, staffLimit } = useBusiness()
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // staff_seat_override is set by FieldSuite HQ via the set-staff-override
-  // Pages Function. NULL → use the plan default. Use ?? not || so a
-  // legal override of 0 ("no staff allowed") doesn't fall through.
-  const staffLimit = business?.staff_seat_override ?? PLAN_STAFF_LIMITS[business?.plan] ?? 1
   const canAddStaff = staff.filter(s => s.is_active).length < staffLimit
 
   const fetchStaff = useCallback(async () => {

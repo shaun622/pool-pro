@@ -4,71 +4,33 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import { useBusiness } from '../hooks/useBusiness'
+import { usePlans } from '../hooks/usePlans'
 import { cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 
-const PLANS = [
-  {
-    id: 'trial',
-    name: 'Trial',
-    price: null,
-    priceLabel: 'Free',
-    period: '14 days',
-    features: {
-      pools: '5 pools',
-      staff: '1 staff member',
-      serviceHistory: '30 days',
-      chemistryLog: true,
-      routeSheet: true,
-      clientPortal: true,
-      quotesPdf: false,
-      photoAttachments: false,
-      inventoryTracking: false,
-      customBranding: false,
-      prioritySupport: false,
-    },
-  },
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 9,
-    priceLabel: '$9',
-    period: '/mo',
-    features: {
-      pools: 'Unlimited',
-      staff: '2 staff members',
-      serviceHistory: 'Unlimited',
-      chemistryLog: true,
-      routeSheet: true,
-      clientPortal: true,
-      quotesPdf: true,
-      photoAttachments: true,
-      inventoryTracking: false,
-      customBranding: false,
-      prioritySupport: false,
-    },
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: 19,
-    priceLabel: '$19',
-    period: '/mo',
-    features: {
-      pools: 'Unlimited',
-      staff: '10 staff members',
-      serviceHistory: 'Unlimited',
-      chemistryLog: true,
-      routeSheet: true,
-      clientPortal: true,
-      quotesPdf: true,
-      photoAttachments: true,
-      inventoryTracking: true,
-      customBranding: true,
-      prioritySupport: true,
-    },
-  },
-]
+// Plans now come from the DB-backed `plans` table, edited from
+// FieldSuite HQ. The shape we render expects:
+//   { slug, name, price_cents, period, max_staff, features (jsonb), sort_order, is_active }
+// We adapt to the existing display props (priceLabel, period suffix)
+// at render time so this page didn't need a wholesale rewrite.
+
+// Format price_cents → "Free" / "$9" / "$19" — matches the prior
+// hardcoded `priceLabel` field. Period 'month' renders as "/mo",
+// '14 days' as "14 days", year as "/yr".
+function formatPriceLabel(price_cents) {
+  if (!price_cents || price_cents === 0) return 'Free'
+  const dollars = price_cents / 100
+  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`
+}
+
+function formatPeriod(period) {
+  if (!period) return ''
+  if (period === 'month') return '/mo'
+  if (period === 'year') return '/yr'
+  if (period === 'once') return ''
+  // '14 days' or any custom string passes through verbatim
+  return period
+}
 
 const FEATURE_LABELS = {
   pools: 'Pools',
@@ -102,10 +64,14 @@ function FeatureCheck({ enabled }) {
 export default function Subscription() {
   const toast = useToast()
   const { business, loading: bizLoading } = useBusiness()
+  const { plans, loading: plansLoading } = usePlans()
   const navigate = useNavigate()
   const [subscribing, setSubscribing] = useState(null)
 
   const currentPlan = business?.plan || 'trial'
+
+  // Customer only sees active plans, ordered by sort_order.
+  const activePlans = (plans || []).filter(p => p.is_active)
 
   // Calculate trial days remaining
   const trialDaysLeft = (() => {
@@ -127,7 +93,7 @@ export default function Subscription() {
     }, 1000)
   }
 
-  if (bizLoading) {
+  if (bizLoading || plansLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -150,11 +116,13 @@ export default function Subscription() {
           )}
 
           {/* Plan cards */}
-          {PLANS.map((plan) => {
-            const isCurrent = currentPlan === plan.id
+          {activePlans.map((plan) => {
+            const isCurrent = currentPlan === plan.slug
+            const priceLabel = formatPriceLabel(plan.price_cents)
+            const periodLabel = formatPeriod(plan.period)
             return (
               <Card
-                key={plan.id}
+                key={plan.slug}
                 className={cn(
                   'p-4',
                   isCurrent && 'border-pool-500 border-2 ring-1 ring-pool-200'
@@ -164,8 +132,8 @@ export default function Subscription() {
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{plan.name}</h3>
                     <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{plan.priceLabel}</span>
-                      {plan.period && <span className="text-gray-400 dark:text-gray-500">{plan.period}</span>}
+                      <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{priceLabel}</span>
+                      {periodLabel && <span className="text-gray-400 dark:text-gray-500">{periodLabel}</span>}
                     </p>
                   </div>
                   {isCurrent && (
@@ -173,11 +141,11 @@ export default function Subscription() {
                   )}
                 </div>
 
-                {/* Feature list */}
+                {/* Feature list — features is a JSONB blob with the same shape as before */}
                 <div className="space-y-2.5 mb-4">
-                  {Object.entries(plan.features).map(([key, value]) => (
+                  {Object.entries(plan.features || {}).map(([key, value]) => (
                     <div key={key} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">{FEATURE_LABELS[key]}</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{FEATURE_LABELS[key] || key}</span>
                       <FeatureCheck enabled={value} />
                     </div>
                   ))}
@@ -188,12 +156,12 @@ export default function Subscription() {
                   <div className="text-center py-2">
                     <p className="text-sm text-pool-600 dark:text-pool-400 font-medium">Your current plan</p>
                   </div>
-                ) : plan.id === 'trial' ? null : (
+                ) : plan.slug === 'trial' ? null : (
                   <Button
                     variant="primary"
                     className="w-full min-h-tap"
-                    onClick={() => handleSubscribe(plan.id)}
-                    loading={subscribing === plan.id}
+                    onClick={() => handleSubscribe(plan.slug)}
+                    loading={subscribing === plan.slug}
                   >
                     Subscribe to {plan.name}
                   </Button>

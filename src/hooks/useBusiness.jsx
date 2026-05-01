@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, createContext, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
+import { usePlans } from './usePlans'
 
 const BusinessContext = createContext(null)
 
@@ -94,7 +95,22 @@ export function BusinessProvider({ children }) {
     return () => { cancelled = true }
   }, [authLoading, user?.id])
 
-  const loading = authLoading || businessLoading
+  // Plans are loaded in parallel with the business resolve so the
+  // combined loading flag stays clean — no two-phase flicker.
+  const { plansBySlug, loading: plansLoading } = usePlans()
+
+  const loading = authLoading || businessLoading || plansLoading
+
+  // Effective staff seat limit:
+  //   1. If the operator set a per-business override → use that
+  //   2. Otherwise look up the plan's max_staff in the live plans table
+  //   3. Fallback to 1 if the plan slug isn't seeded (legacy assignment)
+  // Use ?? not || so an override of 0 ("no staff allowed") wins.
+  const staffLimit = (() => {
+    if (!business) return 1
+    if (business.staff_seat_override != null) return business.staff_seat_override
+    return plansBySlug?.[business.plan]?.max_staff ?? 1
+  })()
 
   const createBusiness = useCallback(async (businessData) => {
     const { data, error } = await supabase
@@ -163,7 +179,7 @@ export function BusinessProvider({ children }) {
   }, [user])
 
   return (
-    <BusinessContext.Provider value={{ business, loading, staffRecord, userRole, createBusiness, updateBusiness, refetch }}>
+    <BusinessContext.Provider value={{ business, loading, staffRecord, userRole, staffLimit, createBusiness, updateBusiness, refetch }}>
       {children}
     </BusinessContext.Provider>
   )
