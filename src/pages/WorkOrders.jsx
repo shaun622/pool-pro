@@ -102,9 +102,30 @@ export default function WorkOrders() {
     if (!newClientForm.name.trim() || !business?.id) return
     setNewClientSaving(true)
     try {
+      // Block duplicate names — if a client with the same name (case-
+      // insensitive, trimmed) already exists for this business, reuse it
+      // instead of creating a duplicate. Operator gets a toast pointing
+      // them at the existing record.
+      const trimmed = newClientForm.name.trim()
+      const { data: existing } = await supabase
+        .from('clients')
+        .select('id, name, address')
+        .eq('business_id', business.id)
+        .ilike('name', trimmed)
+        .limit(5)
+      const dup = (existing || []).find(c => c.name.trim().toLowerCase() === trimmed.toLowerCase())
+      if (dup) {
+        toast.error(`A client named "${dup.name}" already exists. Using the existing record.`)
+        setClients(prev => prev.some(c => c.id === dup.id) ? prev : [...prev, dup].sort((a, b) => a.name.localeCompare(b.name)))
+        setJobForm(prev => ({ ...prev, client_id: dup.id, pool_id: '' }))
+        setNewClientForm({ name: '', email: '', phone: '', address: '', notes: '' })
+        setShowNewClient(false)
+        return
+      }
+
       const { data, error } = await supabase.from('clients').insert({
         business_id: business.id,
-        name: newClientForm.name.trim(),
+        name: trimmed,
         email: newClientForm.email.trim() || null,
         phone: newClientForm.phone.trim() || null,
         address: newClientForm.address.trim() || null,
