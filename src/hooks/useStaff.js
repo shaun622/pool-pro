@@ -13,7 +13,10 @@ export function useStaff() {
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const staffLimit = PLAN_STAFF_LIMITS[business?.plan] || 1
+  // staff_seat_override is set by FieldSuite HQ via the set-staff-override
+  // Pages Function. NULL → use the plan default. Use ?? not || so a
+  // legal override of 0 ("no staff allowed") doesn't fall through.
+  const staffLimit = business?.staff_seat_override ?? PLAN_STAFF_LIMITS[business?.plan] ?? 1
   const canAddStaff = staff.filter(s => s.is_active).length < staffLimit
 
   const fetchStaff = useCallback(async () => {
