@@ -122,6 +122,22 @@ export default function TechRunSheet() {
 
   useEffect(() => { fetchData() }, [business?.id, staffId, location.key])
 
+  // Refetch when the tab comes back into focus. After completing a service
+  // the tech often switches apps (Maps for navigation, etc.) and comes back;
+  // this keeps the run sheet honest without forcing a manual reload.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') fetchData()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, staffId])
+
   // Build today's stops
   const todayStops = useMemo(() => {
     const now = new Date()

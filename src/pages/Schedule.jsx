@@ -199,6 +199,11 @@ function Schedule({ business }) {
   const [allPools, setAllPools] = useState([])
   const [allProfiles, setAllProfiles] = useState([])
   const [allStaff, setAllStaff] = useState([])
+  // Recent service_records — used to suppress pool projections on days
+  // when a pool was already serviced. Defensive: even if pool.next_due_at
+  // didn't advance for some reason, the projected "due today" stop still
+  // disappears from the view.
+  const [serviceDays, setServiceDays] = useState(new Set()) // "<pool_id>:<ymd>" keys
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
   // Filter the grid + today list to a single tech (or 'unassigned') —
@@ -212,7 +217,7 @@ function Schedule({ business }) {
     // Wide window so prev/next week navigation is cached.
     const from = new Date(); from.setDate(from.getDate() - 60)
     const to = new Date(); to.setDate(to.getDate() + 120)
-    const [jobsRes, poolsRes, profilesRes, staffRes] = await Promise.all([
+    const [jobsRes, poolsRes, profilesRes, staffRes, servicesRes] = await Promise.all([
       supabase
         .from('jobs')
         .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
@@ -235,15 +240,49 @@ function Schedule({ business }) {
         .select('id, name, photo_url')
         .eq('business_id', business.id)
         .eq('is_active', true),
+      // Completed services in the visible window — used to suppress pool
+      // projections on days when the pool was already serviced.
+      supabase
+        .from('service_records')
+        .select('pool_id, serviced_at')
+        .eq('business_id', business.id)
+        .eq('status', 'completed')
+        .gte('serviced_at', from.toISOString())
+        .lte('serviced_at', to.toISOString()),
     ])
     setAllJobs(jobsRes.data || [])
     setAllPools(poolsRes.data || [])
     setAllProfiles(profilesRes.data || [])
     setAllStaff(staffRes.data || [])
+    // Build a set of "<pool_id>:<ymd>" keys for fast lookup in the projector.
+    const days = new Set()
+    for (const r of servicesRes.data || []) {
+      if (!r.pool_id || !r.serviced_at) continue
+      const d = new Date(r.serviced_at)
+      if (isNaN(d.getTime())) continue
+      days.add(`${r.pool_id}:${ymd(d)}`)
+    }
+    setServiceDays(days)
     setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [business?.id, location.key])
+
+  // Refetch when the tab comes back into focus. Owner is in another tab
+  // while a tech completes a service; coming back here should show the
+  // updated schedule without a manual reload.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') fetchData()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id])
 
   // Build a Map<ymdKey, Stop[]> for the visible 7-day window.
   const stopsByDay = useMemo(() => {
@@ -301,6 +340,13 @@ function Schedule({ business }) {
       }
       for (const occ of occurrences) {
         if (isPoolCovered(occ, p.id)) continue
+        // Suppress projection if the pool was already serviced on this
+        // day. Otherwise a completed pool whose next_due_at advance
+        // somehow didn't propagate would keep showing as due.
+        if (serviceDays.has(`${p.id}:${ymd(occ)}`)) {
+          coverPool(occ, p.id)
+          continue
+        }
         ensure(occ).stops.push(poolToStop({ ...p, next_due_at: occ.toISOString() }))
         coverPool(occ, p.id)
       }
@@ -332,8 +378,14 @@ function Schedule({ business }) {
         const taken = takenByProfile.get(profile.id)
         if (!taken || !taken.has(key)) {
           if (!isPoolCovered(cursor, profile.pool_id)) {
-            ensure(cursor).stops.push(profileToStop(profile, cursor))
-            coverPool(cursor, profile.pool_id)
+            // Same defensive filter as the pool projector — suppress
+            // when the pool was already serviced on this day.
+            if (profile.pool_id && serviceDays.has(`${profile.pool_id}:${key}`)) {
+              coverPool(cursor, profile.pool_id)
+            } else {
+              ensure(cursor).stops.push(profileToStop(profile, cursor))
+              coverPool(cursor, profile.pool_id)
+            }
           }
         }
         cursor.setDate(cursor.getDate() + intervalDays)
@@ -375,7 +427,7 @@ function Schedule({ business }) {
     const flat = new Map()
     for (const [k, v] of byDay.entries()) flat.set(k, v.stops)
     return flat
-  }, [allJobs, allPools, allProfiles, weekStart])
+  }, [allJobs, allPools, allProfiles, weekStart, serviceDays])
 
   const weekDays = useMemo(() => {
     const days = []

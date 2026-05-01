@@ -81,6 +81,23 @@ export function useService() {
         .update({ last_serviced_at: now.toISOString(), next_due_at: nextDue.toISOString() })
         .eq('id', poolId)
 
+      // Mark any scheduled/in-progress job for this pool today as completed.
+      // Without this, recurring services that auto-generated a real jobs row
+      // for today stay on the schedule as 'scheduled' forever — the tech's
+      // run sheet and owner's schedule both keep showing the slot even though
+      // the work is done.
+      try {
+        const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        await supabase
+          .from('jobs')
+          .update({ status: 'completed' })
+          .eq('pool_id', poolId)
+          .eq('scheduled_date', ymd)
+          .in('status', ['scheduled', 'in_progress'])
+      } catch (e) {
+        console.warn('Mark-jobs-completed failed (non-critical):', e)
+      }
+
       // Increment completed_visits on any active recurring profile for this pool
       try {
         const { data: profiles } = await supabase
