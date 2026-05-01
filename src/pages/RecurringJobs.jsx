@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowRight, ChevronLeft, ChevronRight, Pause, Play, Plus, Repeat, Wallet, Zap,
+  ChevronLeft, ChevronRight, Pause, Pencil, Play, Plus, Repeat, Wallet,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
@@ -286,46 +286,6 @@ export default function RecurringJobs() {
     if (!editing) return
     await handleStatusChange(editing.id, 'cancelled')
     setModalOpen(false)
-  }
-
-  async function generateNow(profile) {
-    try {
-      const jt = jobTypes.find(j => j.id === profile.job_type_template_id)
-      const nextDate = new Date()
-      if (profile.preferred_day_of_week != null) {
-        const current = nextDate.getDay()
-        const target = profile.preferred_day_of_week
-        const daysUntil = (target - current + 7) % 7 || 7
-        nextDate.setDate(nextDate.getDate() + daysUntil)
-      }
-      const { error } = await supabase.from('jobs').insert({
-        business_id: business.id,
-        client_id: profile.client_id,
-        pool_id: profile.pool_id,
-        recurring_profile_id: profile.id,
-        job_type_template_id: profile.job_type_template_id,
-        assigned_staff_id: profile.assigned_staff_id,
-        title: profile.title,
-        status: 'scheduled',
-        scheduled_date: nextDate.toISOString().split('T')[0],
-        scheduled_time: profile.preferred_time,
-        estimated_duration_minutes: jt?.estimated_duration_minutes || null,
-        price: profile.price,
-        notes: profile.notes,
-      })
-      if (error) throw error
-      const intervals = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90, custom: profile.custom_interval_days || 7 }
-      const days = intervals[profile.recurrence_rule] || 7
-      const nextGen = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-      await supabase.from('recurring_job_profiles').update({
-        last_generated_at: new Date().toISOString(),
-        next_generation_at: nextGen.toISOString(),
-      }).eq('id', profile.id)
-      toast.success('Job created!')
-      fetchAll()
-    } catch (err) {
-      toast.error(err.message || 'Failed to generate job')
-    }
   }
 
   async function handleStatusChange(profileId, newStatus) {
@@ -628,16 +588,13 @@ export default function RecurringJobs() {
 
                   {/* Quick actions */}
                   <div className="mt-5 flex flex-wrap items-center gap-2">
-                    {selectedProfile._state === 'active' && (
-                      <Button
-                        size="sm"
-                        leftIcon={Zap}
-                        onClick={() => generateNow(selectedProfile)}
-                        className="!bg-emerald-500 !shadow-emerald-500/20 hover:!brightness-110"
-                      >
-                        Generate now
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      leftIcon={Pencil}
+                      onClick={() => openEdit(selectedProfile)}
+                    >
+                      Edit
+                    </Button>
                     {selectedProfile._state === 'active' && (
                       <Button
                         size="sm"
@@ -658,13 +615,6 @@ export default function RecurringJobs() {
                         Resume
                       </Button>
                     )}
-                    <button
-                      onClick={() => openEdit(selectedProfile)}
-                      className="inline-flex items-center gap-1 ml-auto text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
-                    >
-                      Edit
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
-                    </button>
                   </div>
                 </Card>
               )}
