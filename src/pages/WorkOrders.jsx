@@ -102,20 +102,35 @@ export default function WorkOrders() {
     if (!newClientForm.name.trim() || !business?.id) return
     setNewClientSaving(true)
     try {
-      // Block duplicate names — if a client with the same name (case-
-      // insensitive, trimmed) already exists for this business, reuse it
-      // instead of creating a duplicate. Operator gets a toast pointing
-      // them at the existing record.
-      const trimmed = newClientForm.name.trim()
-      const { data: existing } = await supabase
-        .from('clients')
-        .select('id, name, address')
-        .eq('business_id', business.id)
-        .ilike('name', trimmed)
-        .limit(5)
-      const dup = (existing || []).find(c => c.name.trim().toLowerCase() === trimmed.toLowerCase())
+      // Block duplicates by email or phone (NOT name — pool companies
+      // can legitimately have two same-named clients). Email match is
+      // case-insensitive trimmed; phone strips non-digits so spacing
+      // doesn't fool the comparison.
+      const trimmedName  = newClientForm.name.trim()
+      const trimmedEmail = newClientForm.email.trim().toLowerCase()
+      const trimmedPhone = (newClientForm.phone || '').replace(/\D/g, '')
+      let dup = null
+      if (trimmedEmail || trimmedPhone.length >= 6) {
+        const filters = []
+        if (trimmedEmail) filters.push(`email.ilike.${trimmedEmail}`)
+        if (trimmedPhone.length >= 6) filters.push(`phone.ilike.%${trimmedPhone.slice(-8)}%`)
+        const { data: existing } = await supabase
+          .from('clients')
+          .select('id, name, email, phone, address')
+          .eq('business_id', business.id)
+          .or(filters.join(','))
+          .limit(10)
+        dup = (existing || []).find(c => {
+          if (trimmedEmail && (c.email || '').trim().toLowerCase() === trimmedEmail) return true
+          if (trimmedPhone.length >= 6) {
+            const cp = (c.phone || '').replace(/\D/g, '')
+            if (cp && (cp === trimmedPhone || cp.endsWith(trimmedPhone) || trimmedPhone.endsWith(cp))) return true
+          }
+          return false
+        })
+      }
       if (dup) {
-        toast.error(`A client named "${dup.name}" already exists. Using the existing record.`)
+        toast.error(`A client with this email or phone already exists ("${dup.name}"). Using the existing record.`)
         setClients(prev => prev.some(c => c.id === dup.id) ? prev : [...prev, dup].sort((a, b) => a.name.localeCompare(b.name)))
         setJobForm(prev => ({ ...prev, client_id: dup.id, pool_id: '' }))
         setNewClientForm({ name: '', email: '', phone: '', address: '', notes: '' })
@@ -125,7 +140,7 @@ export default function WorkOrders() {
 
       const { data, error } = await supabase.from('clients').insert({
         business_id: business.id,
-        name: trimmed,
+        name: trimmedName,
         email: newClientForm.email.trim() || null,
         phone: newClientForm.phone.trim() || null,
         address: newClientForm.address.trim() || null,

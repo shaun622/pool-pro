@@ -210,25 +210,12 @@ export default function RecurringJobs() {
     if (!newClientName.trim()) return
     setNewClientSaving(true)
     try {
-      // Block duplicates — same-name (case-insensitive trimmed) clients
-      // for this business get reused rather than re-inserted.
+      // Quick-create only captures a name — no email/phone to dedupe
+      // against, and same-name clients are allowed by design (two
+      // legitimate "John Smith"s). Just create. The full create flows
+      // (NewClientModal, WorkOrders inline) enforce the email/phone
+      // uniqueness rule for the cases that matter.
       const trimmed = newClientName.trim()
-      const { data: existing } = await supabase
-        .from('clients')
-        .select('id, name, pools:pools(id, address)')
-        .eq('business_id', business.id)
-        .ilike('name', trimmed)
-        .limit(5)
-      const dup = (existing || []).find(c => c.name.trim().toLowerCase() === trimmed.toLowerCase())
-      if (dup) {
-        toast.error(`A client named "${dup.name}" already exists. Using the existing record.`)
-        setClients(prev => prev.some(c => c.id === dup.id) ? prev : [...prev, dup].sort((a, b) => a.name.localeCompare(b.name)))
-        setForm(prev => ({ ...prev, client_id: dup.id, pool_id: '' }))
-        setNewClientName('')
-        setShowNewClient(false)
-        return
-      }
-
       const { data, error } = await supabase.from('clients')
         .insert({ name: trimmed, business_id: business.id })
         .select('id, name, pools:pools(id, address)')

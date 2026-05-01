@@ -34,28 +34,47 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
     if (!open) setDuplicate(null)
   }, [open, prefill])
 
-  // Live duplicate check — debounced via the natural cadence of typing.
-  // If a client with the same name (case-insensitive, trimmed) already
-  // exists for this business, capture it so we can surface a warning
-  // and offer "Use existing" instead of inserting a duplicate.
+  // Live duplicate check — keyed on email + phone, NOT name. A pool
+  // company can legitimately have two clients named the same ("John
+  // Smith"), but two clients sharing an email or phone is the strong
+  // signal that they're the same person and someone fat-fingered a
+  // new record. Email match is case-insensitive trimmed; phone match
+  // strips all non-digits so "0400 123 456" and "0400123456" collide.
   useEffect(() => {
     if (!open || !business?.id) { setDuplicate(null); return }
-    const name = form.name.trim()
-    if (name.length < 2) { setDuplicate(null); return }
+    const email = form.email.trim().toLowerCase()
+    const phone = (form.phone || '').replace(/\D/g, '')
+    if (!email && phone.length < 6) { setDuplicate(null); return }
     let cancelled = false
     const t = setTimeout(async () => {
+      // Build an OR query — match on email if provided, on phone if
+      // provided, on either when both are.
+      const filters = []
+      if (email) filters.push(`email.ilike.${email}`)
+      if (phone.length >= 6) filters.push(`phone.ilike.%${phone.slice(-8)}%`)
+      if (filters.length === 0) return
       const { data } = await supabase
         .from('clients')
         .select('id, name, email, phone, address')
         .eq('business_id', business.id)
-        .ilike('name', name)
-        .limit(1)
+        .or(filters.join(','))
+        .limit(10)
       if (cancelled) return
-      const match = (data || []).find(c => c.name.trim().toLowerCase() === name.toLowerCase())
+      // Tighten match in JS — DB filter is loose (ilike on phone uses
+      // a substring; could match shorter dial-out prefixes). Compare
+      // strictly here.
+      const match = (data || []).find(c => {
+        if (email && (c.email || '').trim().toLowerCase() === email) return true
+        if (phone.length >= 6) {
+          const cp = (c.phone || '').replace(/\D/g, '')
+          if (cp && (cp === phone || cp.endsWith(phone) || phone.endsWith(cp))) return true
+        }
+        return false
+      })
       setDuplicate(match || null)
     }, 250)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [open, business?.id, form.name])
+  }, [open, business?.id, form.email, form.phone])
 
   function useExisting() {
     if (!duplicate) return
@@ -65,30 +84,41 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
 
   async function handleCreate() {
     if (!form.name.trim() || !business?.id) return
-    // Belt-and-braces: even if the operator dismisses the warning by
-    // continuing to type past it, do one last check on submit. If a
-    // duplicate exists, refuse to insert.
-    const trimmed = form.name.trim()
+    const trimmedName  = form.name.trim()
+    const trimmedEmail = form.email.trim().toLowerCase()
+    const trimmedPhone = (form.phone || '').replace(/\D/g, '')
     setSaving(true)
     try {
-      const { data: existing } = await supabase
-        .from('clients')
-        .select('id, name, email, phone, address')
-        .eq('business_id', business.id)
-        .ilike('name', trimmed)
-        .limit(5)
-      const match = (existing || []).find(c => c.name.trim().toLowerCase() === trimmed.toLowerCase())
-      if (match) {
-        // Show the warning so the operator can decide — never silently
-        // create the dup.
-        setDuplicate(match)
-        setSaving(false)
-        return
+      // Belt-and-braces dup check on submit — by email or phone, NOT
+      // name. If we find one, surface it as the warning and don't insert.
+      if (trimmedEmail || trimmedPhone.length >= 6) {
+        const filters = []
+        if (trimmedEmail) filters.push(`email.ilike.${trimmedEmail}`)
+        if (trimmedPhone.length >= 6) filters.push(`phone.ilike.%${trimmedPhone.slice(-8)}%`)
+        const { data: existing } = await supabase
+          .from('clients')
+          .select('id, name, email, phone, address')
+          .eq('business_id', business.id)
+          .or(filters.join(','))
+          .limit(10)
+        const match = (existing || []).find(c => {
+          if (trimmedEmail && (c.email || '').trim().toLowerCase() === trimmedEmail) return true
+          if (trimmedPhone.length >= 6) {
+            const cp = (c.phone || '').replace(/\D/g, '')
+            if (cp && (cp === trimmedPhone || cp.endsWith(trimmedPhone) || trimmedPhone.endsWith(cp))) return true
+          }
+          return false
+        })
+        if (match) {
+          setDuplicate(match)
+          setSaving(false)
+          return
+        }
       }
 
       const { data, error } = await supabase.from('clients').insert({
         business_id: business.id,
-        name: trimmed,
+        name: trimmedName,
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
         address: form.address.trim() || null,
@@ -119,19 +149,21 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
 
         <Input label="Name" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Sarah Chen" autoFocus required />
 
-        {/* Duplicate warning — shown live as the operator types. The
-            operator can either pick the existing client or change the
-            name to something distinct. */}
+        {/* Duplicate warning — shown live as the operator types email
+            or phone. Email and phone are treated as the unique keys —
+            two clients sharing either is the strong signal that they're
+            the same person. The operator can pick the existing record
+            or change contact info to something distinct. */}
         {duplicate && (
           <div className="rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 p-3">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" strokeWidth={2.25} />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-                  A client named "{duplicate.name}" already exists
+                  A client with this email or phone already exists: "{duplicate.name}"
                 </p>
                 <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80 mt-0.5 truncate">
-                  {duplicate.email || duplicate.phone || duplicate.address || 'No contact info'}
+                  {[duplicate.email, duplicate.phone].filter(Boolean).join(' · ') || duplicate.address || 'No contact info'}
                 </p>
                 <button
                   type="button"
@@ -163,7 +195,7 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
             disabled={!form.name.trim() || !!duplicate}
             className="flex-1"
           >
-            {duplicate ? 'Name already taken' : 'Create Client'}
+            {duplicate ? 'Email or phone already used' : 'Create Client'}
           </Button>
         </div>
       </div>
