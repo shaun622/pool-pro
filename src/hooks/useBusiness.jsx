@@ -102,14 +102,18 @@ export function BusinessProvider({ children }) {
   const loading = authLoading || businessLoading || plansLoading
 
   // Effective staff seat limit:
-  //   1. If the operator set a per-business override → use that
-  //   2. Otherwise look up the plan's max_staff in the live plans table
+  //   1. If the operator set a per-business override → use that (wins)
+  //   2. Otherwise plan's max_staff + customer-purchased extra seats
   //   3. Fallback to 1 if the plan slug isn't seeded (legacy assignment)
   // Use ?? not || so an override of 0 ("no staff allowed") wins.
+  // purchased_seats is updated by the Stripe webhook (see
+  // functions/api/stripe/webhook.ts) — never written from the UI.
   const staffLimit = (() => {
     if (!business) return 1
     if (business.staff_seat_override != null) return business.staff_seat_override
-    return plansBySlug?.[business.plan]?.max_staff ?? 1
+    const planMax = plansBySlug?.[business.plan]?.max_staff ?? 1
+    const extras = business.purchased_seats ?? 0
+    return planMax + extras
   })()
 
   const createBusiness = useCallback(async (businessData) => {
