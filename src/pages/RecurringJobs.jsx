@@ -706,6 +706,23 @@ export default function RecurringJobs() {
                         Resume
                       </Button>
                     )}
+                    {/* Delete sits on the far right, opposite Edit, so
+                        it's discoverable without opening the edit modal
+                        first. ml-auto pushes it past the Pause/Resume
+                        secondaries when they're shown. handleDeleteService
+                        keys off `editing`, so we set that here too. */}
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      leftIcon={Trash2}
+                      onClick={() => {
+                        setEditing(selectedProfile)
+                        setConfirmDeleteOpen(true)
+                      }}
+                      className="ml-auto"
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </Card>
               )}
