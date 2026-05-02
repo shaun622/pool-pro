@@ -7,6 +7,13 @@ import Modal from './ui/Modal'
 import Button from './ui/Button'
 import { POOL_TYPES, POOL_SHAPES, SCHEDULE_FREQUENCIES, FREQUENCY_LABELS, cn } from '../lib/utils'
 import { geocodeAddress, MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
+import { supabase } from '../lib/supabase'
+import { useBusiness } from '../hooks/useBusiness'
+
+// Hardcoded ultimate fallback for the manual pin map — Sanur, Bali. Used
+// when the browser blocks geolocation and the business hasn't pinned a
+// pool yet. Coordinates point at central Sanur near the main road.
+const SANUR = { lat: -8.6803, lng: 115.2623 }
 
 export const emptyPool = {
   address: '',
@@ -205,15 +212,73 @@ function FlyTo({ lat, lng }) {
   return null
 }
 
+// Recenter the map onto the resolved fallback location, but only while
+// the operator hasn't placed a pin yet — once they tap, FlyTo (above)
+// takes over and we shouldn't yank them back.
+function FlyToDefault({ lat, lng, hasTemp }) {
+  const map = useMap()
+  useEffect(() => {
+    if (hasTemp || lat == null || lng == null) return
+    map.flyTo([lat, lng], 13, { duration: 0.4 })
+  }, [lat, lng, hasTemp, map])
+  return null
+}
+
 function ManualPinPicker({ address, lat, lng, onPick }) {
+  const { business } = useBusiness()
   const [open, setOpen] = useState(false)
   const [tempLat, setTempLat] = useState(lat)
   const [tempLng, setTempLng] = useState(lng)
   const [searching, setSearching] = useState(false)
 
-  // Default to Bali center if no coords yet (good for the user's use case)
-  const initialLat = lat ?? -8.4095
-  const initialLng = lng ?? 115.1889
+  // Cascading default for the map when the form has no coords yet:
+  //   1. browser geolocation — best "near me" answer
+  //   2. the business's most recently pinned pool — proxy for "where
+  //      this business operates"
+  //   3. Sanur, Bali — hardcoded ultimate fallback
+  // Resolved on mount so by the time the operator clicks "Drop pin
+  // manually" the map opens at something sensible.
+  const [defaultCenter, setDefaultCenter] = useState(SANUR)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function tryBusinessFallback() {
+      if (cancelled || !business?.id) return
+      const { data } = await supabase
+        .from('pools')
+        .select('latitude, longitude')
+        .eq('business_id', business.id)
+        .not('latitude', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (cancelled) return
+      if (data?.latitude != null && data?.longitude != null) {
+        setDefaultCenter({ lat: Number(data.latitude), lng: Number(data.longitude) })
+      }
+      // else: stays at the SANUR initial state
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled) return
+          setDefaultCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        },
+        () => { tryBusinessFallback() },
+        { timeout: 5000, enableHighAccuracy: false, maximumAge: 60_000 },
+      )
+    } else {
+      tryBusinessFallback()
+    }
+
+    return () => { cancelled = true }
+  }, [business?.id])
+
+  // Use the resolved default when the form has no pin yet.
+  const initialLat = lat ?? defaultCenter.lat
+  const initialLng = lng ?? defaultCenter.lng
 
   function handleOpen() {
     setTempLat(lat)
@@ -290,6 +355,11 @@ function ManualPinPicker({ address, lat, lng, onPick }) {
                 <Marker position={[tempLat, tempLng]} icon={pinIcon} />
               )}
               <FlyTo lat={tempLat} lng={tempLng} />
+              <FlyToDefault
+                lat={defaultCenter.lat}
+                lng={defaultCenter.lng}
+                hasTemp={tempLat != null && tempLng != null}
+              />
             </MapContainer>
           </div>
           {tempLat != null && tempLng != null && (
