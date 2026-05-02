@@ -25,14 +25,16 @@ export const RECURRENCE_LABELS = {
   custom:      'Custom',
 }
 
-// Options shown in the new-create / edit pickers. Legacy values
-// (6_weekly, quarterly) are still valid in the DB but no longer offered
-// to operators creating new profiles.
+// Options shown in the new-create / edit pickers. Ordered from most
+// frequent to least frequent so the common high-cadence cases (tri /
+// bi / weekly) sit at the head of the pill row. Legacy values
+// (6_weekly, quarterly) are still valid in the DB but no longer
+// offered to operators creating new profiles.
 export const RECURRENCE_OPTIONS = [
+  { value: 'tri_weekly',  label: 'Tri-weekly (3/week)' },
+  { value: 'bi_weekly',   label: 'Bi-weekly (2/week)' },
   { value: 'weekly',      label: 'Weekly' },
   { value: 'fortnightly', label: 'Fortnightly' },
-  { value: 'bi_weekly',   label: 'Bi-weekly (2/week)' },
-  { value: 'tri_weekly',  label: 'Tri-weekly (3/week)' },
   { value: 'monthly',     label: 'Monthly' },
   { value: 'custom',      label: 'Custom' },
 ]
