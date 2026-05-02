@@ -13,15 +13,11 @@ import { useToast } from '../../contexts/ToastContext'
 import {
   RECURRENCE_OPTIONS,
   DAYS_OF_WEEK,
-  MONTH_WEEK_OPTIONS,
   expectedDayCount,
   isMultiDayWeekly,
+  computeNthFromDate,
+  derivedScheduleLabel,
 } from '../../lib/recurringScheduling'
-
-const DAY_OPTIONS = [
-  { value: '', label: 'No preference' },
-  ...DAYS_OF_WEEK.map(d => ({ value: String(d.value), label: d.long })),
-]
 
 export default function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   const toast = useToast()
@@ -60,14 +56,14 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     }
   }, [clientDropdownOpen])
 
-  // Schedule
+  // Schedule. The first service date is the anchor for everything: its
+  // day-of-week is locked into the bi/tri-weekly chip grid, and the
+  // monthly Nth-occurrence is computed from it (no more separate
+  // dropdown). extraDays is the operator's *additional* picks beyond
+  // the anchor day.
   const [recurrenceRule, setRecurrenceRule] = useState('weekly')
   const [customDays, setCustomDays] = useState(7)
-  const [preferredDay, setPreferredDay] = useState('')
-  // bi_weekly / tri_weekly: multi-select. Stored as numbers 0..6.
-  const [preferredDaysOfWeek, setPreferredDaysOfWeek] = useState([])
-  // Monthly Nth-weekday picker (1..4 = exact, 5 = "last")
-  const [monthlyWeekOfMonth, setMonthlyWeekOfMonth] = useState(1)
+  const [extraDays, setExtraDays] = useState([]) // weekday integers 0..6
   const [firstDate, setFirstDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
 
@@ -107,8 +103,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   function reset() {
     setClientId(''); setPoolId(''); setAssignedStaffId('')
     setClientSearch(''); setClientDropdownOpen(false)
-    setRecurrenceRule('weekly'); setCustomDays(7); setPreferredDay('')
-    setPreferredDaysOfWeek([]); setMonthlyWeekOfMonth(1)
+    setRecurrenceRule('weekly'); setCustomDays(7); setExtraDays([])
     setFirstDate(new Date().toISOString().split('T')[0]); setNotes('')
     setDurationType('ongoing'); setEndDate(''); setTotalVisits('')
     setShowNewClient(false); setShowNewPool(false); setShowNewTech(false)
@@ -116,25 +111,26 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     setLocalStaff([])
   }
 
-  // Toggle a day in/out of the multi-day picker, but cap at the rule's
-  // expected count (2 for bi_weekly, 3 for tri_weekly). Once the cap is
-  // hit, tapping a new day silently no-ops; the operator has to deselect
-  // first. Keeps the form honest re: the schema CHECK constraint.
-  function toggleMultiDay(dayValue) {
-    const cap = expectedDayCount(recurrenceRule)
-    setPreferredDaysOfWeek(prev => {
+  // The first service date's weekday is always implicitly selected in
+  // bi/tri-weekly — it's the locked chip — so the operator picks the
+  // *additional* days here. Cap is (expected count - 1) since the
+  // anchor day already counts.
+  function toggleExtraDay(dayValue) {
+    const expected = expectedDayCount(recurrenceRule)
+    if (expected == null) return
+    const cap = expected - 1
+    setExtraDays(prev => {
       if (prev.includes(dayValue)) return prev.filter(d => d !== dayValue)
-      if (cap != null && prev.length >= cap) return prev
+      if (prev.length >= cap) return prev
       return [...prev, dayValue].sort((a, b) => a - b)
     })
   }
 
-  // When the rule flips between simple/multi/monthly, reset the picker
-  // state so stale values from a previous selection don't leak through.
+  // Reset extra-day picks when the rule flips so a stale 2-day pick
+  // from bi-weekly doesn't leak into tri-weekly's expectations.
   function changeRule(newRule) {
     setRecurrenceRule(newRule)
-    if (!isMultiDayWeekly(newRule)) setPreferredDaysOfWeek([])
-    if (newRule !== 'monthly') setMonthlyWeekOfMonth(1)
+    setExtraDays([])
   }
 
   function handleClose() { reset(); onClose() }
@@ -178,17 +174,33 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   }
 
   async function handleSubmit() {
-    if (!clientId || !poolId) return
+    if (!clientId || !poolId || !firstDate) return
     setSaving(true)
     try {
       const freqLabel = recurrenceRule === 'custom' ? `Every ${customDays} days` : RECURRENCE_OPTIONS.find(o => o.value === recurrenceRule)?.label || recurrenceRule
 
-      // Pick which day-of-week field(s) to populate based on the rule:
-      //   bi_weekly / tri_weekly → preferred_days_of_week (int[])
-      //   monthly with Nth picker → preferred_day_of_week + monthly_week_of_month
-      //   weekly / fortnightly / custom / legacy monthly → preferred_day_of_week
+      // First service date drives every day-of-week field. For bi/tri
+      // it's the locked anchor day in the array. For monthly it's both
+      // preferred_day_of_week AND the source of the Nth via
+      // computeNthFromDate (no separate dropdown anymore).
+      const anchorDate = new Date(firstDate + 'T00:00:00')
+      const anchorWd = anchorDate.getDay()
       const isMulti = isMultiDayWeekly(recurrenceRule)
-      const isMonthlyNth = recurrenceRule === 'monthly' && preferredDay
+
+      let preferred_day_of_week = null
+      let preferred_days_of_week = null
+      let monthly_week_of_month = null
+      if (isMulti) {
+        preferred_days_of_week = [anchorWd, ...extraDays]
+          .filter((v, i, arr) => arr.indexOf(v) === i)
+          .sort((a, b) => a - b)
+      } else if (recurrenceRule === 'monthly') {
+        preferred_day_of_week = anchorWd
+        monthly_week_of_month = computeNthFromDate(anchorDate)
+      } else if (recurrenceRule === 'weekly' || recurrenceRule === 'fortnightly') {
+        preferred_day_of_week = anchorWd
+      }
+
       const insertPayload = {
         business_id: business.id,
         client_id: clientId,
@@ -196,9 +208,9 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
         title: `Pool Service — ${freqLabel}`,
         recurrence_rule: recurrenceRule,
         custom_interval_days: recurrenceRule === 'custom' ? Number(customDays) : null,
-        preferred_day_of_week: isMulti ? null : (preferredDay ? Number(preferredDay) : null),
-        preferred_days_of_week: isMulti ? preferredDaysOfWeek : null,
-        monthly_week_of_month: isMonthlyNth ? monthlyWeekOfMonth : null,
+        preferred_day_of_week,
+        preferred_days_of_week,
+        monthly_week_of_month,
         assigned_staff_id: assignedStaffId || null,
         notes: notes.trim() || null,
         is_active: true,
@@ -252,14 +264,13 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     ? (() => { const d = new Date(firstDate); d.setDate(d.getDate() + intervalDaysValue * (Number(totalVisits) - 1)); return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) })()
     : null
 
-  // Validation. bi_weekly / tri_weekly need exactly 2 / 3 days picked
-  // — the schema CHECK enforces this server-side too, but blocking
-  // submit gives the operator a clear "you can't ship this yet" signal
-  // instead of a generic Postgres rejection.
+  // Validation. The first service date contributes its own weekday
+  // automatically, so bi/tri-weekly only needs (expected - 1) extra
+  // chips picked. Schema CHECK enforces array length server-side.
   const expectedDays = expectedDayCount(recurrenceRule)
   const daysOk = expectedDays == null
     ? true
-    : preferredDaysOfWeek.length === expectedDays
+    : extraDays.length === expectedDays - 1
   const canSubmit = clientId && poolId && firstDate && !saving && daysOk
     && (durationType !== 'until_date' || !!endDate)
     && (durationType !== 'num_visits' || (Number(totalVisits) > 0))
@@ -425,75 +436,79 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
                   </button>
                 ))}
               </div>
-              {recurrenceRule === 'custom' && (
-                <Input label="" type="number" min="1" value={customDays} onChange={e => setCustomDays(e.target.value)}
-                  placeholder="Number of days" className="mt-2" />
-              )}
             </div>
 
-            {/* Multi-day weekly: chip picker for bi_weekly / tri_weekly */}
-            {isMultiDayWeekly(recurrenceRule) && (
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
-                  Pick {expectedDayCount(recurrenceRule)} days
-                  <span className="ml-2 text-gray-400 dark:text-gray-500">
-                    ({preferredDaysOfWeek.length}/{expectedDayCount(recurrenceRule)})
-                  </span>
-                </label>
-                <div className="grid grid-cols-7 gap-1.5">
-                  {DAYS_OF_WEEK.map(d => {
-                    const active = preferredDaysOfWeek.includes(d.value)
-                    const cap = expectedDayCount(recurrenceRule)
-                    const atCap = !active && preferredDaysOfWeek.length >= cap
-                    return (
-                      <button key={d.value} type="button"
-                        onClick={() => toggleMultiDay(d.value)}
-                        disabled={atCap}
-                        className={cn(
-                          'py-2 rounded-lg text-xs font-semibold transition-all min-h-[40px]',
-                          active
-                            ? 'bg-pool-500 text-white shadow-sm'
-                            : atCap
-                              ? 'bg-gray-50 dark:bg-gray-900 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100',
-                        )}>
-                        {d.label}
-                      </button>
-                    )
-                  })}
+            {/* First service date — drives the locked weekday for
+                bi/tri, the Nth-occurrence for monthly, and the
+                anchor for everything. */}
+            <Input
+              label="First service date"
+              type="date"
+              value={firstDate}
+              onChange={e => setFirstDate(e.target.value)}
+            />
+
+            {/* Custom interval input lives next to its preview text. */}
+            {recurrenceRule === 'custom' && (
+              <Input
+                label="Repeat every (days)"
+                type="number"
+                min="1"
+                value={customDays}
+                onChange={e => setCustomDays(e.target.value)}
+                placeholder="e.g. 10"
+              />
+            )}
+
+            {/* Multi-day weekly: anchor weekday is locked-on. Operator
+                picks (expected - 1) additional chips. */}
+            {isMultiDayWeekly(recurrenceRule) && firstDate && (() => {
+              const anchorWd = new Date(firstDate + 'T00:00:00').getDay()
+              const cap = expectedDayCount(recurrenceRule) - 1
+              return (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                    Plus pick {cap} more day{cap === 1 ? '' : 's'}
+                    <span className="ml-2 text-gray-400 dark:text-gray-500">
+                      ({extraDays.length}/{cap})
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {DAYS_OF_WEEK.map(d => {
+                      const isAnchor = d.value === anchorWd
+                      const active = isAnchor || extraDays.includes(d.value)
+                      const atCap = !active && extraDays.length >= cap
+                      return (
+                        <button key={d.value} type="button"
+                          onClick={() => !isAnchor && toggleExtraDay(d.value)}
+                          disabled={isAnchor || atCap}
+                          className={cn(
+                            'py-2 rounded-lg text-xs font-semibold transition-all min-h-[40px] relative',
+                            active
+                              ? 'bg-pool-500 text-white shadow-sm'
+                              : atCap
+                                ? 'bg-gray-50 dark:bg-gray-900 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100',
+                            isAnchor && 'cursor-default ring-2 ring-pool-300 dark:ring-pool-700',
+                          )}
+                          title={isAnchor ? 'First service date — change the date to move' : undefined}>
+                          {d.label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
-            {/* Monthly Nth-weekday picker. Single-day Select still drives
-                the day; the new "Nth" select layered on top makes it
-                "1st Monday" / "Last Friday" etc. Leaving the day blank
-                falls back to legacy "every 30 days from anchor". */}
-            {recurrenceRule === 'monthly' && (
-              <div className="grid grid-cols-2 gap-3">
-                <Select
-                  label="Nth occurrence"
-                  value={String(monthlyWeekOfMonth)}
-                  onChange={e => setMonthlyWeekOfMonth(Number(e.target.value))}
-                  options={MONTH_WEEK_OPTIONS.map(o => ({ value: String(o.value), label: o.label }))}
-                />
-                <Select
-                  label="Day of week"
-                  value={preferredDay}
-                  onChange={e => setPreferredDay(e.target.value)}
-                  options={DAY_OPTIONS}
-                />
-              </div>
+            {/* Inline preview line for every rule — "Every Monday",
+                "Mondays and Thursdays every week", "Monthly on the 2nd
+                Monday", "Every 10 days starting May 11"… */}
+            {firstDate && (
+              <p className="text-xs text-pool-700 dark:text-pool-300 bg-pool-50 dark:bg-pool-950/40 rounded-lg px-3 py-2">
+                {derivedScheduleLabel(recurrenceRule, firstDate, extraDays, customDays) || 'Pick a first service date to see the schedule.'}
+              </p>
             )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <Input label="First service date" type="date" value={firstDate} onChange={e => setFirstDate(e.target.value)} />
-              {/* Single-day picker: hide for bi/tri (covered by chip
-                  grid above) and for monthly (covered by Nth + day pair) */}
-              {!isMultiDayWeekly(recurrenceRule) && recurrenceRule !== 'monthly' && (
-                <Select label="Preferred day" value={preferredDay} onChange={e => setPreferredDay(e.target.value)} options={DAY_OPTIONS} />
-              )}
-            </div>
 
             {/* Duration cards */}
             <div>

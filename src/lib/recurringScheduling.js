@@ -94,6 +94,79 @@ export function cadenceIntervalDays(profile) {
   }
 }
 
+// Inverse of nthWeekdayOfMonth — given a date, return which Nth
+// occurrence of its own weekday it is in its month. 1..4 = exact;
+// 5 = "the last one" (chosen when the date is the final occurrence
+// of its weekday in the month, even if it's also the 4th). Without
+// the heuristic, "Last Friday" can't be expressed by picking a date —
+// the operator would just see "4th Friday" and lose the "always the
+// last Friday, even in 5-Friday months" semantics. Matches the
+// Google Calendar interpretation.
+export function computeNthFromDate(date) {
+  if (!date) return null
+  const d = typeof date === 'string'
+    ? new Date(date + 'T00:00:00')
+    : new Date(date)
+  if (isNaN(d.getTime())) return null
+  const day = d.getDate()
+  const exactN = Math.floor((day - 1) / 7) + 1   // 1..5
+  // Is there another occurrence of this weekday later in the month?
+  const lastOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  const hasLater = day + 7 <= lastOfMonth
+  // If this is the final occurrence, prefer "Last" semantics.
+  return hasLater ? exactN : 5
+}
+
+// Build the human-readable preview line shown under the schedule
+// pickers — "Mondays and Thursdays every week", "Monthly on the 2nd
+// Monday", "Every other Tuesday", etc.
+//
+// rule:        the recurrence_rule
+// firstDate:   Date | YYYY-MM-DD string of the first service date
+// extraDays:   array of weekday integers (0..6) for the chips the
+//              operator picked in addition to the date's own weekday
+//              (only relevant for bi/tri-weekly)
+// customDays:  number for `custom`
+export function derivedScheduleLabel(rule, firstDate, extraDays, customDays) {
+  if (!firstDate) return ''
+  const d = typeof firstDate === 'string'
+    ? new Date(firstDate + 'T00:00:00')
+    : new Date(firstDate)
+  if (isNaN(d.getTime())) return ''
+  const anchorWd = d.getDay()
+  const anchorLong = DAYS_OF_WEEK.find(o => o.value === anchorWd)?.long || ''
+  const anchorPlural = anchorLong ? `${anchorLong}s` : ''
+
+  if (rule === 'weekly')      return anchorLong ? `Every ${anchorLong}` : ''
+  if (rule === 'fortnightly') return anchorLong ? `Every other ${anchorLong}` : ''
+
+  if (rule === 'bi_weekly' || rule === 'tri_weekly') {
+    const all = [anchorWd, ...(extraDays || [])]
+      .filter((v, i, arr) => arr.indexOf(v) === i)
+      .sort((a, b) => a - b)
+    const expected = expectedDayCount(rule)
+    if (all.length < expected) return `${anchorPlural} + pick ${expected - all.length} more`
+    const labels = all.map(v => `${DAYS_OF_WEEK.find(o => o.value === v)?.long || ''}s`)
+    if (labels.length === 2) return `${labels[0]} and ${labels[1]} every week`
+    if (labels.length === 3) return `${labels[0]}, ${labels[1]}, and ${labels[2]} every week`
+    return `${labels.join(', ')} every week`
+  }
+
+  if (rule === 'monthly') {
+    const n = computeNthFromDate(d)
+    const nLabel = MONTH_WEEK_OPTIONS.find(o => o.value === n)?.label || ''
+    return nLabel && anchorLong ? `Monthly on the ${nLabel} ${anchorLong}` : ''
+  }
+
+  if (rule === 'custom') {
+    const n = Number(customDays) || 0
+    if (n <= 0) return ''
+    return `Every ${n} day${n === 1 ? '' : 's'} starting ${d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`
+  }
+
+  return ''
+}
+
 // Compute the date of the Nth occurrence of `weekday` (0..6) in
 // (year, month). n=1..4 picks the exact occurrence; n=5 means "the
 // last one" — so 5 lands on the 4th or 5th weekday depending on month
