@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ChevronLeft, ChevronRight, Pause, Pencil, Play, Plus, Repeat, Wallet,
+  ChevronLeft, ChevronRight, Pause, Pencil, Play, Plus, Repeat, Trash2, Wallet,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
@@ -110,6 +110,12 @@ export default function RecurringJobs() {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false)
+  // Hard-delete dialog. Cancelling stops new jobs from generating; deleting
+  // also removes the profile row from the DB. Existing scheduled jobs that
+  // were already generated from this profile aren't touched (their
+  // recurring_profile_id just orphans).
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [deletingService, setDeletingService] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [showNewClient, setShowNewClient] = useState(false)
@@ -281,6 +287,33 @@ export default function RecurringJobs() {
     if (!editing) return
     await handleStatusChange(editing.id, 'cancelled')
     setModalOpen(false)
+  }
+
+  // Permanently delete the recurring profile. Different from Cancel:
+  // Cancel keeps the row (status=cancelled) for history, Delete removes
+  // it entirely. We don't touch jobs that were already generated from
+  // this profile — their recurring_profile_id orphans.
+  async function handleDeleteService() {
+    if (!editing) return
+    setDeletingService(true)
+    try {
+      const { error } = await supabase
+        .from('recurring_job_profiles')
+        .delete()
+        .eq('id', editing.id)
+      if (error) throw error
+      toast.success('Recurring service deleted')
+      // If the deleted profile was selected in the desktop detail pane,
+      // clear the selection so the empty-state shows.
+      if (selectedProfile?.id === editing.id) setSelectedProfileId(null)
+      setConfirmDeleteOpen(false)
+      setModalOpen(false)
+      fetchAll()
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete')
+    } finally {
+      setDeletingService(false)
+    }
   }
 
   async function handleStatusChange(profileId, newStatus) {
@@ -685,8 +718,20 @@ export default function RecurringJobs() {
                   <Button type="button" variant="secondary" onClick={() => handleExtend(editing.id)} className="text-xs px-3">Extend</Button>
                 )}
                 {editing.status !== 'cancelled' && (
-                  <Button type="button" variant="danger" onClick={() => setConfirmCancelOpen(true)} className="text-xs px-3">Cancel Service</Button>
+                  <Button type="button" variant="secondary" onClick={() => setConfirmCancelOpen(true)} className="text-xs px-3">Cancel Service</Button>
                 )}
+                {/* Hard-delete: removes the profile row entirely. Use
+                    when the operator wants to clean up rather than
+                    keep a cancelled record for history. */}
+                <Button
+                  type="button"
+                  variant="danger"
+                  leftIcon={Trash2}
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  className="text-xs px-3"
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           )}
@@ -697,10 +742,20 @@ export default function RecurringJobs() {
         open={confirmCancelOpen}
         onClose={() => setConfirmCancelOpen(false)}
         title="Cancel this recurring service?"
-        description="This will stop generating new jobs from now. Existing scheduled jobs are not removed."
+        description="This will stop generating new jobs from now. Existing scheduled jobs are not removed. The profile stays in the list as Cancelled — use Delete instead to remove it entirely."
         destructive
         confirmLabel="Cancel Service"
         onConfirm={handleCancelService}
+      />
+
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title="Delete this recurring service?"
+        description="Permanently removes the profile from the list. Existing scheduled jobs that were generated from this profile aren't deleted — only the recurring template is. Cannot be undone."
+        destructive
+        confirmLabel={deletingService ? 'Deleting…' : 'Delete service'}
+        onConfirm={handleDeleteService}
       />
 
       {/* Shared new-client modal (same one used at /clients and inside
