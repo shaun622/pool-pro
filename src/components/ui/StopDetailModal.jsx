@@ -253,23 +253,30 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             }).eq('id', poolId)
           }
           // Advance the recurring profile's next_generation_at past this
-          // occurrence. computeNextOccurrence handles bi/tri-weekly
-          // (next preferred day-of-week) and monthly Nth-weekday in
-          // addition to the simple cadence rules.
+          // occurrence AND record the original date in skipped_dates.
+          // For single-day cadence rules advancing the anchor is enough;
+          // for bi/tri-weekly the projection ignores the anchor and
+          // enumerates every preferred day, so without skipped_dates the
+          // moved occurrence's old date keeps showing up.
           if (profileId && form.scheduled_date) {
             const profile = await supabase
               .from('recurring_job_profiles')
-              .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
+              .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, skipped_dates')
               .eq('id', profileId)
               .single()
             if (profile.data) {
               const next = computeNextOccurrence(form.scheduled_date, profile.data)
-              if (next) {
-                await supabase.from('recurring_job_profiles').update({
-                  next_generation_at: next.toISOString().split('T')[0],
-                  last_generated_at: new Date().toISOString(),
-                }).eq('id', profileId)
+              const origDate = stop.scheduled_date || (typeof stop.id === 'string' && stop.id.startsWith('profile-') ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1] : null)
+              const skipped = Array.isArray(profile.data.skipped_dates) ? profile.data.skipped_dates : []
+              const newSkipped = origDate && origDate !== form.scheduled_date && !skipped.includes(origDate)
+                ? [...skipped, origDate]
+                : skipped
+              const updates = {
+                last_generated_at: new Date().toISOString(),
+                skipped_dates: newSkipped,
               }
+              if (next) updates.next_generation_at = next.toISOString().split('T')[0]
+              await supabase.from('recurring_job_profiles').update(updates).eq('id', profileId)
             }
           }
         } else {
@@ -611,7 +618,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           if (!profileId) throw new Error('Could not find recurring profile for this stop.')
           const { data: profileRow } = await supabase
             .from('recurring_job_profiles')
-            .select('business_id, pool_id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
+            .select('business_id, pool_id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, skipped_dates')
             .eq('id', profileId)
             .single()
           if (!profileRow?.business_id) throw new Error('Recurring profile not found.')
@@ -637,13 +644,20 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             }).eq('id', poolId)
           }
           if (form.scheduled_date) {
+            // Same skip-the-original-date dance as handleSave — without
+            // it bi/tri-weekly profiles re-project the moved occurrence.
             const next = computeNextOccurrence(form.scheduled_date, profileRow)
-            if (next) {
-              await supabase.from('recurring_job_profiles').update({
-                next_generation_at: next.toISOString().split('T')[0],
-                last_generated_at: new Date().toISOString(),
-              }).eq('id', profileId)
+            const origDate = stop.scheduled_date || (typeof stop.id === 'string' && stop.id.startsWith('profile-') ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1] : null)
+            const skipped = Array.isArray(profileRow.skipped_dates) ? profileRow.skipped_dates : []
+            const newSkipped = origDate && origDate !== form.scheduled_date && !skipped.includes(origDate)
+              ? [...skipped, origDate]
+              : skipped
+            const updates = {
+              last_generated_at: new Date().toISOString(),
+              skipped_dates: newSkipped,
             }
+            if (next) updates.next_generation_at = next.toISOString().split('T')[0]
+            await supabase.from('recurring_job_profiles').update(updates).eq('id', profileId)
           }
         } else if (!isProjected) {
           const jobUpdates = {}
@@ -739,30 +753,34 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       if (stop.type === 'job') {
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
         if (isProjected) {
-          // Skip this single occurrence by advancing the profile's
-          // next_generation_at past this date — works for the new
-          // multi-day-per-week and monthly-Nth rules via the shared
-          // computeNextOccurrence helper.
+          // Skip this single occurrence. For single-day cadence rules
+          // advancing next_generation_at is enough; for bi/tri-weekly
+          // we ALSO have to add the date to skipped_dates because the
+          // multi-day projector ignores the anchor field. Use both
+          // mechanisms uniformly so the bug doesn't reappear if a
+          // future projection path forgets one.
           const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
           const { data: profile } = await supabase
             .from('recurring_job_profiles')
-            .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, pool_id')
+            .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, pool_id, skipped_dates')
             .eq('id', profileId)
             .single()
           if (profile) {
             const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
             if (stopDate) {
               const next = computeNextOccurrence(stopDate, profile)
-              if (next) {
-                await supabase.from('recurring_job_profiles').update({
-                  next_generation_at: next.toISOString().split('T')[0],
-                  last_generated_at: new Date().toISOString(),
-                }).eq('id', profileId)
-                if (profile.pool_id) {
-                  await supabase.from('pools').update({
-                    next_due_at: next.toISOString(),
-                  }).eq('id', profile.pool_id)
-                }
+              const skipped = Array.isArray(profile.skipped_dates) ? profile.skipped_dates : []
+              const newSkipped = !skipped.includes(stopDate) ? [...skipped, stopDate] : skipped
+              const updates = {
+                last_generated_at: new Date().toISOString(),
+                skipped_dates: newSkipped,
+              }
+              if (next) updates.next_generation_at = next.toISOString().split('T')[0]
+              await supabase.from('recurring_job_profiles').update(updates).eq('id', profileId)
+              if (profile.pool_id && next) {
+                await supabase.from('pools').update({
+                  next_due_at: next.toISOString(),
+                }).eq('id', profile.pool_id)
               }
             }
           }

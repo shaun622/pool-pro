@@ -239,17 +239,51 @@ export function computeNextOccurrence(date, profile) {
   return next
 }
 
+// Local YYYY-MM-DD formatter — must use local time so weekend boundaries
+// match what the operator sees in the calendar.
+function ymdLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Build a Set of YYYY-MM-DD strings from profile.skipped_dates so the
+// occurrence enumerator can drop them. Postgres date[] comes back as
+// either strings ("2026-05-01") or full ISO timestamps depending on
+// driver / casting; normalise both.
+function skippedDateSet(profile) {
+  const raw = profile?.skipped_dates || []
+  const out = new Set()
+  for (const d of raw) {
+    if (!d) continue
+    if (typeof d === 'string') {
+      out.add(d.split('T')[0])
+    } else {
+      const parsed = new Date(d)
+      if (!isNaN(parsed.getTime())) out.add(ymdLocal(parsed))
+    }
+  }
+  return out
+}
+
 // Enumerate every occurrence date the profile would land on, strictly
 // inside [rangeStart, rangeEnd] (inclusive on both ends). Used by the
 // Schedule view to project profile-based stops onto the visible week.
 //
 // rangeStart/rangeEnd should be Dates (any time-of-day; we normalise).
 // Returns an array of Date objects, each at local midnight.
+//
+// profile.skipped_dates filters the enumeration — the operator's "move
+// just this one" / "skip just this one" actions append to that array,
+// so the projection stops showing the moved occurrence's old date.
+// Critical for bi/tri-weekly where advancing next_generation_at alone
+// doesn't suppress a single occurrence (the multi-day branch ignores
+// the anchor field entirely).
 export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   if (!profile) return []
   const start = new Date(rangeStart); start.setHours(0, 0, 0, 0)
   const end   = new Date(rangeEnd);   end.setHours(0, 0, 0, 0)
   if (start > end) return []
+  const skipped = skippedDateSet(profile)
+  const notSkipped = (d) => !skipped.has(ymdLocal(d))
 
   if (isMultiDayWeekly(profile.recurrence_rule)) {
     const days = (profile.preferred_days_of_week || []).slice()
@@ -259,7 +293,7 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
     while (cursor <= end) {
       if (days.includes(cursor.getDay())) {
         const d = new Date(cursor); d.setHours(0, 0, 0, 0)
-        out.push(d)
+        if (notSkipped(d)) out.push(d)
       }
       cursor.setDate(cursor.getDate() + 1)
     }
@@ -274,7 +308,7 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
     const lastM = new Date(end.getFullYear(), end.getMonth(), 1)
     while (m <= lastM) {
       const candidate = nthWeekdayOfMonth(m.getFullYear(), m.getMonth(), n, day)
-      if (candidate && candidate >= start && candidate <= end) {
+      if (candidate && candidate >= start && candidate <= end && notSkipped(candidate)) {
         out.push(candidate)
       }
       m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
@@ -294,7 +328,7 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   while (cursor < start) cursor.setDate(cursor.getDate() + interval)
   const out = []
   while (cursor <= end) {
-    out.push(new Date(cursor))
+    if (notSkipped(cursor)) out.push(new Date(cursor))
     cursor.setDate(cursor.getDate() + interval)
   }
   return out
