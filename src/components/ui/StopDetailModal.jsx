@@ -12,7 +12,13 @@ import { supabase } from '../../lib/supabase'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, geocodeAddress } from '../../lib/mapbox'
 import { FREQUENCY_LABELS, SCHEDULE_FREQUENCIES, cn } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
-import { computeNextOccurrence } from '../../lib/recurringScheduling'
+import RecurrencePicker from './RecurrencePicker'
+import {
+  computeNextOccurrence,
+  isMultiDayWeekly,
+  profileFieldsFromForm,
+  ruleRequiresProfile,
+} from '../../lib/recurringScheduling'
 
 // Numbered pin factory
 function numberedIcon(n, color = '#0CA5EB') {
@@ -79,30 +85,64 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           assigned_staff_id: stop.assigned_staff_id || '',
           is_recurring: false,
           recurrence_rule: 'weekly',
+          // Used by RecurrencePicker for bi/tri and custom rules. Anchor
+          // weekday is derived from scheduled_date so we only store the
+          // *additional* picks here.
+          extra_days: [],
+          custom_interval_days: 7,
           recurring_profile_id: null,
           client_phone: stop.phone || '',
           client_email: stop.email || '',
         })
-        // Fetch any matching recurring profile so the toggle reflects reality.
+        // Fetch the matching recurring profile (rich shape) so the
+        // toggle and picker reflect what's actually stored. Title +
+        // client_id is a reasonable identifier here — the AddRecurring
+        // flow ALSO uses title for de-dupe keying.
         if (stop.client_id) {
           supabase
             .from('recurring_job_profiles')
-            .select('id, recurrence_rule')
+            .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, next_generation_at')
             .eq('client_id', stop.client_id)
             .eq('title', stop.title || '')
             .limit(1)
             .then(({ data }) => {
               const profile = data?.[0]
-              if (profile) {
-                setForm(f => ({ ...f, is_recurring: true, recurrence_rule: profile.recurrence_rule || 'weekly', recurring_profile_id: profile.id }))
-              }
+              if (!profile) return
+              setForm(f => {
+                const anchorDate = f.scheduled_date || profile.next_generation_at?.split('T')[0]
+                const anchorWd = anchorDate
+                  ? new Date(anchorDate + 'T00:00:00').getDay()
+                  : null
+                const savedDays = Array.isArray(profile.preferred_days_of_week)
+                  ? profile.preferred_days_of_week.slice().sort((a, b) => a - b)
+                  : []
+                const extras = isMultiDayWeekly(profile.recurrence_rule) && anchorWd != null
+                  ? savedDays.filter(d => d !== anchorWd)
+                  : []
+                return {
+                  ...f,
+                  is_recurring: true,
+                  recurrence_rule: profile.recurrence_rule || 'weekly',
+                  recurring_profile_id: profile.id,
+                  extra_days: extras,
+                  custom_interval_days: profile.custom_interval_days || 7,
+                }
+              })
             })
         }
       } else {
+        // Pool stop. Default the form to the pool's stored frequency,
+        // then overlay the recurring profile's richer shape if one
+        // exists for this pool. Profile is the source of truth when
+        // present; the pool's schedule_frequency is a denormalised
+        // mirror that may lag.
         setForm({
           next_due_at: stop.next_due_at ? stop.next_due_at.split('T')[0] : '',
           next_due_time: stop.next_due_at ? new Date(stop.next_due_at).toTimeString().slice(0, 5) : '',
           schedule_frequency: stop.schedule_frequency || 'weekly',
+          extra_days: [],
+          custom_interval_days: 7,
+          recurring_profile_id: null,
           access_notes: stop.access_notes || '',
           assigned_staff_id: stop.assigned_staff_id || '',
           pool_address: stop.address || '',
@@ -111,6 +151,37 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           client_phone: stop.phone || '',
           client_email: stop.email || '',
         })
+        if (stop.id) {
+          supabase
+            .from('recurring_job_profiles')
+            .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, next_generation_at')
+            .eq('pool_id', stop.id)
+            .eq('is_active', true)
+            .limit(1)
+            .then(({ data }) => {
+              const profile = data?.[0]
+              if (!profile) return
+              setForm(f => {
+                const anchorDate = f.next_due_at || profile.next_generation_at?.split('T')[0]
+                const anchorWd = anchorDate
+                  ? new Date(anchorDate + 'T00:00:00').getDay()
+                  : null
+                const savedDays = Array.isArray(profile.preferred_days_of_week)
+                  ? profile.preferred_days_of_week.slice().sort((a, b) => a - b)
+                  : []
+                const extras = isMultiDayWeekly(profile.recurrence_rule) && anchorWd != null
+                  ? savedDays.filter(d => d !== anchorWd)
+                  : []
+                return {
+                  ...f,
+                  schedule_frequency: profile.recurrence_rule || f.schedule_frequency,
+                  recurring_profile_id: profile.id,
+                  extra_days: extras,
+                  custom_interval_days: profile.custom_interval_days || 7,
+                }
+              })
+            })
+        }
       }
       setEditing(false)
       setQuickEdit(false)
@@ -282,18 +353,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           }
         }
 
-        // Sync recurring profile
+        // Sync recurring profile. profileFieldsFromForm centralises the
+        // "rule + extra days + custom days → DB columns" mapping so the
+        // shape we write here matches what AddRecurringModal /
+        // RecurringJobs write — single procedure, no drift.
         if (form.is_recurring) {
-          const days = RECURRENCE_DAYS[form.recurrence_rule] || 7
-          const nextGen = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+          const richFields = profileFieldsFromForm({
+            rule: form.recurrence_rule,
+            extraDays: form.extra_days,
+            customDays: form.custom_interval_days,
+            firstDate: form.scheduled_date,
+          })
           if (form.recurring_profile_id) {
             await supabase.from('recurring_job_profiles').update({
               title: form.title,
               pool_id: poolId || null,
-              recurrence_rule: form.recurrence_rule,
               preferred_time: form.scheduled_time || null,
               price: form.price ? Number(form.price) : null,
               notes: form.notes || null,
+              ...richFields,
             }).eq('id', form.recurring_profile_id)
             // Make sure the job points at the profile so dedupe works
             await supabase.from('jobs').update({ recurring_profile_id: form.recurring_profile_id }).eq('id', jobId)
@@ -303,17 +381,22 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               businessId = jobRow?.business_id || null
             }
             if (businessId) {
+              const nextGen = form.scheduled_date || new Date().toISOString().split('T')[0]
               const { data: newProfile, error: profErr } = await supabase.from('recurring_job_profiles').insert({
                 business_id: businessId,
                 client_id: stop.client_id,
                 pool_id: poolId || null,
                 title: form.title,
-                recurrence_rule: form.recurrence_rule,
                 preferred_time: form.scheduled_time || null,
                 price: form.price ? Number(form.price) : null,
                 notes: form.notes || null,
                 next_generation_at: nextGen,
                 last_generated_at: new Date().toISOString(),
+                is_active: true,
+                status: 'active',
+                duration_type: 'ongoing',
+                completed_visits: 0,
+                ...richFields,
               }).select('id').single()
               if (profErr) throw profErr
               if (newProfile?.id) {
@@ -359,6 +442,54 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         }
         const { error } = await supabase.from('pools').update(updates).eq('id', stop.id)
         if (error) throw error
+
+        // Sync recurring_job_profile to match what the operator picked.
+        // Pool's schedule_frequency text is a denormalised mirror — the
+        // profile (when present) is the source of truth for projection.
+        // Three cases:
+        //   1. Profile exists → update rule + days + Nth + next_gen.
+        //   2. Profile doesn't exist + rich rule → create one so the
+        //      multi-day/Nth shape has somewhere to live.
+        //   3. Profile doesn't exist + simple rule → no profile needed,
+        //      pool.schedule_frequency is sufficient.
+        const richFields = profileFieldsFromForm({
+          rule: form.schedule_frequency,
+          extraDays: form.extra_days,
+          customDays: form.custom_interval_days,
+          firstDate: form.next_due_at,
+        })
+        const needsProfile = ruleRequiresProfile(form.schedule_frequency, richFields.monthly_week_of_month)
+        if (form.recurring_profile_id) {
+          await supabase.from('recurring_job_profiles').update({
+            ...richFields,
+            next_generation_at: form.next_due_at || null,
+            preferred_time: form.next_due_time || null,
+          }).eq('id', form.recurring_profile_id)
+        } else if (needsProfile && stop.client_id) {
+          // Need pool's business_id — fetch if not on stop already.
+          let bizId = stop.business_id
+          if (!bizId) {
+            const { data: poolRow } = await supabase.from('pools').select('business_id').eq('id', stop.id).single()
+            bizId = poolRow?.business_id || null
+          }
+          if (bizId) {
+            const { error: profErr } = await supabase.from('recurring_job_profiles').insert({
+              business_id: bizId,
+              client_id: stop.client_id,
+              pool_id: stop.id,
+              title: 'Pool Service',
+              preferred_time: form.next_due_time || null,
+              next_generation_at: form.next_due_at || new Date().toISOString().split('T')[0],
+              last_generated_at: new Date().toISOString(),
+              is_active: true,
+              status: 'active',
+              duration_type: 'ongoing',
+              completed_visits: 0,
+              ...richFields,
+            })
+            if (profErr) throw profErr
+          }
+        }
 
         // Sync client contact info
         if (stop.client_id) {
@@ -1036,12 +1167,23 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               </div>
             </label>
 
+            {/* Same date-first recurrence picker used everywhere else.
+                Picking a rich rule will spawn or sync a profile in
+                handleSave; the job's scheduled_date is the anchor. */}
             {form.is_recurring && (
-              <Select
-                label="Frequency"
-                value={form.recurrence_rule}
-                onChange={e => setForm(f => ({ ...f, recurrence_rule: e.target.value }))}
-                options={RECURRENCE_OPTIONS}
+              <RecurrencePicker
+                value={{
+                  rule: form.recurrence_rule,
+                  extraDays: form.extra_days,
+                  customDays: form.custom_interval_days,
+                }}
+                onChange={(next) => setForm(f => ({
+                  ...f,
+                  recurrence_rule: next.rule,
+                  extra_days: next.extraDays,
+                  custom_interval_days: next.customDays,
+                }))}
+                firstDate={form.scheduled_date}
               />
             )}
 
@@ -1092,11 +1234,23 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               <Input label="Next Service Date" type="date" value={form.next_due_at} onChange={e => setForm(f => ({ ...f, next_due_at: e.target.value }))} />
               <Input label="Time" type="time" value={form.next_due_time} onChange={e => setForm(f => ({ ...f, next_due_time: e.target.value }))} />
             </div>
-            <Select
-              label="Frequency"
-              value={form.schedule_frequency}
-              onChange={e => setForm(f => ({ ...f, schedule_frequency: e.target.value }))}
-              options={SCHEDULE_FREQUENCIES.map(v => ({ value: v, label: FREQUENCY_LABELS[v] || v }))}
+            {/* Same date-first picker used in AddRecurringModal /
+                RecurringJobs. Picking a rich rule (bi/tri-weekly,
+                monthly-Nth) here will spawn or sync a
+                recurring_job_profile in handleSave. */}
+            <RecurrencePicker
+              value={{
+                rule: form.schedule_frequency,
+                extraDays: form.extra_days,
+                customDays: form.custom_interval_days,
+              }}
+              onChange={(next) => setForm(f => ({
+                ...f,
+                schedule_frequency: next.rule,
+                extra_days: next.extraDays,
+                custom_interval_days: next.customDays,
+              }))}
+              firstDate={form.next_due_at}
             />
             <TextArea label="Notes" value={form.access_notes} onChange={e => setForm(f => ({ ...f, access_notes: e.target.value }))} rows={3} />
             {staffList.length > 0 && (

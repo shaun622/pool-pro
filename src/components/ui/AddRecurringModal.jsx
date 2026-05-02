@@ -10,13 +10,12 @@ import NewTechnicianModal from './NewTechnicianModal'
 import { supabase } from '../../lib/supabase'
 import { cn } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
+import RecurrencePicker from './RecurrencePicker'
 import {
   RECURRENCE_OPTIONS,
-  DAYS_OF_WEEK,
   expectedDayCount,
   isMultiDayWeekly,
   computeNthFromDate,
-  derivedScheduleLabel,
 } from '../../lib/recurringScheduling'
 
 export default function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
@@ -111,27 +110,9 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     setLocalStaff([])
   }
 
-  // The first service date's weekday is always implicitly selected in
-  // bi/tri-weekly — it's the locked chip — so the operator picks the
-  // *additional* days here. Cap is (expected count - 1) since the
-  // anchor day already counts.
-  function toggleExtraDay(dayValue) {
-    const expected = expectedDayCount(recurrenceRule)
-    if (expected == null) return
-    const cap = expected - 1
-    setExtraDays(prev => {
-      if (prev.includes(dayValue)) return prev.filter(d => d !== dayValue)
-      if (prev.length >= cap) return prev
-      return [...prev, dayValue].sort((a, b) => a - b)
-    })
-  }
-
-  // Reset extra-day picks when the rule flips so a stale 2-day pick
-  // from bi-weekly doesn't leak into tri-weekly's expectations.
-  function changeRule(newRule) {
-    setRecurrenceRule(newRule)
-    setExtraDays([])
-  }
+  // RecurrencePicker owns the rule/extraDays/customDays interactions
+  // (incl. resetting extras when the rule flips and capping the chip
+  // count). We just consume its onChange in the JSX below.
 
   function handleClose() { reset(); onClose() }
 
@@ -420,27 +401,9 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
 
           {/* ── SCHEDULE ──────────────────────────────────── */}
           <Section icon={CalendarIcon} iconColor="text-emerald-600 dark:text-emerald-400" iconBg="bg-emerald-50 dark:bg-emerald-950/40" label="Schedule">
-            {/* Recurrence pills */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Frequency</label>
-              <div className="flex flex-wrap gap-1.5">
-                {RECURRENCE_OPTIONS.map(opt => (
-                  <button key={opt.value} type="button" onClick={() => changeRule(opt.value)}
-                    className={cn(
-                      'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px]',
-                      recurrenceRule === opt.value
-                        ? 'bg-pool-500 text-white shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
-                    )}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* First service date — drives the locked weekday for
                 bi/tri, the Nth-occurrence for monthly, and the
-                anchor for everything. */}
+                projection anchor. */}
             <Input
               label="First service date"
               type="date"
@@ -448,67 +411,15 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
               onChange={e => setFirstDate(e.target.value)}
             />
 
-            {/* Custom interval input lives next to its preview text. */}
-            {recurrenceRule === 'custom' && (
-              <Input
-                label="Repeat every (days)"
-                type="number"
-                min="1"
-                value={customDays}
-                onChange={e => setCustomDays(e.target.value)}
-                placeholder="e.g. 10"
-              />
-            )}
-
-            {/* Multi-day weekly: anchor weekday is locked-on. Operator
-                picks (expected - 1) additional chips. */}
-            {isMultiDayWeekly(recurrenceRule) && firstDate && (() => {
-              const anchorWd = new Date(firstDate + 'T00:00:00').getDay()
-              const cap = expectedDayCount(recurrenceRule) - 1
-              return (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
-                    Plus pick {cap} more day{cap === 1 ? '' : 's'}
-                    <span className="ml-2 text-gray-400 dark:text-gray-500">
-                      ({extraDays.length}/{cap})
-                    </span>
-                  </label>
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {DAYS_OF_WEEK.map(d => {
-                      const isAnchor = d.value === anchorWd
-                      const active = isAnchor || extraDays.includes(d.value)
-                      const atCap = !active && extraDays.length >= cap
-                      return (
-                        <button key={d.value} type="button"
-                          onClick={() => !isAnchor && toggleExtraDay(d.value)}
-                          disabled={isAnchor || atCap}
-                          className={cn(
-                            'py-2 rounded-lg text-xs font-semibold transition-all min-h-[40px] relative',
-                            active
-                              ? 'bg-pool-500 text-white shadow-sm'
-                              : atCap
-                                ? 'bg-gray-50 dark:bg-gray-900 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100',
-                            isAnchor && 'cursor-default ring-2 ring-pool-300 dark:ring-pool-700',
-                          )}
-                          title={isAnchor ? 'First service date — change the date to move' : undefined}>
-                          {d.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* Inline preview line for every rule — "Every Monday",
-                "Mondays and Thursdays every week", "Monthly on the 2nd
-                Monday", "Every 10 days starting May 11"… */}
-            {firstDate && (
-              <p className="text-xs text-pool-700 dark:text-pool-300 bg-pool-50 dark:bg-pool-950/40 rounded-lg px-3 py-2">
-                {derivedScheduleLabel(recurrenceRule, firstDate, extraDays, customDays) || 'Pick a first service date to see the schedule.'}
-              </p>
-            )}
+            <RecurrencePicker
+              value={{ rule: recurrenceRule, extraDays, customDays }}
+              onChange={(next) => {
+                setRecurrenceRule(next.rule)
+                setExtraDays(next.extraDays)
+                setCustomDays(next.customDays)
+              }}
+              firstDate={firstDate}
+            />
 
             {/* Duration cards */}
             <div>

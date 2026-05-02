@@ -300,6 +300,60 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   return out
 }
 
+// Map a form's RecurrencePicker state + first-date into the set of DB
+// columns we'd write on the recurring_job_profiles row. Centralises the
+// "weekly stores preferred_day_of_week, bi/tri stores
+// preferred_days_of_week, monthly stores both + monthly_week_of_month"
+// logic so AddRecurringModal, RecurringJobs, and StopDetailModal all
+// produce identical writes for the same picker state.
+//
+// Returns an object suitable to spread into an insert/update payload:
+//   { recurrence_rule, custom_interval_days, preferred_day_of_week,
+//     preferred_days_of_week, monthly_week_of_month }
+//
+// firstDate must be a YYYY-MM-DD string or Date (we just need its
+// weekday). Pass null/empty when no anchor — the day-of-week fields
+// will all be null in that case.
+export function profileFieldsFromForm({ rule, extraDays, customDays, firstDate }) {
+  const anchorDate = firstDate
+    ? (typeof firstDate === 'string' ? new Date(firstDate + 'T00:00:00') : new Date(firstDate))
+    : null
+  const anchorWd = anchorDate && !isNaN(anchorDate.getTime()) ? anchorDate.getDay() : null
+
+  let preferred_day_of_week = null
+  let preferred_days_of_week = null
+  let monthly_week_of_month = null
+
+  if (isMultiDayWeekly(rule) && anchorWd != null) {
+    preferred_days_of_week = [anchorWd, ...(extraDays || [])]
+      .filter((v, i, arr) => arr.indexOf(v) === i)
+      .sort((a, b) => a - b)
+  } else if (rule === 'monthly' && anchorWd != null) {
+    preferred_day_of_week = anchorWd
+    monthly_week_of_month = computeNthFromDate(anchorDate)
+  } else if ((rule === 'weekly' || rule === 'fortnightly') && anchorWd != null) {
+    preferred_day_of_week = anchorWd
+  }
+
+  return {
+    recurrence_rule: rule,
+    custom_interval_days: rule === 'custom' ? (Number(customDays) || 7) : null,
+    preferred_day_of_week,
+    preferred_days_of_week,
+    monthly_week_of_month,
+  }
+}
+
+// True when the rule needs a recurring_job_profile to fully express
+// itself (multi-day weekly, monthly-Nth). Pool/job rows alone can't
+// store those — StopDetailModal uses this to decide whether to spawn
+// a profile when one doesn't already exist.
+export function ruleRequiresProfile(rule, monthlyWeekOfMonth) {
+  if (isMultiDayWeekly(rule)) return true
+  if (rule === 'monthly' && monthlyWeekOfMonth != null) return true
+  return false
+}
+
 // Pretty-print the schedule for the recurring detail card / list.
 // Examples:
 //   "Mon, Wed, Fri every week"

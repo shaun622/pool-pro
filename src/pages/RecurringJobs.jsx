@@ -19,15 +19,13 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
+import RecurrencePicker from '../components/ui/RecurrencePicker'
 import {
-  RECURRENCE_OPTIONS,
   RECURRENCE_LABELS as RECURRENCE_LABEL,
-  DAYS_OF_WEEK,
   expectedDayCount,
   isMultiDayWeekly,
   describeSchedule,
   computeNthFromDate,
-  derivedScheduleLabel,
 } from '../lib/recurringScheduling'
 
 // Profile status logic — combines is_active + status field into a single state
@@ -218,32 +216,9 @@ export default function RecurringJobs() {
     setModalOpen(true)
   }
 
-  // Toggle a day in/out of the *extra* picks for bi/tri-weekly. The
-  // anchor day (= first service date's weekday) is locked separately
-  // and not stored here.
-  function toggleEditExtraDay(dayValue) {
-    const expected = expectedDayCount(form.recurrence_rule)
-    if (expected == null) return
-    const cap = expected - 1
-    setForm(prev => {
-      const current = prev.extra_days || []
-      if (current.includes(dayValue)) {
-        return { ...prev, extra_days: current.filter(d => d !== dayValue) }
-      }
-      if (current.length >= cap) return prev
-      return { ...prev, extra_days: [...current, dayValue].sort((a, b) => a - b) }
-    })
-  }
-
-  // Reset extra-day picks when the rule flips — bi-weekly's 1 extra
-  // shouldn't carry over into tri-weekly (which expects 2).
-  function changeEditRule(newRule) {
-    setForm(prev => ({
-      ...prev,
-      recurrence_rule: newRule,
-      extra_days: [],
-    }))
-  }
+  // RecurrencePicker owns the rule/extras/customDays interactions
+  // (incl. resetting extras when the rule flips and capping the chip
+  // count). The form just consumes its onChange in the JSX below.
 
   // Client creation lives in <NewClientModal> — same modal used at
   // /clients and inside AddRecurringModal. The legacy inline name-only
@@ -764,81 +739,27 @@ export default function RecurringJobs() {
           )}
           <Input label="Service Title" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. Regular Maintenance" required />
 
-          {/* Frequency + first service date — date drives every
-              day-of-week / Nth field downstream. */}
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Frequency"
-              options={RECURRENCE_OPTIONS}
-              value={form.recurrence_rule}
-              onChange={e => changeEditRule(e.target.value)}
-            />
-            <Input
-              label="First service date"
-              type="date"
-              value={form.first_date}
-              onChange={e => setForm(prev => ({ ...prev, first_date: e.target.value }))}
-            />
-          </div>
+          <Input
+            label="First service date"
+            type="date"
+            value={form.first_date}
+            onChange={e => setForm(prev => ({ ...prev, first_date: e.target.value }))}
+          />
 
-          {form.recurrence_rule === 'custom' && (
-            <Input
-              label="Repeat every (days)"
-              type="number"
-              min="1"
-              value={form.custom_interval_days}
-              onChange={e => setForm(prev => ({ ...prev, custom_interval_days: e.target.value }))}
-              placeholder="10"
-            />
-          )}
-
-          {/* Bi/tri-weekly: anchor weekday is locked, operator picks
-              (expected - 1) extras. */}
-          {isMultiDayWeekly(form.recurrence_rule) && form.first_date && (() => {
-            const anchorWd = new Date(form.first_date + 'T00:00:00').getDay()
-            const cap = expectedDayCount(form.recurrence_rule) - 1
-            return (
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
-                  Plus pick {cap} more day{cap === 1 ? '' : 's'}
-                  <span className="ml-2 text-gray-400 dark:text-gray-500">
-                    ({form.extra_days.length}/{cap})
-                  </span>
-                </label>
-                <div className="grid grid-cols-7 gap-1.5">
-                  {DAYS_OF_WEEK.map(d => {
-                    const isAnchor = d.value === anchorWd
-                    const active = isAnchor || form.extra_days.includes(d.value)
-                    const atCap = !active && form.extra_days.length >= cap
-                    return (
-                      <button key={d.value} type="button"
-                        onClick={() => !isAnchor && toggleEditExtraDay(d.value)}
-                        disabled={isAnchor || atCap}
-                        className={cn(
-                          'py-2 rounded-lg text-xs font-semibold transition-all min-h-[40px]',
-                          active
-                            ? 'bg-pool-500 text-white shadow-sm'
-                            : atCap
-                              ? 'bg-gray-50 dark:bg-gray-900 text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100',
-                          isAnchor && 'cursor-default ring-2 ring-pool-300 dark:ring-pool-700',
-                        )}
-                        title={isAnchor ? 'First service date — change the date to move' : undefined}>
-                        {d.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })()}
-
-          {/* Inline preview for every rule. */}
-          {form.first_date && (
-            <p className="text-xs text-pool-700 dark:text-pool-300 bg-pool-50 dark:bg-pool-950/40 rounded-lg px-3 py-2">
-              {derivedScheduleLabel(form.recurrence_rule, form.first_date, form.extra_days, form.custom_interval_days) || 'Pick a first service date to see the schedule.'}
-            </p>
-          )}
+          <RecurrencePicker
+            value={{
+              rule: form.recurrence_rule,
+              extraDays: form.extra_days,
+              customDays: form.custom_interval_days,
+            }}
+            onChange={(next) => setForm(prev => ({
+              ...prev,
+              recurrence_rule: next.rule,
+              extra_days: next.extraDays,
+              custom_interval_days: next.customDays,
+            }))}
+            firstDate={form.first_date}
+          />
           <div className="grid grid-cols-2 gap-3">
             <Input label="Preferred Time" type="time" value={form.preferred_time} onChange={e => setForm(prev => ({ ...prev, preferred_time: e.target.value }))} />
             <Input label="Price ($)" type="number" value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} placeholder="150" />
