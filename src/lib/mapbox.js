@@ -39,6 +39,27 @@ export async function geocodeAddress(address) {
 }
 
 /**
+ * Reverse geocode a coordinate to a human-readable address using Nominatim.
+ * Free, no API key required. Returns a single-line address string or null
+ * if the lookup fails. Used by the manual pin picker so that dropping a
+ * pin alone is enough to add a pool — without this the address field
+ * would stay empty and the Save button stays disabled.
+ */
+export async function reverseGeocode(lat, lng) {
+  if (lat == null || lng == null) return null
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&format=json&zoom=18`
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.display_name || null
+  } catch (err) {
+    console.error('Reverse geocode (Nominatim) error:', err)
+    return null
+  }
+}
+
+/**
  * Get a driving route between multiple waypoints using OSRM public demo server.
  * Free, no key required.
  * waypoints: array of { lat, lng }

@@ -6,7 +6,7 @@ import AddressAutocomplete from './ui/AddressAutocomplete'
 import Modal from './ui/Modal'
 import Button from './ui/Button'
 import { POOL_TYPES, POOL_SHAPES, SCHEDULE_FREQUENCIES, FREQUENCY_LABELS, cn } from '../lib/utils'
-import { geocodeAddress, MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
+import { geocodeAddress, reverseGeocode, MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
 import { supabase } from '../lib/supabase'
 import { useBusiness } from '../hooks/useBusiness'
 
@@ -105,7 +105,15 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress })
             address={poolForm.address}
             lat={poolForm.latitude}
             lng={poolForm.longitude}
-            onPick={({ lat, lng }) => setPoolForm(prev => ({ ...prev, latitude: lat, longitude: lng }))}
+            onPick={({ lat, lng, address }) => setPoolForm(prev => ({
+              ...prev,
+              latitude: lat,
+              longitude: lng,
+              // Pin-picker can pass an optional address (initial coords
+              // string or upgraded from reverse geocode). Only overwrite
+              // when present so a typed address isn't clobbered.
+              ...(address != null ? { address } : {}),
+            }))}
           />
         </>
       )}
@@ -288,7 +296,20 @@ function ManualPinPicker({ address, lat, lng, onPick }) {
 
   function handleConfirm() {
     if (tempLat != null && tempLng != null) {
-      onPick({ lat: tempLat, lng: tempLng })
+      // Always pass coords. If the form's address is still empty, seed
+      // it with a coords string so the Save button enables immediately
+      // (pools.address is NOT NULL in the schema), then upgrade to a
+      // real street address from reverse geocode when it lands. If the
+      // operator already typed an address, leave it alone.
+      if (!address?.trim()) {
+        const coordsStr = `${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`
+        onPick({ lat: tempLat, lng: tempLng, address: coordsStr })
+        reverseGeocode(tempLat, tempLng).then((addr) => {
+          if (addr) onPick({ lat: tempLat, lng: tempLng, address: addr })
+        })
+      } else {
+        onPick({ lat: tempLat, lng: tempLng })
+      }
     }
     setOpen(false)
   }
