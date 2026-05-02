@@ -397,6 +397,14 @@ export function ruleRequiresProfile(rule, monthlyWeekOfMonth) {
 //   weekly / fortnightly / monthly / custom — not multi-day, returns
 //     null (caller should hide the "drop this day" option for these).
 //
+// When transitioning to a cadence rule (weekly), next_generation_at
+// is recomputed to the next occurrence of the remaining day from
+// today. Cadence projections walk from the anchor by interval and
+// ignore preferred_day_of_week — without aligning the anchor here
+// the projector would keep firing on the OLD anchor's day-of-week
+// (the day-of-the-just-dropped-day) which is exactly the wrong
+// behaviour.
+//
 // Returns { patch, becameInvalid } where:
 //   patch is the column-update object to send to Supabase
 //   becameInvalid is true when removing the day would leave nothing
@@ -412,18 +420,30 @@ export function dropDayFromProfile(profile, weekday) {
     return { becameInvalid: true, patch: null }
   }
   if (current.length === 1) {
-    // Down to a single day → switch to weekly.
+    // Down to a single day → switch to weekly. Cadence rules use
+    // next_generation_at as the anchor, so realign it to the next
+    // occurrence of the remaining day from today; otherwise the
+    // projector keeps firing on whatever day the old anchor was.
+    const remainingDay = current[0]
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const next = new Date(today)
+    while (next.getDay() !== remainingDay) {
+      next.setDate(next.getDate() + 1)
+    }
     return {
       becameInvalid: false,
       patch: {
         recurrence_rule: 'weekly',
-        preferred_day_of_week: current[0],
+        preferred_day_of_week: remainingDay,
         preferred_days_of_week: null,
+        next_generation_at: ymdLocal(next),
       },
     }
   }
   if (current.length === 2) {
-    // Two days remain → bi_weekly.
+    // Two days remain → bi_weekly. Multi-day projections enumerate
+    // preferred_days_of_week directly, ignoring the anchor, so
+    // next_generation_at can stay as-is here.
     return {
       becameInvalid: false,
       patch: {

@@ -873,6 +873,12 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   // Mon/Tue. dropDayFromProfile handles the rule-type transition
   // (tri→bi when 2 left, bi→weekly when 1 left). Only shown for
   // multi-day weekly rules.
+  //
+  // Also deletes any FUTURE real jobs already materialised for this
+  // profile + dropped weekday — operator's "stop coming on Mondays"
+  // intent means no more Mondays at all, not just no more *projections*
+  // on Mondays. Past jobs stay (service history is intentionally
+  // preserved).
   async function handleDropDayFromSchedule() {
     setDeleting(true)
     try {
@@ -895,6 +901,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           .update(result.patch)
           .eq('id', loadedProfile.id)
       }
+
+      // Delete already-materialised future jobs for this profile that
+      // fall on the dropped weekday. Without this step the schedule
+      // shows "phantom" Mondays from real jobs whose recurring profile
+      // no longer projects them — exactly the "kept next week" bug.
+      const today = new Date()
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      const { data: futureJobs } = await supabase
+        .from('jobs')
+        .select('id, scheduled_date')
+        .eq('recurring_profile_id', loadedProfile.id)
+        .gte('scheduled_date', todayStr)
+      const orphanIds = (futureJobs || [])
+        .filter(j => j.scheduled_date && new Date(j.scheduled_date + 'T00:00:00').getDay() === weekday)
+        .map(j => j.id)
+      if (orphanIds.length > 0) {
+        await supabase.from('jobs').delete().in('id', orphanIds)
+      }
+
       setDeleteConfirm(null)
       onClose?.()
       onUpdated?.()
