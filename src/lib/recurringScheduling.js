@@ -388,6 +388,61 @@ export function ruleRequiresProfile(rule, monthlyWeekOfMonth) {
   return false
 }
 
+// Return the patch object the StopDetailModal can apply to a profile
+// to drop a single weekday from its recurrence. Handles rule-type
+// transitions when dropping leaves the array too short for the
+// current rule's CHECK constraint:
+//   tri_weekly [Mon,Tue,Wed] - drop Wed → bi_weekly [Mon,Tue]
+//   bi_weekly  [Mon,Wed]      - drop Wed → weekly with preferred_day_of_week=Mon
+//   weekly / fortnightly / monthly / custom — not multi-day, returns
+//     null (caller should hide the "drop this day" option for these).
+//
+// Returns { patch, becameInvalid } where:
+//   patch is the column-update object to send to Supabase
+//   becameInvalid is true when removing the day would leave nothing
+//     (the operator should be redirected to "End the whole schedule"
+//     instead — bi_weekly with [Mon] dropped would be empty).
+export function dropDayFromProfile(profile, weekday) {
+  if (!profile || !isMultiDayWeekly(profile.recurrence_rule)) return null
+  if (weekday == null) return null
+  const current = (profile.preferred_days_of_week || [])
+    .filter((d) => d !== weekday)
+    .sort((a, b) => a - b)
+  if (current.length === 0) {
+    return { becameInvalid: true, patch: null }
+  }
+  if (current.length === 1) {
+    // Down to a single day → switch to weekly.
+    return {
+      becameInvalid: false,
+      patch: {
+        recurrence_rule: 'weekly',
+        preferred_day_of_week: current[0],
+        preferred_days_of_week: null,
+      },
+    }
+  }
+  if (current.length === 2) {
+    // Two days remain → bi_weekly.
+    return {
+      becameInvalid: false,
+      patch: {
+        recurrence_rule: 'bi_weekly',
+        preferred_day_of_week: null,
+        preferred_days_of_week: current,
+      },
+    }
+  }
+  // 3+ days remain (only possible if we add quad_weekly etc. later).
+  // Keep current rule and just trim the array.
+  return {
+    becameInvalid: false,
+    patch: {
+      preferred_days_of_week: current,
+    },
+  }
+}
+
 // Pretty-print the schedule for the recurring detail card / list.
 // Examples:
 //   "Mon, Wed, Fri every week"

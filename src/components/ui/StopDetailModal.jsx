@@ -18,6 +18,9 @@ import {
   isMultiDayWeekly,
   profileFieldsFromForm,
   ruleRequiresProfile,
+  describeSchedule,
+  dropDayFromProfile,
+  DAYS_OF_WEEK,
 } from '../../lib/recurringScheduling'
 
 // Numbered pin factory
@@ -65,8 +68,19 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   const [assigning, setAssigning] = useState(false)
   const [pendingStaffId, setPendingStaffId] = useState(null)
   const [form, setForm] = useState({})
+  // Cache the recurring_job_profile row if this stop is part of one.
+  // Used to render the linkage label in the modal header
+  // ("Tri-weekly Mon, Tue, Wed") and to know which days are eligible
+  // for the "Stop coming on Wednesdays" delete option.
+  const [loadedProfile, setLoadedProfile] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // null | 'confirm' | 'recurring'
   const [deleting, setDeleting] = useState(false)
+  // Edit-scope: when an operator changes a recurring stop's time/notes/etc.,
+  // 'all_future' updates the profile (every future occurrence on this
+  // weekday picks up the change), 'this_stop' creates a per-occurrence
+  // override. Default = all_future to match the user's expectation that
+  // "I edited the recurring schedule".
+  const [editScope, setEditScope] = useState('all_future')
 
   useEffect(() => {
     if (stop) {
@@ -101,13 +115,15 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         if (stop.client_id) {
           supabase
             .from('recurring_job_profiles')
-            .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, next_generation_at')
+            .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, next_generation_at, is_active, status')
             .eq('client_id', stop.client_id)
             .eq('title', stop.title || '')
+            .eq('is_active', true)
             .limit(1)
             .then(({ data }) => {
               const profile = data?.[0]
               if (!profile) return
+              setLoadedProfile(profile)
               setForm(f => {
                 const anchorDate = f.scheduled_date || profile.next_generation_at?.split('T')[0]
                 const anchorWd = anchorDate
@@ -154,13 +170,14 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         if (stop.id) {
           supabase
             .from('recurring_job_profiles')
-            .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, next_generation_at')
+            .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, next_generation_at, is_active, status')
             .eq('pool_id', stop.id)
             .eq('is_active', true)
             .limit(1)
             .then(({ data }) => {
               const profile = data?.[0]
               if (!profile) return
+              setLoadedProfile(profile)
               setForm(f => {
                 const anchorDate = f.next_due_at || profile.next_generation_at?.split('T')[0]
                 const anchorWd = anchorDate
@@ -188,6 +205,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       setPendingStaffId(null)
       setDeleteConfirm(null)
       setDeleting(false)
+      setLoadedProfile(null)
+      setEditScope('all_future')
     }
   }, [stop])
 
@@ -370,6 +389,16 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         // "rule + extra days + custom days → DB columns" mapping so the
         // shape we write here matches what AddRecurringModal /
         // RecurringJobs write — single procedure, no drift.
+        //
+        // editScope decides what gets written:
+        //   'all_future' (default for recurring stops): propagate
+        //     title / preferred_time / price / notes / duration / tech
+        //     to the profile so every future occurrence on this
+        //     weekday picks up the change.
+        //   'this_stop': write only the schedule-shape (richFields)
+        //     plus the toggle linkage. The per-occurrence fields stay
+        //     on the job row only — operator's "this Wednesday is
+        //     different" intent.
         if (form.is_recurring) {
           const richFields = profileFieldsFromForm({
             rule: form.recurrence_rule,
@@ -377,15 +406,21 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             customDays: form.custom_interval_days,
             firstDate: form.scheduled_date,
           })
+          const propagateAllFuture = editScope === 'all_future'
+          const profileUpdate = propagateAllFuture
+            ? {
+                title: form.title,
+                pool_id: poolId || null,
+                preferred_time: form.scheduled_time || null,
+                price: form.price ? Number(form.price) : null,
+                notes: form.notes || null,
+                estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
+                assigned_staff_id: form.assigned_staff_id || null,
+                ...richFields,
+              }
+            : { ...richFields }
           if (form.recurring_profile_id) {
-            await supabase.from('recurring_job_profiles').update({
-              title: form.title,
-              pool_id: poolId || null,
-              preferred_time: form.scheduled_time || null,
-              price: form.price ? Number(form.price) : null,
-              notes: form.notes || null,
-              ...richFields,
-            }).eq('id', form.recurring_profile_id)
+            await supabase.from('recurring_job_profiles').update(profileUpdate).eq('id', form.recurring_profile_id)
             // Make sure the job points at the profile so dedupe works
             await supabase.from('jobs').update({ recurring_profile_id: form.recurring_profile_id }).eq('id', jobId)
           } else if (stop.client_id) {
@@ -485,11 +520,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         })
         const needsProfile = ruleRequiresProfile(form.schedule_frequency, richFields.monthly_week_of_month)
         if (form.recurring_profile_id) {
-          await supabase.from('recurring_job_profiles').update({
-            ...richFields,
-            next_generation_at: form.next_due_at || null,
-            preferred_time: form.next_due_time || null,
-          }).eq('id', form.recurring_profile_id)
+          // editScope=all_future: propagate the per-occurrence fields
+          // (notes, tech, time) to the profile so future occurrences
+          // pick them up. editScope=this_stop: write only the schedule
+          // shape so the picker change still persists, but per-stop
+          // fields stay on the pool row only.
+          const propagateAllFuture = editScope === 'all_future'
+          const profileUpdate = propagateAllFuture
+            ? {
+                ...richFields,
+                next_generation_at: form.next_due_at || null,
+                preferred_time: form.next_due_time || null,
+                notes: form.access_notes || null,
+                assigned_staff_id: form.assigned_staff_id || null,
+              }
+            : {
+                ...richFields,
+                next_generation_at: form.next_due_at || null,
+              }
+          await supabase.from('recurring_job_profiles').update(profileUpdate).eq('id', form.recurring_profile_id)
         } else if (needsProfile && stop.client_id) {
           // Need pool's business_id — fetch if not on stop already.
           let bizId = stop.business_id
@@ -818,6 +867,45 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
+  // Drop the THIS-OCCURRENCE-day from the recurring schedule going
+  // forward. e.g. tri-weekly Mon/Tue/Wed → operator clicks a Wednesday
+  // stop → "Stop coming on Wednesdays" → profile becomes bi-weekly
+  // Mon/Tue. dropDayFromProfile handles the rule-type transition
+  // (tri→bi when 2 left, bi→weekly when 1 left). Only shown for
+  // multi-day weekly rules.
+  async function handleDropDayFromSchedule() {
+    setDeleting(true)
+    try {
+      if (!loadedProfile) return
+      // Determine the weekday from the stop's date.
+      const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
+      if (!stopDate) return
+      const weekday = new Date(stopDate + 'T00:00:00').getDay()
+      const result = dropDayFromProfile(loadedProfile, weekday)
+      if (!result) return
+      if (result.becameInvalid) {
+        // Last day removed — equivalent to ending the whole schedule.
+        await supabase
+          .from('recurring_job_profiles')
+          .update({ is_active: false, status: 'cancelled' })
+          .eq('id', loadedProfile.id)
+      } else {
+        await supabase
+          .from('recurring_job_profiles')
+          .update(result.patch)
+          .eq('id', loadedProfile.id)
+      }
+      setDeleteConfirm(null)
+      onClose?.()
+      onUpdated?.()
+    } catch (err) {
+      console.error('Drop day error:', err)
+      toast.error(err.message || 'Failed to update recurring schedule')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   async function handleDeleteAllFuture() {
     setDeleting(true)
     try {
@@ -919,6 +1007,24 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             ) : stop.client_name ? (
               <p className="text-sm text-gray-500 mt-0.5">{stop.client_name}</p>
             ) : null}
+            {/* Linkage label — when this stop belongs to a recurring
+                schedule, show "Tri-weekly Mon, Tue, Wed" so the
+                operator never edits/deletes a stop without seeing
+                what other stops are tied to it. The chip jumps to the
+                Recurring page where the whole schedule is editable. */}
+            {loadedProfile && (
+              <button
+                onClick={() => { onClose(); navigate('/recurring') }}
+                className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-pool-50 dark:bg-pool-950/40 border border-pool-200/60 dark:border-pool-800/40 text-[11px] font-semibold text-pool-700 dark:text-pool-300 hover:bg-pool-100 dark:hover:bg-pool-950/60 transition-colors"
+                title="Open recurring services"
+              >
+                <RepeatIcon />
+                <span>{describeSchedule(loadedProfile)}</span>
+                <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
           </div>
           <Badge variant={STATUS_VARIANTS[statusLabel] || 'primary'} className="shrink-0 capitalize">
             {String(statusLabel).replace('_', ' ')}
@@ -1344,10 +1450,60 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             </div>
           </div>
         ) : (
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={() => setEditing(false)} className="flex-1">Cancel</Button>
-            <Button onClick={handleSave} loading={saving} className="flex-1">Save</Button>
-          </div>
+          <>
+            {/* Scope toggle — only shown when this stop is part of a
+                recurring schedule. Default = all_future (operator's
+                expected mental model: editing the recurring service).
+                Date changes are still per-occurrence regardless of
+                scope, since "moving this Wednesday to Friday" is
+                semantically a one-off move. */}
+            {loadedProfile && (() => {
+              const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
+              const weekday = stopDate ? new Date(stopDate + 'T00:00:00').getDay() : null
+              const dayLabel = weekday != null ? DAYS_OF_WEEK.find(d => d.value === weekday)?.long : null
+              return (
+                <div className="bg-pool-50/60 dark:bg-pool-950/30 border border-pool-200/60 dark:border-pool-800/40 rounded-xl p-3 space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-pool-700 dark:text-pool-300">
+                    Apply changes to
+                  </p>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 cursor-pointer min-h-[32px]">
+                      <input
+                        type="radio"
+                        name="edit-scope"
+                        value="all_future"
+                        checked={editScope === 'all_future'}
+                        onChange={() => setEditScope('all_future')}
+                        className="w-4 h-4 text-pool-600 border-gray-300 focus:ring-pool-500"
+                      />
+                      <span className="text-sm text-gray-900 dark:text-gray-100">
+                        All future {dayLabel ? `${dayLabel}s` : 'occurrences'}
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 ml-1">(updates the recurring schedule)</span>
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer min-h-[32px]">
+                      <input
+                        type="radio"
+                        name="edit-scope"
+                        value="this_stop"
+                        checked={editScope === 'this_stop'}
+                        onChange={() => setEditScope('this_stop')}
+                        className="w-4 h-4 text-pool-600 border-gray-300 focus:ring-pool-500"
+                      />
+                      <span className="text-sm text-gray-900 dark:text-gray-100">
+                        Just this stop only
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 ml-1">(per-occurrence override)</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )
+            })()}
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => setEditing(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleSave} loading={saving} className="flex-1">Save</Button>
+            </div>
+          </>
         )}
       </div>
 
@@ -1371,56 +1527,69 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
                     Delete this {stop.type === 'job' ? 'job' : 'service'}?
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    It's part of a recurring schedule. Pick what to do — most of the time you want the first one.
-                  </p>
+                  {loadedProfile ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Part of: <span className="font-semibold text-gray-700 dark:text-gray-200">{describeSchedule(loadedProfile)}</span>. What do you want to do?
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      This stop is part of a recurring schedule. What do you want to do?
+                    </p>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  {/* Safe option = primary. Skipping a single occurrence
-                      is what operators reach for 95% of the time and
-                      leaves the recurring schedule intact. */}
-                  <button
-                    onClick={handleDeleteSingle}
-                    disabled={deleting}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white bg-pool-600 hover:bg-pool-700 transition-colors flex flex-col items-center justify-center gap-0.5 min-h-tap"
-                  >
-                    {deleting ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>
+                {/* Three-way prompt — every button is equally weighted.
+                    User explicitly asked for "no default" so the
+                    operator picks deliberately. Order: least
+                    destructive at top, most destructive at bottom. */}
+                {(() => {
+                  const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
+                  const weekday = stopDate ? new Date(stopDate + 'T00:00:00').getDay() : null
+                  const dayLabel = weekday != null ? DAYS_OF_WEEK.find(d => d.value === weekday)?.long : null
+                  const canDropDay = loadedProfile && isMultiDayWeekly(loadedProfile.recurrence_rule) && weekday != null
+                  return (
+                    <div className="space-y-2">
+                      <button
+                        onClick={handleDeleteSingle}
+                        disabled={deleting}
+                        className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex flex-col items-center justify-center gap-0.5 min-h-tap"
+                      >
                         <span>Skip just this one</span>
-                        <span className="text-[11px] font-medium opacity-80">Future occurrences stay scheduled</span>
-                      </>
-                    )}
-                  </button>
-                  {/* Destructive option demoted to outline-style so it's
-                      visually distinct from the safe primary. Spelling
-                      out "ends the whole schedule" makes the
-                      consequence unmistakable — that wording is what
-                      stops the misclick that nuked the user's profile
-                      yesterday. */}
-                  <button
-                    onClick={handleDeleteAllFuture}
-                    disabled={deleting}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex flex-col items-center justify-center gap-0.5 min-h-tap"
-                  >
-                    {deleting ? (
-                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>
+                        <span className="text-[11px] font-medium opacity-70">
+                          {dayLabel ? `This ${dayLabel} only. Future ${dayLabel}s stay scheduled.` : 'Just this occurrence. The schedule stays intact.'}
+                        </span>
+                      </button>
+                      {canDropDay && (
+                        <button
+                          onClick={handleDropDayFromSchedule}
+                          disabled={deleting}
+                          className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/40 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors flex flex-col items-center justify-center gap-0.5 min-h-tap"
+                        >
+                          <span>Stop coming on {dayLabel}s</span>
+                          <span className="text-[11px] font-medium opacity-80">
+                            Removes {dayLabel} from this schedule going forward.
+                          </span>
+                        </button>
+                      )}
+                      <button
+                        onClick={handleDeleteAllFuture}
+                        disabled={deleting}
+                        className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex flex-col items-center justify-center gap-0.5 min-h-tap"
+                      >
                         <span>End the whole recurring schedule</span>
-                        <span className="text-[11px] font-medium opacity-80">No more occurrences will ever be generated</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirm(null)}
-                    disabled={deleting}
-                    className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors min-h-tap"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                        <span className="text-[11px] font-medium opacity-80">
+                          No more occurrences will ever be generated.
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        disabled={deleting}
+                        className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors min-h-tap"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )
+                })()}
               </>
             ) : (
               <>
