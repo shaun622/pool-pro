@@ -346,9 +346,25 @@ function Schedule({ business }) {
       coverPool(d, j.pool_id)
     }
 
-    // 2. Pools with next_due_at in range — project at frequency
+    // 2. Pools with next_due_at in range — project at frequency.
+    // Skip pools that have an active recurring profile: the profile
+    // is the source of truth for those, and the pool's next_due_at
+    // is just a denormalised mirror. Without this skip, the same
+    // recurring service renders TWICE for the same pool on the same
+    // day — once as a pool projection (path 2, yellow) and once as
+    // a profile projection (path 3, blue) — and the dedup picks
+    // whichever path runs first, so individual days look styled
+    // differently from their siblings (the "why is this Wednesday
+    // orange?" report).
+    const poolsWithActiveProfile = new Set()
+    for (const profile of allProfiles) {
+      if (isProfileActive(profile) && profile.pool_id) {
+        poolsWithActiveProfile.add(profile.pool_id)
+      }
+    }
     for (const p of allPools) {
       if (!p.next_due_at) continue
+      if (poolsWithActiveProfile.has(p.id)) continue
       const intervalDays = frequencyToDays(p.schedule_frequency)
       const firstDue = new Date(p.next_due_at)
       if (isNaN(firstDue.getTime())) continue
