@@ -6,6 +6,7 @@ import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
+import AddSeatCard from '../components/ui/AddSeatCard'
 import { useStaff } from '../hooks/useStaff'
 import { useBusiness } from '../hooks/useBusiness'
 import { useAuth } from '../hooks/useAuth'
@@ -358,6 +359,11 @@ export default function Staff() {
             emptyText="No technicians yet. Add the people who service pools in the field."
             canAdd={canAddStaff}
           />
+
+          {/* Seat upsell — same card as the Subscription page so the
+              operator can buy a seat from wherever they noticed the
+              limit. Self-hides for trial / staff-override accounts. */}
+          <AddSeatCard />
 
           {/* ── INACTIVE ── */}
           {inactive.length > 0 && (
