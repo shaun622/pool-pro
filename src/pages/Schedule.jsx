@@ -682,7 +682,10 @@ function WeekStack({ weekDays, stopsByDay, onStopSelect }) {
 function StackRow({ stop, onClick }) {
   const meta = statusMeta(stop)
   const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
-  const sub = stop.address || stop.client_name
+  // Client name leads the title (see TodayRow). Address goes in subtitle.
+  const titleText = stop.client_name
+    ? `${stop.client_name} · ${stop.title}`
+    : stop.title
   return (
     <button
       onClick={onClick}
@@ -700,11 +703,11 @@ function StackRow({ stop, onClick }) {
             'text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate',
             stop.status === 'cancelled' && 'line-through text-gray-500',
           )}>
-            {stop.title}
+            {titleText}
           </p>
-          {sub && (
+          {stop.address && (
             <p className="text-[11.5px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
-              {sub}{stop.client_name && stop.address ? ` · ${stop.client_name}` : ''}
+              {stop.address}
             </p>
           )}
         </div>
@@ -754,7 +757,12 @@ function DayColumn({ day, stops, isToday, onStopSelect }) {
 function EventCard({ stop, onClick }) {
   const meta = statusMeta(stop)
   const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
-  const sub = stop.client_name || stop.address || null
+  // Client name leads the title (see TodayRow / StackRow). Address —
+  // the most operationally useful info — falls into the subtitle.
+  const titleText = stop.client_name
+    ? `${stop.client_name} · ${stop.title}`
+    : stop.title
+  const sub = stop.address || (stop.client_name ? null : null)
   return (
     <button
       onClick={onClick}
@@ -771,7 +779,7 @@ function EventCard({ stop, onClick }) {
         'text-[12px] font-semibold text-gray-900 dark:text-gray-100 leading-tight truncate mt-0.5',
         stop.status === 'cancelled' && 'line-through text-gray-500 dark:text-gray-500',
       )}>
-        {stop.title}
+        {titleText}
       </p>
       {sub && (
         <p className="text-[10.5px] text-gray-500 dark:text-gray-400 leading-tight truncate">{sub}</p>
@@ -936,7 +944,12 @@ function TodayList({ stops, onStopSelect, variant = 'attached' }) {
 function TodayRow({ stop, onClick }) {
   const meta = statusMeta(stop)
   const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
-  const sub = stop.address || stop.client_name
+  // Client name leads the title — most stops are titled "Pool Service"
+  // so the client is the differentiating identifier. Address goes in
+  // the subtitle since the operator usually navigates by address.
+  const titleText = stop.client_name
+    ? `${stop.client_name} · ${stop.title}`
+    : stop.title
   return (
     <button
       onClick={onClick}
@@ -951,11 +964,11 @@ function TodayRow({ stop, onClick }) {
             'text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-1',
             stop.status === 'cancelled' && 'line-through text-gray-500'
           )}>
-            {stop.title}
+            {titleText}
           </p>
-          {sub && (
+          {stop.address && (
             <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
-              {sub}{stop.client_name && stop.address ? ` · ${stop.client_name}` : ''}
+              {stop.address}
             </p>
           )}
         </div>
