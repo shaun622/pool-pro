@@ -515,13 +515,17 @@ function Schedule({ business }) {
   const weekEnd = addDays(weekStart, 6)
   const isThisWeek = sameYMD(weekStart, getMondayOfWeek(new Date()))
 
-  // Real jobs route to /work-orders/:id; everything else opens detail modal.
+  // Always open the StopDetailModal — including for real jobs. The
+  // older behaviour routed real jobs to /work-orders/:id, but that
+  // surfaced as a bug when an operator moved a recurring projection
+  // (which materialises into a real job): clicking the same card on
+  // the new date suddenly navigated away instead of opening the
+  // familiar quick-edit modal. The modal handles real jobs fine —
+  // Edit Job + Delete + the same field set as a projected stop. If
+  // the operator wants the full work-order surface, they still go
+  // there explicitly via Work Orders in the nav.
   function handleStopSelect(stop) {
-    if (stop.type === 'job' && !stop.projected) {
-      navigate(`/work-orders/${stop.id}`)
-    } else {
-      setSelectedStop(stop)
-    }
+    setSelectedStop(stop)
   }
 
   // Eyebrow + title vary by view
