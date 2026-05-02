@@ -182,6 +182,19 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
         preferred_day_of_week = anchorWd
       }
 
+      // A pool should only ever have ONE active recurring service at a
+      // time. Without this, every "+ New recurring" creates an additional
+      // active profile, the schedule projection runs path 3 against ALL
+      // of them, and the operator sees the same pool on multiple days
+      // ("indo test on Fri AND Sat" was the canonical bug here). Mark
+      // any existing actives inactive before inserting the new one — the
+      // rows stay around for history, just stop projecting.
+      await supabase
+        .from('recurring_job_profiles')
+        .update({ is_active: false, status: 'cancelled' })
+        .eq('pool_id', poolId)
+        .eq('is_active', true)
+
       const insertPayload = {
         business_id: business.id,
         client_id: clientId,

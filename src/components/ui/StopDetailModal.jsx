@@ -382,6 +382,18 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             }
             if (businessId) {
               const nextGen = form.scheduled_date || new Date().toISOString().split('T')[0]
+              // Single-active-profile invariant: if this job's pool
+              // already has an active recurring profile, deactivate it
+              // before creating the new one. Otherwise the schedule
+              // projection runs path 3 against both, duplicating the
+              // pool across days.
+              if (poolId) {
+                await supabase
+                  .from('recurring_job_profiles')
+                  .update({ is_active: false, status: 'cancelled' })
+                  .eq('pool_id', poolId)
+                  .eq('is_active', true)
+              }
               const { data: newProfile, error: profErr } = await supabase.from('recurring_job_profiles').insert({
                 business_id: businessId,
                 client_id: stop.client_id,
@@ -473,6 +485,18 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             bizId = poolRow?.business_id || null
           }
           if (bizId) {
+            // Same single-active-profile-per-pool invariant the
+            // AddRecurringModal flow enforces — without this the
+            // pool-edit path can race and end up spawning a second
+            // profile on a pool that already has one (different code
+            // paths landed at this branch from form state where
+            // form.recurring_profile_id was momentarily null).
+            await supabase
+              .from('recurring_job_profiles')
+              .update({ is_active: false, status: 'cancelled' })
+              .eq('pool_id', stop.id)
+              .eq('is_active', true)
+
             const { error: profErr } = await supabase.from('recurring_job_profiles').insert({
               business_id: bizId,
               client_id: stop.client_id,
