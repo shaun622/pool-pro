@@ -7,6 +7,7 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
+import Modal from '../components/ui/Modal'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
 import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Users, X } from 'lucide-react'
@@ -207,6 +208,12 @@ function Schedule({ business }) {
   const [serviceDays, setServiceDays] = useState(new Set()) // "<pool_id>:<ymd>" keys
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
+  // The desktop week grid caps each day column at MAX_VISIBLE_STOPS rows
+  // and surfaces the rest behind a "+N more" link that opens this
+  // focused day view. Holds the Date currently focused, or null when
+  // the modal is closed. Mobile WeekStack already lists all stops
+  // inline so it doesn't need this affordance.
+  const [focusedDay, setFocusedDay] = useState(null)
   // Filter the grid + today list to a single tech (or 'unassigned') —
   // toggled by clicking a pill in the "On service / Crew" card.
   // null = no filter (show everyone).
@@ -532,7 +539,7 @@ function Schedule({ business }) {
         <>
           {/* Desktop: 7-column grid */}
           <div className="hidden md:block">
-            <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} />
+            <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} onFocusDay={setFocusedDay} />
           </div>
           {/* Mobile: stacked-by-day list */}
           <div className="md:hidden">
@@ -560,6 +567,24 @@ function Schedule({ business }) {
         stopNumber={1}
         onUpdated={() => { fetchData(); setSelectedStop(null) }}
         staffList={allStaff}
+      />
+
+      {/* Focused day view — opened by "+N more" or by clicking the day
+          header in the desktop week grid. Lists every stop for that
+          one day (no cap), reusing TodayRow for visual parity with
+          the standalone Today list. Tapping a row hands off to the
+          regular StopDetailModal. */}
+      <DayStopsModal
+        day={focusedDay}
+        stops={focusedDay ? (filteredStopsByDay.get(ymd(focusedDay)) || []) : []}
+        onClose={() => setFocusedDay(null)}
+        onStopSelect={(stop) => {
+          // Close the day modal first so the stop modal isn't stacked
+          // on top — the StopDetailModal is the operator's main edit
+          // surface and shouldn't be visually nested.
+          setFocusedDay(null)
+          handleStopSelect(stop)
+        }}
       />
     </PageWrapper>
   )
@@ -607,8 +632,15 @@ function ViewToggle({ view, setView }) {
   )
 }
 
+// Each desktop day column renders at most this many stops inline; the
+// rest sit behind a "+N more" link that opens the focused day modal.
+// 8 was chosen so a day with one extra stop (9) still gets the link
+// (preferring "+1 more" over forcing the +1 to wrap into the column
+// and balloon every column's height by one row).
+const MAX_VISIBLE_STOPS_PER_DAY = 8
+
 // ─── Week grid (7 day columns) ─────────────────
-function WeekGrid({ weekDays, stopsByDay, onStopSelect }) {
+function WeekGrid({ weekDays, stopsByDay, onStopSelect, onFocusDay }) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 overflow-hidden mb-4">
       <div className="grid grid-cols-7 divide-x divide-gray-100 dark:divide-gray-800">
@@ -622,6 +654,7 @@ function WeekGrid({ weekDays, stopsByDay, onStopSelect }) {
               stops={stops}
               isToday={isToday}
               onStopSelect={onStopSelect}
+              onFocusDay={onFocusDay}
             />
           )
         })}
@@ -722,32 +755,80 @@ function StackRow({ stop, onClick }) {
   )
 }
 
-function DayColumn({ day, stops, isToday, onStopSelect }) {
+function DayColumn({ day, stops, isToday, onStopSelect, onFocusDay }) {
   const dow = day.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase()
+  // Slice for inline rendering. If there's exactly one extra stop past
+  // the cap, prefer "+1 more" over showing 9 inline — keeps every
+  // column the same max height regardless of the busy day.
+  const visible = stops.slice(0, MAX_VISIBLE_STOPS_PER_DAY)
+  const hiddenCount = Math.max(0, stops.length - visible.length)
+  const stopCount = stops.length
   return (
     <div className="min-h-[220px] flex flex-col">
-      <div className={cn(
-        'px-3 py-2 border-b border-gray-100 dark:border-gray-800',
-        isToday && 'bg-pool-50/60 dark:bg-pool-950/20'
-      )}>
-        <p className={cn(
-          'text-[10px] font-semibold uppercase tracking-wider',
-          isToday ? 'text-pool-700 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500'
-        )}>{dow}</p>
-        <p className={cn(
-          'text-2xl font-bold leading-none mt-0.5',
-          isToday ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100'
+      {/* Header is a button when there are stops, so clicking the date
+          opens the focused day view directly. Plain div when empty so
+          we don't dangle a useless click target. */}
+      {stopCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => onFocusDay?.(day)}
+          className={cn(
+            'text-left px-3 py-2 border-b border-gray-100 dark:border-gray-800 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50',
+            isToday && 'bg-pool-50/60 dark:bg-pool-950/20',
+          )}
+          aria-label={`Open all ${stopCount} stops for ${day.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p className={cn(
+              'text-[10px] font-semibold uppercase tracking-wider',
+              isToday ? 'text-pool-700 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500'
+            )}>{dow}</p>
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-[10px] font-bold tabular-nums text-gray-600 dark:text-gray-400">
+              {stopCount}
+            </span>
+          </div>
+          <p className={cn(
+            'text-2xl font-bold leading-none mt-0.5',
+            isToday ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100'
+          )}>
+            {day.getDate()}
+          </p>
+        </button>
+      ) : (
+        <div className={cn(
+          'px-3 py-2 border-b border-gray-100 dark:border-gray-800',
+          isToday && 'bg-pool-50/60 dark:bg-pool-950/20'
         )}>
-          {day.getDate()}
-        </p>
-      </div>
+          <p className={cn(
+            'text-[10px] font-semibold uppercase tracking-wider',
+            isToday ? 'text-pool-700 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500'
+          )}>{dow}</p>
+          <p className={cn(
+            'text-2xl font-bold leading-none mt-0.5',
+            isToday ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100'
+          )}>
+            {day.getDate()}
+          </p>
+        </div>
+      )}
       <div className="p-1.5 space-y-1 flex-1">
-        {stops.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="text-center text-gray-300 dark:text-gray-700 text-sm py-6 select-none">—</p>
         ) : (
-          stops.map(stop => (
-            <EventCard key={stop.id} stop={stop} onClick={() => onStopSelect(stop)} />
-          ))
+          <>
+            {visible.map(stop => (
+              <EventCard key={stop.id} stop={stop} onClick={() => onStopSelect(stop)} />
+            ))}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onFocusDay?.(day)}
+                className="w-full text-left px-2 py-1.5 rounded-lg text-[11px] font-semibold text-pool-600 dark:text-pool-400 hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors"
+              >
+                +{hiddenCount} more
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -906,6 +987,43 @@ function TechAvatar({ photo, name }) {
     <span className="w-7 h-7 rounded-full bg-pool-100 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 flex items-center justify-center text-[10px] font-bold ring-1 ring-white dark:ring-gray-900 shrink-0">
       {initials}
     </span>
+  )
+}
+
+// ─── Focused day view — modal listing every stop for one day ────
+// Surfaced from the desktop week grid when a day has more stops than
+// the column can show inline (the "+N more" link) or when the operator
+// clicks the day header. Re-uses TodayRow so a busy day reads the same
+// as the standalone Today list.
+function DayStopsModal({ day, stops, onClose, onStopSelect }) {
+  if (!day) return null
+  const heading = day.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+  return (
+    <Modal open={!!day} onClose={onClose} title={heading} size="md">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+            All stops
+          </p>
+          <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+            {stops.length}
+          </span>
+        </div>
+        {stops.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">
+            Nothing scheduled for this day.
+          </p>
+        ) : (
+          <ul className="divide-y divide-gray-100 dark:divide-gray-800 -mx-2">
+            {stops.map(stop => (
+              <li key={stop.id}>
+                <TodayRow stop={stop} onClick={() => onStopSelect(stop)} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Modal>
   )
 }
 
