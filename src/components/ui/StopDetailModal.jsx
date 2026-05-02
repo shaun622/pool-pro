@@ -1368,41 +1368,48 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {deleteConfirm === 'recurring' ? (
               <>
                 <div className="text-center">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Delete Service</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                    Delete this {stop.type === 'job' ? 'job' : 'service'}?
+                  </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    This is a recurring service. Would you like to delete just this one or cancel all future services?
+                    It's part of a recurring schedule. Pick what to do — most of the time you want the first one.
                   </p>
                 </div>
                 <div className="space-y-2">
+                  {/* Safe option = primary. Skipping a single occurrence
+                      is what operators reach for 95% of the time and
+                      leaves the recurring schedule intact. */}
                   <button
                     onClick={handleDeleteSingle}
                     disabled={deleting}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 min-h-tap"
-                  >
-                    {deleting ? (
-                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        Delete This Service Only
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleDeleteAllFuture}
-                    disabled={deleting}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center gap-2 min-h-tap"
+                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white bg-pool-600 hover:bg-pool-700 transition-colors flex flex-col items-center justify-center gap-0.5 min-h-tap"
                   >
                     {deleting ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Cancel All Future Services
+                        <span>Skip just this one</span>
+                        <span className="text-[11px] font-medium opacity-80">Future occurrences stay scheduled</span>
+                      </>
+                    )}
+                  </button>
+                  {/* Destructive option demoted to outline-style so it's
+                      visually distinct from the safe primary. Spelling
+                      out "ends the whole schedule" makes the
+                      consequence unmistakable — that wording is what
+                      stops the misclick that nuked the user's profile
+                      yesterday. */}
+                  <button
+                    onClick={handleDeleteAllFuture}
+                    disabled={deleting}
+                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex flex-col items-center justify-center gap-0.5 min-h-tap"
+                  >
+                    {deleting ? (
+                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <span>End the whole recurring schedule</span>
+                        <span className="text-[11px] font-medium opacity-80">No more occurrences will ever be generated</span>
                       </>
                     )}
                   </button>
@@ -1411,7 +1418,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                     disabled={deleting}
                     className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors min-h-tap"
                   >
-                    Go Back
+                    Cancel
                   </button>
                 </div>
               </>
