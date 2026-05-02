@@ -8,6 +8,7 @@ import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { cn, formatDate } from '../../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
+import { occurrencesInRange } from '../../lib/recurringScheduling'
 import { Calendar, Check, Clock, MapPin, Phone } from 'lucide-react'
 
 // ─── Helpers ───────────────────────────────────
@@ -174,14 +175,14 @@ export default function TechRunSheet() {
     }
     for (const profile of profiles) {
       if (!isProfileActive(profile)) continue
-      const interval = profileIntervalDays(profile)
-      if (!interval) continue
-      const anchorStr = profile.next_generation_at || profile.last_generated_at
-      const anchor = anchorStr ? new Date(anchorStr) : new Date()
-      if (isNaN(anchor.getTime())) continue
-      let cursor = new Date(anchor); cursor.setHours(0,0,0,0)
-      while (cursor > startOfToday) cursor.setDate(cursor.getDate() - interval)
-      while (cursor < startOfToday) cursor.setDate(cursor.getDate() + interval)
+      // occurrencesInRange handles the new bi/tri-weekly + monthly-Nth
+      // shapes alongside cadence rules. Asking for the [today, today]
+      // range yields at most one date — multi-day weekly profiles can
+      // legitimately land on today even though the anchor is elsewhere
+      // in the week.
+      const occurrences = occurrencesInRange(profile, startOfToday, startOfToday)
+      if (!occurrences.length) continue
+      const cursor = occurrences[0]
       if (sameYMD(cursor, now)) {
         const taken = takenByProfile.get(profile.id)
         if (taken && taken.has(todayKey)) continue

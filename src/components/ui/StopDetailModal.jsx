@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, geocodeAddress } from '../../lib/mapbox'
 import { FREQUENCY_LABELS, SCHEDULE_FREQUENCIES, cn } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
+import { computeNextOccurrence } from '../../lib/recurringScheduling'
 
 // Numbered pin factory
 function numberedIcon(n, color = '#0CA5EB') {
@@ -27,12 +28,15 @@ function numberedIcon(n, color = '#0CA5EB') {
   })
 }
 
+// The inline "make this recurring" toggle inside the job edit form
+// stays narrow on purpose — it just lets the operator quick-create a
+// profile from an existing job. Bi/tri-weekly need a day-picker UI which
+// doesn't fit here; for that the operator should use the Recurring
+// services page. Custom is omitted for the same reason.
 const RECURRENCE_OPTIONS = [
   { value: 'weekly', label: 'Weekly' },
   { value: 'fortnightly', label: 'Fortnightly' },
   { value: 'monthly', label: 'Monthly' },
-  { value: '6_weekly', label: 'Every 6 Weeks' },
-  { value: 'quarterly', label: 'Quarterly' },
 ]
 
 const RECURRENCE_DAYS = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }
@@ -177,18 +181,24 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
             }).eq('id', poolId)
           }
-          // Advance the recurring profile's next_generation_at past this occurrence
+          // Advance the recurring profile's next_generation_at past this
+          // occurrence. computeNextOccurrence handles bi/tri-weekly
+          // (next preferred day-of-week) and monthly Nth-weekday in
+          // addition to the simple cadence rules.
           if (profileId && form.scheduled_date) {
-            const profile = await supabase.from('recurring_job_profiles').select('recurrence_rule, custom_interval_days').eq('id', profileId).single()
+            const profile = await supabase
+              .from('recurring_job_profiles')
+              .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
+              .eq('id', profileId)
+              .single()
             if (profile.data) {
-              const days = profile.data.recurrence_rule === 'custom' ? (profile.data.custom_interval_days || 7) :
-                ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[profile.data.recurrence_rule] || 7)
-              const nextGen = new Date(form.scheduled_date)
-              nextGen.setDate(nextGen.getDate() + days)
-              await supabase.from('recurring_job_profiles').update({
-                next_generation_at: nextGen.toISOString().split('T')[0],
-                last_generated_at: new Date().toISOString(),
-              }).eq('id', profileId)
+              const next = computeNextOccurrence(form.scheduled_date, profile.data)
+              if (next) {
+                await supabase.from('recurring_job_profiles').update({
+                  next_generation_at: next.toISOString().split('T')[0],
+                  last_generated_at: new Date().toISOString(),
+                }).eq('id', profileId)
+              }
             }
           }
         } else {
@@ -446,7 +456,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           if (!profileId) throw new Error('Could not find recurring profile for this stop.')
           const { data: profileRow } = await supabase
             .from('recurring_job_profiles')
-            .select('business_id, pool_id, recurrence_rule, custom_interval_days')
+            .select('business_id, pool_id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
             .eq('id', profileId)
             .single()
           if (!profileRow?.business_id) throw new Error('Recurring profile not found.')
@@ -472,15 +482,13 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             }).eq('id', poolId)
           }
           if (form.scheduled_date) {
-            const days = profileRow.recurrence_rule === 'custom'
-              ? (profileRow.custom_interval_days || 7)
-              : ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[profileRow.recurrence_rule] || 7)
-            const nextGen = new Date(form.scheduled_date)
-            nextGen.setDate(nextGen.getDate() + days)
-            await supabase.from('recurring_job_profiles').update({
-              next_generation_at: nextGen.toISOString().split('T')[0],
-              last_generated_at: new Date().toISOString(),
-            }).eq('id', profileId)
+            const next = computeNextOccurrence(form.scheduled_date, profileRow)
+            if (next) {
+              await supabase.from('recurring_job_profiles').update({
+                next_generation_at: next.toISOString().split('T')[0],
+                last_generated_at: new Date().toISOString(),
+              }).eq('id', profileId)
+            }
           }
         } else if (!isProjected) {
           const jobUpdates = {}
@@ -576,25 +584,30 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       if (stop.type === 'job') {
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
         if (isProjected) {
-          // Skip this single occurrence by advancing the profile's next_generation_at past this date
+          // Skip this single occurrence by advancing the profile's
+          // next_generation_at past this date — works for the new
+          // multi-day-per-week and monthly-Nth rules via the shared
+          // computeNextOccurrence helper.
           const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
-          const { data: profile } = await supabase.from('recurring_job_profiles').select('recurrence_rule, custom_interval_days, pool_id').eq('id', profileId).single()
+          const { data: profile } = await supabase
+            .from('recurring_job_profiles')
+            .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, pool_id')
+            .eq('id', profileId)
+            .single()
           if (profile) {
-            const days = profile.recurrence_rule === 'custom' ? (profile.custom_interval_days || 7) :
-              ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[profile.recurrence_rule] || 7)
             const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
             if (stopDate) {
-              const nextGen = new Date(stopDate)
-              nextGen.setDate(nextGen.getDate() + days)
-              await supabase.from('recurring_job_profiles').update({
-                next_generation_at: nextGen.toISOString().split('T')[0],
-                last_generated_at: new Date().toISOString(),
-              }).eq('id', profileId)
-              // Also advance the pool's next_due_at
-              if (profile.pool_id) {
-                await supabase.from('pools').update({
-                  next_due_at: nextGen.toISOString(),
-                }).eq('id', profile.pool_id)
+              const next = computeNextOccurrence(stopDate, profile)
+              if (next) {
+                await supabase.from('recurring_job_profiles').update({
+                  next_generation_at: next.toISOString().split('T')[0],
+                  last_generated_at: new Date().toISOString(),
+                }).eq('id', profileId)
+                if (profile.pool_id) {
+                  await supabase.from('pools').update({
+                    next_due_at: next.toISOString(),
+                  }).eq('id', profile.pool_id)
+                }
               }
             }
           }

@@ -14,6 +14,7 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
+import { occurrencesInRange } from '../lib/recurringScheduling'
 
 // ─── Helpers ───────────────────────────────────
 function ymd(d) {
@@ -362,17 +363,17 @@ function Schedule({ business }) {
     }
     for (const profile of allProfiles) {
       if (!isProfileActive(profile)) continue
-      const intervalDays = profileIntervalDays(profile)
-      if (!intervalDays) continue
-      const anchorStr = profile.next_generation_at || profile.last_generated_at
-      const anchor = anchorStr ? new Date(anchorStr) : new Date()
-      if (isNaN(anchor.getTime())) continue
-      let cursor = new Date(anchor)
-      cursor.setHours(0, 0, 0, 0)
-      while (cursor > weekEnd) cursor.setDate(cursor.getDate() - intervalDays)
-      while (cursor < weekStart) cursor.setDate(cursor.getDate() + intervalDays)
+
+      // occurrencesInRange covers all three rule shapes:
+      //   - cadence interval (weekly / fortnightly / 6_weekly / quarterly /
+      //     legacy monthly / custom): walks anchor by interval days
+      //   - bi_weekly / tri_weekly: enumerates preferred_days_of_week per
+      //     week within the visible range
+      //   - monthly with monthly_week_of_month: computes Nth weekday of
+      //     each month touching the range
+      const occurrences = occurrencesInRange(profile, weekStart, weekEnd)
       let occurrenceIdx = 0
-      while (cursor <= weekEnd) {
+      for (const cursor of occurrences) {
         if (!isOccurrenceInRange(profile, cursor, occurrenceIdx)) break
         const key = ymd(cursor)
         const taken = takenByProfile.get(profile.id)
@@ -388,7 +389,6 @@ function Schedule({ business }) {
             }
           }
         }
-        cursor.setDate(cursor.getDate() + intervalDays)
         occurrenceIdx++
       }
     }

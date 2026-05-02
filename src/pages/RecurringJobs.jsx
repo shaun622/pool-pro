@@ -19,31 +19,20 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
-
-const RECURRENCE_OPTIONS = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'fortnightly', label: 'Fortnightly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: '6_weekly', label: 'Every 6 Weeks' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'custom', label: 'Custom Interval' },
-]
+import {
+  RECURRENCE_OPTIONS,
+  RECURRENCE_LABELS as RECURRENCE_LABEL,
+  DAYS_OF_WEEK,
+  MONTH_WEEK_OPTIONS,
+  expectedDayCount,
+  isMultiDayWeekly,
+  describeSchedule,
+} from '../lib/recurringScheduling'
 
 const DAY_OPTIONS = [
   { value: '', label: 'Any day' },
-  { value: '1', label: 'Monday' },
-  { value: '2', label: 'Tuesday' },
-  { value: '3', label: 'Wednesday' },
-  { value: '4', label: 'Thursday' },
-  { value: '5', label: 'Friday' },
-  { value: '6', label: 'Saturday' },
-  { value: '0', label: 'Sunday' },
+  ...DAYS_OF_WEEK.map(d => ({ value: String(d.value), label: d.long })),
 ]
-
-const RECURRENCE_LABEL = {
-  weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly',
-  '6_weekly': 'Every 6 weeks', quarterly: 'Quarterly', custom: 'Custom',
-}
 
 // Profile status logic — combines is_active + status field into a single state
 function getProfileState(p) {
@@ -93,6 +82,11 @@ const emptyForm = {
   recurrence_rule: 'weekly', custom_interval_days: '',
   preferred_day_of_week: '', preferred_time: '', assigned_staff_id: '',
   price: '', notes: '',
+  // Multi-day-per-week + Nth-weekday-of-month additions. Stored on the
+  // form as numbers / number-array and translated to nullable columns
+  // at save time depending on the selected recurrence_rule.
+  preferred_days_of_week: [],
+  monthly_week_of_month: 1,
 }
 
 const PAGE_SIZE = 25
@@ -203,12 +197,40 @@ export default function RecurringJobs() {
       recurrence_rule: profile.recurrence_rule || 'weekly',
       custom_interval_days: profile.custom_interval_days || '',
       preferred_day_of_week: profile.preferred_day_of_week != null ? String(profile.preferred_day_of_week) : '',
+      preferred_days_of_week: Array.isArray(profile.preferred_days_of_week)
+        ? profile.preferred_days_of_week.slice().sort((a, b) => a - b)
+        : [],
+      monthly_week_of_month: profile.monthly_week_of_month || 1,
       preferred_time: profile.preferred_time || '',
       assigned_staff_id: profile.assigned_staff_id || '',
       price: profile.price || '',
       notes: profile.notes || '',
     })
     setModalOpen(true)
+  }
+
+  // Toggle a day in/out of the multi-day picker, capped at the rule's
+  // expected count. Mirrors the AddRecurringModal helper.
+  function toggleEditMultiDay(dayValue) {
+    const cap = expectedDayCount(form.recurrence_rule)
+    setForm(prev => {
+      const current = prev.preferred_days_of_week || []
+      if (current.includes(dayValue)) {
+        return { ...prev, preferred_days_of_week: current.filter(d => d !== dayValue) }
+      }
+      if (cap != null && current.length >= cap) return prev
+      return { ...prev, preferred_days_of_week: [...current, dayValue].sort((a, b) => a - b) }
+    })
+  }
+
+  // Reset day pickers when the rule flips so stale values don't leak.
+  function changeEditRule(newRule) {
+    setForm(prev => ({
+      ...prev,
+      recurrence_rule: newRule,
+      preferred_days_of_week: isMultiDayWeekly(newRule) ? prev.preferred_days_of_week : [],
+      monthly_week_of_month: newRule === 'monthly' ? (prev.monthly_week_of_month || 1) : 1,
+    }))
   }
 
   // Client creation lives in <NewClientModal> — same modal used at
@@ -253,8 +275,18 @@ export default function RecurringJobs() {
   async function handleSave(e) {
     e.preventDefault()
     if (!form.client_id || !form.title.trim()) return
+    // Block save when bi/tri-weekly hasn't filled the day chips —
+    // matches the schema CHECK so we don't dump the operator into a
+    // raw Postgres error.
+    const expectedDays = expectedDayCount(form.recurrence_rule)
+    if (expectedDays != null && (form.preferred_days_of_week || []).length !== expectedDays) {
+      toast.error(`Pick ${expectedDays} days for ${RECURRENCE_LABEL[form.recurrence_rule] || form.recurrence_rule}`)
+      return
+    }
     setSaving(true)
     try {
+      const isMulti = isMultiDayWeekly(form.recurrence_rule)
+      const isMonthlyNth = form.recurrence_rule === 'monthly' && form.preferred_day_of_week !== ''
       const payload = {
         client_id: form.client_id,
         pool_id: form.pool_id || null,
@@ -262,7 +294,12 @@ export default function RecurringJobs() {
         title: form.title.trim(),
         recurrence_rule: form.recurrence_rule,
         custom_interval_days: form.recurrence_rule === 'custom' ? Number(form.custom_interval_days) || 7 : null,
-        preferred_day_of_week: form.preferred_day_of_week !== '' ? Number(form.preferred_day_of_week) : null,
+        // bi/tri-weekly: clear the single-day column and populate the array.
+        // monthly-Nth: keep the single-day column (which day) plus monthly_week_of_month.
+        // Everything else: legacy single-day column only.
+        preferred_day_of_week: isMulti ? null : (form.preferred_day_of_week !== '' ? Number(form.preferred_day_of_week) : null),
+        preferred_days_of_week: isMulti ? form.preferred_days_of_week : null,
+        monthly_week_of_month: isMonthlyNth ? form.monthly_week_of_month : null,
         preferred_time: form.preferred_time || null,
         assigned_staff_id: form.assigned_staff_id || null,
         price: form.price ? Number(form.price) : null,
@@ -454,7 +491,7 @@ export default function RecurringJobs() {
                     <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.title}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.clients?.name || 'Unknown'}</p>
                     <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                      {RECURRENCE_LABEL[p.recurrence_rule] || p.recurrence_rule}
+                      {describeSchedule(p)}
                       {p.next_generation_at && ` · next ${formatDate(p.next_generation_at)}`}
                     </p>
                   </div>
@@ -507,7 +544,7 @@ export default function RecurringJobs() {
                           </span>
                         </span>
                         <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                          {RECURRENCE_LABEL[p.recurrence_rule] || p.recurrence_rule}
+                          {describeSchedule(p)}
                         </span>
                         <span className="text-sm tabular-nums text-gray-700 dark:text-gray-300 truncate">
                           {p.next_generation_at ? formatDate(p.next_generation_at) : <span className="text-gray-300 dark:text-gray-600">—</span>}
@@ -584,7 +621,7 @@ export default function RecurringJobs() {
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Frequency</p>
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                        {RECURRENCE_LABEL[selectedProfile.recurrence_rule] || selectedProfile.recurrence_rule}
+                        {describeSchedule(selectedProfile)}
                       </p>
                     </div>
                     <div>
@@ -684,13 +721,81 @@ export default function RecurringJobs() {
           )}
           <Input label="Service Title" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. Regular Maintenance" required />
           <div className="grid grid-cols-2 gap-3">
-            <Select label="Frequency" options={RECURRENCE_OPTIONS} value={form.recurrence_rule} onChange={e => setForm(prev => ({ ...prev, recurrence_rule: e.target.value }))} />
-            {form.recurrence_rule === 'custom' ? (
+            <Select
+              label="Frequency"
+              options={RECURRENCE_OPTIONS}
+              value={form.recurrence_rule}
+              onChange={e => changeEditRule(e.target.value)}
+            />
+            {form.recurrence_rule === 'custom' && (
               <Input label="Interval (days)" type="number" value={form.custom_interval_days} onChange={e => setForm(prev => ({ ...prev, custom_interval_days: e.target.value }))} placeholder="10" />
-            ) : (
-              <Select label="Preferred Day" options={DAY_OPTIONS} value={form.preferred_day_of_week} onChange={e => setForm(prev => ({ ...prev, preferred_day_of_week: e.target.value }))} />
+            )}
+            {/* Single-day picker for weekly / fortnightly / 6_weekly /
+                quarterly. Bi/tri-weekly use the chip grid below; monthly
+                pairs the day with an "Nth" select. */}
+            {!isMultiDayWeekly(form.recurrence_rule)
+              && form.recurrence_rule !== 'custom'
+              && form.recurrence_rule !== 'monthly' && (
+              <Select
+                label="Preferred Day"
+                options={DAY_OPTIONS}
+                value={form.preferred_day_of_week}
+                onChange={e => setForm(prev => ({ ...prev, preferred_day_of_week: e.target.value }))}
+              />
+            )}
+            {form.recurrence_rule === 'monthly' && (
+              <Select
+                label="Day of week"
+                options={DAY_OPTIONS}
+                value={form.preferred_day_of_week}
+                onChange={e => setForm(prev => ({ ...prev, preferred_day_of_week: e.target.value }))}
+              />
             )}
           </div>
+
+          {/* Multi-day weekly chip grid */}
+          {isMultiDayWeekly(form.recurrence_rule) && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                Pick {expectedDayCount(form.recurrence_rule)} days
+                <span className="ml-2 text-gray-400 dark:text-gray-500">
+                  ({form.preferred_days_of_week.length}/{expectedDayCount(form.recurrence_rule)})
+                </span>
+              </label>
+              <div className="grid grid-cols-7 gap-1.5">
+                {DAYS_OF_WEEK.map(d => {
+                  const active = form.preferred_days_of_week.includes(d.value)
+                  const cap = expectedDayCount(form.recurrence_rule)
+                  const atCap = !active && form.preferred_days_of_week.length >= cap
+                  return (
+                    <button key={d.value} type="button"
+                      onClick={() => toggleEditMultiDay(d.value)}
+                      disabled={atCap}
+                      className={cn(
+                        'py-2 rounded-lg text-xs font-semibold transition-all min-h-[40px]',
+                        active
+                          ? 'bg-pool-500 text-white shadow-sm'
+                          : atCap
+                            ? 'bg-gray-50 dark:bg-gray-900 text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100',
+                      )}>
+                      {d.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Monthly Nth-occurrence picker */}
+          {form.recurrence_rule === 'monthly' && (
+            <Select
+              label="Nth occurrence of month"
+              value={String(form.monthly_week_of_month)}
+              onChange={e => setForm(prev => ({ ...prev, monthly_week_of_month: Number(e.target.value) }))}
+              options={MONTH_WEEK_OPTIONS.map(o => ({ value: String(o.value), label: o.label }))}
+            />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Input label="Preferred Time" type="time" value={form.preferred_time} onChange={e => setForm(prev => ({ ...prev, preferred_time: e.target.value }))} />
             <Input label="Price ($)" type="number" value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} placeholder="150" />
