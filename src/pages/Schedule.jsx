@@ -72,6 +72,13 @@ function frequencyToDays(freq) {
   if (f === 'monthly' || f === 'every_month' || f === '1m') return 30
   if (f === '6_weekly' || f === 'every_6_weeks' || f === '6w') return 42
   if (f === 'quarterly' || f === '3m') return 90
+  // bi_weekly / tri_weekly are multi-day-per-week rules — they don't have
+  // a single "interval in days" representation. Returning null tells the
+  // pool projector to project ONCE at next_due_at; the recurring profile
+  // (which always exists for these rules — the StopDetailModal /
+  // AddRecurringModal save handlers spawn one when needed) drives the
+  // remaining occurrences via path 3, which uses preferred_days_of_week.
+  if (f === 'bi_weekly' || f === 'tri_weekly') return null
   const n = parseInt(f, 10)
   if (!isNaN(n) && n > 0) return n
   return null
