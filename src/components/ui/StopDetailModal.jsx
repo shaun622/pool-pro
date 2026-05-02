@@ -1339,7 +1339,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 {stop.type === 'job' ? 'Edit Job' : 'Edit Service'}
               </Button>
               <Button variant="danger" onClick={handleDeleteClick} className="flex-1">
-                {stop.type === 'job' ? (stop.projected ? 'Cancel' : 'Delete') : 'Delete'}
+                Delete
               </Button>
             </div>
           </div>
