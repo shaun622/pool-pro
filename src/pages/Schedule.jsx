@@ -380,10 +380,27 @@ function Schedule({ business }) {
 
     // 3. Recurring job profile projections
     const takenByProfile = new Map()
+    // jobs.replaces_recurring_date carries the link from a moved job
+    // back to the original projection date it replaced. Build a per-
+    // profile set of those dates so the projector skips them — that's
+    // what makes "moving an occurrence" not duplicate, and "deleting
+    // the moved job" naturally restores the original date (the job's
+    // replaces_recurring_date is gone with it).
+    const replacedByProfile = new Map()
     for (const j of allJobs) {
       if (j.recurring_profile_id && j.scheduled_date) {
         if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
         takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
+      }
+      if (j.recurring_profile_id && j.replaces_recurring_date) {
+        // DB date columns come back as 'YYYY-MM-DD' strings via PostgREST.
+        const dateStr = typeof j.replaces_recurring_date === 'string'
+          ? j.replaces_recurring_date.split('T')[0]
+          : null
+        if (dateStr) {
+          if (!replacedByProfile.has(j.recurring_profile_id)) replacedByProfile.set(j.recurring_profile_id, new Set())
+          replacedByProfile.get(j.recurring_profile_id).add(dateStr)
+        }
       }
     }
     for (const profile of allProfiles) {
@@ -402,7 +419,9 @@ function Schedule({ business }) {
         if (!isOccurrenceInRange(profile, cursor, occurrenceIdx)) break
         const key = ymd(cursor)
         const taken = takenByProfile.get(profile.id)
-        if (!taken || !taken.has(key)) {
+        const replaced = replacedByProfile.get(profile.id)
+        const isReplaced = replaced && replaced.has(key)
+        if (!isReplaced && (!taken || !taken.has(key))) {
           if (!isPoolCovered(cursor, profile.pool_id)) {
             // Same defensive filter as the pool projector — suppress
             // when the pool was already serviced on this day.

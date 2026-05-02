@@ -165,12 +165,24 @@ export default function TechRunSheet() {
       poolIdsCovered.add(p.id)
     }
 
-    // Recurring profiles for today
+    // Recurring profiles for today. Same dedupe shape as Schedule.jsx:
+    // takenByProfile + replacedByProfile both filter the projection so
+    // a moved/skipped occurrence doesn't reappear here either.
     const takenByProfile = new Map()
+    const replacedByProfile = new Map()
     for (const j of jobs) {
       if (j.recurring_profile_id && j.scheduled_date) {
         if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
         takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
+      }
+      if (j.recurring_profile_id && j.replaces_recurring_date) {
+        const dateStr = typeof j.replaces_recurring_date === 'string'
+          ? j.replaces_recurring_date.split('T')[0]
+          : null
+        if (dateStr) {
+          if (!replacedByProfile.has(j.recurring_profile_id)) replacedByProfile.set(j.recurring_profile_id, new Set())
+          replacedByProfile.get(j.recurring_profile_id).add(dateStr)
+        }
       }
     }
     for (const profile of profiles) {
@@ -185,7 +197,9 @@ export default function TechRunSheet() {
       const cursor = occurrences[0]
       if (sameYMD(cursor, now)) {
         const taken = takenByProfile.get(profile.id)
+        const replaced = replacedByProfile.get(profile.id)
         if (taken && taken.has(todayKey)) continue
+        if (replaced && replaced.has(todayKey)) continue
         if (profile.pool_id && poolIdsCovered.has(profile.pool_id)) continue
         items.push(profileToStop(profile, cursor))
         if (profile.pool_id) poolIdsCovered.add(profile.pool_id)

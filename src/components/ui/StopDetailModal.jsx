@@ -229,11 +229,21 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             if (!poolId) poolId = profileRow?.pool_id || null
           }
           if (!businessId) throw new Error('Could not determine business for new job — recurring profile not found.')
+          // Capture the date this job is replacing — extract from the
+          // synthetic stop id (`profile-<uuid>-YYYY-MM-DD`) or fall
+          // back to stop.scheduled_date. The projector uses this to
+          // suppress the original-date projection while the job
+          // exists; deleting the job removes the suppression.
+          const origRecurringDate = stop.scheduled_date
+            || (typeof stop.id === 'string' && stop.id.startsWith('profile-')
+              ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1]
+              : null)
           const { data: inserted, error: insErr } = await supabase.from('jobs').insert({
             business_id: businessId,
             client_id: stop.client_id,
             pool_id: poolId,
             recurring_profile_id: profileId || null,
+            replaces_recurring_date: origRecurringDate || null,
             title: form.title,
             status: form.status || 'scheduled',
             scheduled_date: form.scheduled_date || null,
@@ -252,31 +262,27 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
             }).eq('id', poolId)
           }
-          // Advance the recurring profile's next_generation_at past this
-          // occurrence AND record the original date in skipped_dates.
-          // For single-day cadence rules advancing the anchor is enough;
-          // for bi/tri-weekly the projection ignores the anchor and
-          // enumerates every preferred day, so without skipped_dates the
-          // moved occurrence's old date keeps showing up.
+          // Advance the recurring profile's next_generation_at past
+          // this occurrence. The projector also reads
+          // jobs.replaces_recurring_date (set on the insert above) to
+          // suppress the original-date projection, so we don't need to
+          // touch skipped_dates from the move path — that's reserved
+          // for explicit "skip this one" deletes where no job exists
+          // to carry the link.
           if (profileId && form.scheduled_date) {
             const profile = await supabase
               .from('recurring_job_profiles')
-              .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, skipped_dates')
+              .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
               .eq('id', profileId)
               .single()
             if (profile.data) {
               const next = computeNextOccurrence(form.scheduled_date, profile.data)
-              const origDate = stop.scheduled_date || (typeof stop.id === 'string' && stop.id.startsWith('profile-') ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1] : null)
-              const skipped = Array.isArray(profile.data.skipped_dates) ? profile.data.skipped_dates : []
-              const newSkipped = origDate && origDate !== form.scheduled_date && !skipped.includes(origDate)
-                ? [...skipped, origDate]
-                : skipped
-              const updates = {
-                last_generated_at: new Date().toISOString(),
-                skipped_dates: newSkipped,
+              if (next) {
+                await supabase.from('recurring_job_profiles').update({
+                  next_generation_at: next.toISOString().split('T')[0],
+                  last_generated_at: new Date().toISOString(),
+                }).eq('id', profileId)
               }
-              if (next) updates.next_generation_at = next.toISOString().split('T')[0]
-              await supabase.from('recurring_job_profiles').update(updates).eq('id', profileId)
             }
           }
         } else {
@@ -618,17 +624,26 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           if (!profileId) throw new Error('Could not find recurring profile for this stop.')
           const { data: profileRow } = await supabase
             .from('recurring_job_profiles')
-            .select('business_id, pool_id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, skipped_dates')
+            .select('business_id, pool_id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
             .eq('id', profileId)
             .single()
           if (!profileRow?.business_id) throw new Error('Recurring profile not found.')
           const poolId = profileRow.pool_id || stop.pool_id || null
 
+          // Same replaces_recurring_date trick as handleSave — store the
+          // link to the original projection date on the new job so the
+          // projector can suppress that date for as long as this job
+          // exists, and naturally restore it on delete.
+          const origRecurringDate = stop.scheduled_date
+            || (typeof stop.id === 'string' && stop.id.startsWith('profile-')
+              ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1]
+              : null)
           const { error: insErr } = await supabase.from('jobs').insert({
             business_id: profileRow.business_id,
             client_id: stop.client_id,
             pool_id: poolId,
             recurring_profile_id: profileId,
+            replaces_recurring_date: origRecurringDate || null,
             title: form.title || stop.title || 'Pool Service',
             status: 'scheduled',
             scheduled_date: form.scheduled_date || null,
@@ -644,20 +659,13 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             }).eq('id', poolId)
           }
           if (form.scheduled_date) {
-            // Same skip-the-original-date dance as handleSave — without
-            // it bi/tri-weekly profiles re-project the moved occurrence.
             const next = computeNextOccurrence(form.scheduled_date, profileRow)
-            const origDate = stop.scheduled_date || (typeof stop.id === 'string' && stop.id.startsWith('profile-') ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1] : null)
-            const skipped = Array.isArray(profileRow.skipped_dates) ? profileRow.skipped_dates : []
-            const newSkipped = origDate && origDate !== form.scheduled_date && !skipped.includes(origDate)
-              ? [...skipped, origDate]
-              : skipped
-            const updates = {
-              last_generated_at: new Date().toISOString(),
-              skipped_dates: newSkipped,
+            if (next) {
+              await supabase.from('recurring_job_profiles').update({
+                next_generation_at: next.toISOString().split('T')[0],
+                last_generated_at: new Date().toISOString(),
+              }).eq('id', profileId)
             }
-            if (next) updates.next_generation_at = next.toISOString().split('T')[0]
-            await supabase.from('recurring_job_profiles').update(updates).eq('id', profileId)
           }
         } else if (!isProjected) {
           const jobUpdates = {}
