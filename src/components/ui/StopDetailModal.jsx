@@ -129,8 +129,21 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
 
         if (isProjected) {
-          // Need a business_id — pull it from the recurring profile
+          // Need a business_id — pull it from the recurring profile.
+          // Prefer form.recurring_profile_id (set by the async lookup
+          // on modal open), but fall back to extracting the profile id
+          // directly from the synthetic stop id, which is deterministic
+          // (profileToStop builds it as `profile-<uuid>-YYYY-MM-DD`).
+          // Without the fallback, a fast user who changes the date and
+          // hits Save before the async lookup lands gets "Could not
+          // determine business for new job" and the new job never
+          // inserts — that was the bug behind the Schedule "I changed
+          // the date and nothing happened" report.
           let profileId = form.recurring_profile_id
+          if (!profileId && typeof stop.id === 'string' && stop.id.startsWith('profile-')) {
+            // Strip the trailing -YYYY-MM-DD; what remains is the UUID.
+            profileId = stop.id.replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+          }
           if (profileId) {
             const { data: profileRow } = await supabase
               .from('recurring_job_profiles')
@@ -140,7 +153,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             businessId = profileRow?.business_id || null
             if (!poolId) poolId = profileRow?.pool_id || null
           }
-          if (!businessId) throw new Error('Could not determine business for new job')
+          if (!businessId) throw new Error('Could not determine business for new job — recurring profile not found.')
           const { data: inserted, error: insErr } = await supabase.from('jobs').insert({
             business_id: businessId,
             client_id: stop.client_id,
