@@ -194,6 +194,7 @@ export default function JobDetail() {
     e.preventDefault()
     setSaving(true)
     try {
+      const dateChanged = (editForm.scheduled_date || '') !== (job.scheduled_date || '')
       const updates = {
         title: editForm.title.trim(),
         scheduled_date: editForm.scheduled_date || null,
@@ -208,6 +209,18 @@ export default function JobDetail() {
       }
       const { error } = await supabase.from('jobs').update(updates).eq('id', id)
       if (error) throw error
+
+      // Keep the pool's next_due_at aligned with the job's new date —
+      // without this the Schedule view shows the pool projection at the
+      // OLD date as a phantom stop while the real job sits at the new
+      // date (the dedupe in Schedule.jsx only suppresses the pool
+      // projection on the same day as the job, not on the day it was).
+      if (dateChanged && job.pool_id && editForm.scheduled_date) {
+        await supabase.from('pools').update({
+          next_due_at: new Date(editForm.scheduled_date + 'T09:00:00').toISOString(),
+        }).eq('id', job.pool_id)
+      }
+
       setJob(prev => ({ ...prev, ...updates }))
       setEditModalOpen(false)
     } catch (err) {

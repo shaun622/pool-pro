@@ -204,6 +204,18 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           }
           const { error } = await supabase.from('jobs').update(updates).eq('id', jobId)
           if (error) throw error
+
+          // If the operator changed the date on a real job that's tied to
+          // a pool, sync pool.next_due_at. Otherwise the Schedule view
+          // keeps projecting the pool on the old date as a phantom stop
+          // while the job sits at the new date — the dedupe in
+          // Schedule.jsx only suppresses the pool projection for the day
+          // the job is on, not the day it WAS on.
+          if (poolId && (form.scheduled_date || '') !== (stop.scheduled_date || '') && form.scheduled_date) {
+            await supabase.from('pools').update({
+              next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
+            }).eq('id', poolId)
+          }
         }
 
         // Sync pool address (job's address comes from its linked pool)
@@ -415,13 +427,76 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         }
         // Save notes + schedule
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
-        if (!isProjected) {
+        const dateChanged  = (form.scheduled_date || '') !== (stop.scheduled_date || '')
+        const timeChanged  = (form.scheduled_time || '') !== (stop.scheduled_time || '')
+        const notesChanged = (form.notes || '')           !== (stop.notes || '')
+
+        if (isProjected && (dateChanged || timeChanged || notesChanged)) {
+          // Quick-edit on a projected stop used to silently discard the
+          // change because there's no row to UPDATE — same root cause as
+          // the handleSave bug. Materialize the projection by inserting
+          // a real job, then advance the pool's next_due_at and the
+          // profile's next_generation_at so the old projection
+          // disappears from the schedule. Mirrors handleSave's
+          // projected branch.
+          let profileId = form.recurring_profile_id
+          if (!profileId && typeof stop.id === 'string' && stop.id.startsWith('profile-')) {
+            profileId = stop.id.replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+          }
+          if (!profileId) throw new Error('Could not find recurring profile for this stop.')
+          const { data: profileRow } = await supabase
+            .from('recurring_job_profiles')
+            .select('business_id, pool_id, recurrence_rule, custom_interval_days')
+            .eq('id', profileId)
+            .single()
+          if (!profileRow?.business_id) throw new Error('Recurring profile not found.')
+          const poolId = profileRow.pool_id || stop.pool_id || null
+
+          const { error: insErr } = await supabase.from('jobs').insert({
+            business_id: profileRow.business_id,
+            client_id: stop.client_id,
+            pool_id: poolId,
+            recurring_profile_id: profileId,
+            title: form.title || stop.title || 'Pool Service',
+            status: 'scheduled',
+            scheduled_date: form.scheduled_date || null,
+            scheduled_time: form.scheduled_time || null,
+            notes: form.notes || null,
+            assigned_staff_id: stop.assigned_staff_id || null,
+          })
+          if (insErr) throw insErr
+
+          if (poolId && form.scheduled_date) {
+            await supabase.from('pools').update({
+              next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
+            }).eq('id', poolId)
+          }
+          if (form.scheduled_date) {
+            const days = profileRow.recurrence_rule === 'custom'
+              ? (profileRow.custom_interval_days || 7)
+              : ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[profileRow.recurrence_rule] || 7)
+            const nextGen = new Date(form.scheduled_date)
+            nextGen.setDate(nextGen.getDate() + days)
+            await supabase.from('recurring_job_profiles').update({
+              next_generation_at: nextGen.toISOString().split('T')[0],
+              last_generated_at: new Date().toISOString(),
+            }).eq('id', profileId)
+          }
+        } else if (!isProjected) {
           const jobUpdates = {}
-          if ((form.notes || '') !== (stop.notes || '')) jobUpdates.notes = form.notes || null
-          if ((form.scheduled_date || '') !== (stop.scheduled_date || '')) jobUpdates.scheduled_date = form.scheduled_date || null
-          if ((form.scheduled_time || '') !== (stop.scheduled_time || '')) jobUpdates.scheduled_time = form.scheduled_time || null
+          if (notesChanged) jobUpdates.notes = form.notes || null
+          if (dateChanged)  jobUpdates.scheduled_date = form.scheduled_date || null
+          if (timeChanged)  jobUpdates.scheduled_time = form.scheduled_time || null
           if (Object.keys(jobUpdates).length > 0) {
             await supabase.from('jobs').update(jobUpdates).eq('id', stop.id)
+            // Keep pool.next_due_at aligned with the job's date — without
+            // this, the Schedule view's pool projection lingers on the
+            // old date as a phantom stop alongside the moved job.
+            if (dateChanged && stop.pool_id && form.scheduled_date) {
+              await supabase.from('pools').update({
+                next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
+              }).eq('id', stop.pool_id)
+            }
           }
         }
       }
