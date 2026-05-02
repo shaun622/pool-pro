@@ -790,7 +790,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 Recurring page where the whole schedule is editable. */}
             {loadedProfile && (
               <button
-                onClick={() => { onClose(); navigate('/recurring') }}
+                onClick={() => { onClose(); navigate('/recurring-jobs') }}
                 className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-pool-50 dark:bg-pool-950/40 border border-pool-200/60 dark:border-pool-800/40 text-[11px] font-semibold text-pool-700 dark:text-pool-300 hover:bg-pool-100 dark:hover:bg-pool-950/60 transition-colors"
                 title="Open recurring services"
               >
@@ -1194,7 +1194,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 Edits here apply to this stop only.{' '}
                 <button
                   type="button"
-                  onClick={() => { onClose?.(); navigate('/recurring') }}
+                  onClick={() => { onClose?.(); navigate('/recurring-jobs') }}
                   className="font-semibold underline hover:no-underline"
                 >
                   Edit the recurring schedule →
@@ -1280,7 +1280,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                         To edit the schedule or remove all future {dayLabel ? `${dayLabel}s` : 'occurrences'},{' '}
                         <button
                           type="button"
-                          onClick={() => { onClose?.(); navigate('/recurring') }}
+                          onClick={() => { onClose?.(); navigate('/recurring-jobs') }}
                           className="font-semibold text-pool-600 dark:text-pool-400 hover:underline"
                         >
                           go to Recurring →

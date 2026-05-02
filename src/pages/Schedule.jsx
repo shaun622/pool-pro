@@ -453,7 +453,14 @@ function Schedule({ business }) {
       }
     }
 
-    // 4. Overdue pools — surface under today's column
+    // 4. Overdue pools — surface under today's column. Skip pools with
+    // an active profile (same dedupe rule as path 2): the profile is
+    // the source of truth and projects via path 3, so an "overdue
+    // pool stop" for a pool whose profile is healthy is just noise
+    // that appears as a phantom day after the operator skips an
+    // occurrence (handleDeleteSingle backs pool.next_due_at into the
+    // past as the "next" cursor advances). The "random Saturday"
+    // bug after skip-day was this exact pattern.
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     if (startOfToday >= weekStart && startOfToday <= weekEnd) {
@@ -463,6 +470,7 @@ function Schedule({ business }) {
         const poolIdsInToday = new Set(todayGroup.stops.filter(s => s.pool_id).map(s => s.pool_id))
         for (const p of allPools) {
           if (!p.next_due_at) continue
+          if (poolsWithActiveProfile.has(p.id)) continue
           const d = new Date(p.next_due_at)
           if (d >= startOfToday) continue
           if (poolIdsInToday.has(p.id)) continue
