@@ -7,7 +7,6 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
-import Modal from '../components/ui/Modal'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
 import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Users, X } from 'lucide-react'
@@ -208,12 +207,24 @@ function Schedule({ business }) {
   const [serviceDays, setServiceDays] = useState(new Set()) // "<pool_id>:<ymd>" keys
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
-  // The desktop week grid caps each day column at MAX_VISIBLE_STOPS rows
-  // and surfaces the rest behind a "+N more" link that opens this
-  // focused day view. Holds the Date currently focused, or null when
-  // the modal is closed. Mobile WeekStack already lists all stops
-  // inline so it doesn't need this affordance.
+  // The desktop week grid caps each day column at MAX_VISIBLE_STOPS_PER_DAY
+  // rows. Clicking a day header or the "+N more" link sets this state,
+  // which flips the bottom "Today" section into a "selected day"
+  // section showing every stop for that day with no cap. Default null
+  // means show today (current behaviour). Mobile WeekStack lists every
+  // day inline so it doesn't need this.
   const [focusedDay, setFocusedDay] = useState(null)
+
+  // Scroll the bottom day section into view when the operator picks a
+  // day from the grid — without this, on a tall page they might not
+  // notice the section updating below the fold.
+  function focusDay(day) {
+    setFocusedDay(day)
+    requestAnimationFrame(() => {
+      document.getElementById('schedule-day-section')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
   // Filter the grid + today list to a single tech (or 'unassigned') —
   // toggled by clicking a pill in the "On service / Crew" card.
   // null = no filter (show everyone).
@@ -539,7 +550,7 @@ function Schedule({ business }) {
         <>
           {/* Desktop: 7-column grid */}
           <div className="hidden md:block">
-            <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} onFocusDay={setFocusedDay} />
+            <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} onFocusDay={focusDay} />
           </div>
           {/* Mobile: stacked-by-day list */}
           <div className="md:hidden">
@@ -553,9 +564,35 @@ function Schedule({ business }) {
               onSelect={(id) => setTechFilter(prev => prev === id ? null : id)}
             />
           )}
-          {/* TodayList only on desktop — mobile already shows today inline in the stack */}
-          <div className="hidden md:block">
-            <TodayList stops={filteredTodayStops} onStopSelect={handleStopSelect} />
+          {/* Selected-day list. Default = today; clicking a day header
+              or "+N more" in the week grid flips this section to that
+              day instead so all its stops are visible inline (no cap,
+              no modal). Mobile's WeekStack already lists everything
+              by day so this section stays desktop-only. */}
+          <div className="hidden md:block" id="schedule-day-section">
+            {(() => {
+              const today = new Date()
+              const isFocusedToday = focusedDay && sameYMD(focusedDay, today)
+              const showDay = focusedDay || today
+              const showStops = focusedDay
+                ? (filteredStopsByDay.get(ymd(focusedDay)) || [])
+                : filteredTodayStops
+              const heading = focusedDay && !isFocusedToday
+                ? showDay.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' })
+                : 'Today'
+              const emptyText = focusedDay && !isFocusedToday
+                ? `Nothing scheduled for ${showDay.toLocaleDateString('en-AU', { weekday: 'long' })}.`
+                : undefined
+              return (
+                <TodayList
+                  stops={showStops}
+                  onStopSelect={handleStopSelect}
+                  heading={heading}
+                  emptyText={emptyText}
+                  onClearFocus={focusedDay && !isFocusedToday ? () => setFocusedDay(null) : null}
+                />
+              )
+            })()}
           </div>
         </>
       )}
@@ -567,24 +604,6 @@ function Schedule({ business }) {
         stopNumber={1}
         onUpdated={() => { fetchData(); setSelectedStop(null) }}
         staffList={allStaff}
-      />
-
-      {/* Focused day view — opened by "+N more" or by clicking the day
-          header in the desktop week grid. Lists every stop for that
-          one day (no cap), reusing TodayRow for visual parity with
-          the standalone Today list. Tapping a row hands off to the
-          regular StopDetailModal. */}
-      <DayStopsModal
-        day={focusedDay}
-        stops={focusedDay ? (filteredStopsByDay.get(ymd(focusedDay)) || []) : []}
-        onClose={() => setFocusedDay(null)}
-        onStopSelect={(stop) => {
-          // Close the day modal first so the stop modal isn't stacked
-          // on top — the StopDetailModal is the operator's main edit
-          // surface and shouldn't be visually nested.
-          setFocusedDay(null)
-          handleStopSelect(stop)
-        }}
       />
     </PageWrapper>
   )
@@ -990,60 +1009,39 @@ function TechAvatar({ photo, name }) {
   )
 }
 
-// ─── Focused day view — modal listing every stop for one day ────
-// Surfaced from the desktop week grid when a day has more stops than
-// the column can show inline (the "+N more" link) or when the operator
-// clicks the day header. Re-uses TodayRow so a busy day reads the same
-// as the standalone Today list.
-function DayStopsModal({ day, stops, onClose, onStopSelect }) {
-  if (!day) return null
-  const heading = day.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
-  return (
-    <Modal open={!!day} onClose={onClose} title={heading} size="md">
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-            All stops
-          </p>
-          <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
-            {stops.length}
-          </span>
-        </div>
-        {stops.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">
-            Nothing scheduled for this day.
-          </p>
-        ) : (
-          <ul className="divide-y divide-gray-100 dark:divide-gray-800 -mx-2">
-            {stops.map(stop => (
-              <li key={stop.id}>
-                <TodayRow stop={stop} onClick={() => onStopSelect(stop)} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </Modal>
-  )
-}
-
 // ─── Today list (below week grid; also stand-alone for Day view) ──
-function TodayList({ stops, onStopSelect, variant = 'attached' }) {
+// `heading` defaults to "Today". When the operator clicks a day in the
+// week grid, Schedule.jsx flips this section to that day instead and
+// passes onClearFocus so a "Back to today" affordance can return them.
+// emptyText too so the empty state reads right for the day they're on.
+function TodayList({ stops, onStopSelect, variant = 'attached', heading = 'Today', emptyText, onClearFocus }) {
+  const fallbackEmpty = variant === 'standalone' ? 'Nothing scheduled today.' : 'Nothing scheduled.'
   return (
     <Card className="p-0 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400 inline-flex items-center gap-2">
           <CalendarClock className="w-3.5 h-3.5" strokeWidth={2.5} />
-          Today
+          {heading}
         </p>
-        <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
-          {stops.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {onClearFocus && (
+            <button
+              type="button"
+              onClick={onClearFocus}
+              className="text-[11px] font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300"
+            >
+              Back to today
+            </button>
+          )}
+          <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+            {stops.length}
+          </span>
+        </div>
       </div>
       {stops.length === 0 ? (
         <div className="px-4 py-12 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {variant === 'standalone' ? 'Nothing scheduled today.' : 'Nothing scheduled.'}
+            {emptyText || fallbackEmpty}
           </p>
         </div>
       ) : (
