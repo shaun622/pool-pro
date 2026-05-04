@@ -80,8 +80,12 @@ export function formatCurrency(amount) {
   }).format(amount || 0)
 }
 
-export function calculateGST(subtotal) {
-  return Math.round(subtotal * 0.1 * 100) / 100
+// GST rate is per-business — see businesses.gst_rate (migration
+// 20260504120000). Default kept at 0.10 (Australian) so any caller
+// that hasn't yet been wired through the new business setting still
+// produces correct totals for the current rate.
+export function calculateGST(subtotal, rate = 0.10) {
+  return Math.round(subtotal * rate * 100) / 100
 }
 
 export function cn(...args) {

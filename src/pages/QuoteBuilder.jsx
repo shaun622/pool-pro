@@ -45,6 +45,11 @@ export default function QuoteBuilder() {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(isEditing)
   const [quoteStatus, setQuoteStatus] = useState('draft')
+  // Per-doc gst_rate (null on legacy quotes that predate the column —
+  // those fall back to business.gst_rate, then to the 0.10 hardcoded
+  // default in calculateGST). New quotes inherit business.gst_rate at
+  // save time so they're frozen against future rate changes.
+  const [docGstRate, setDocGstRate] = useState(null)
   const [converting, setConverting] = useState(false)
   const [convertModalOpen, setConvertModalOpen] = useState(false)
   const [convertForm, setConvertForm] = useState({
@@ -133,6 +138,7 @@ export default function QuoteBuilder() {
       setScope(data.scope || '')
       setTerms(data.terms || '')
       setQuoteStatus(data.status || 'draft')
+      setDocGstRate(data.gst_rate != null ? Number(data.gst_rate) : null)
       setLoading(false)
     }
     fetchQuote()
@@ -211,7 +217,11 @@ export default function QuoteBuilder() {
     (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
     0
   )
-  const gst = calculateGST(subtotal)
+  // Effective rate: per-doc (when editing an existing quote) → business
+  // default → hardcoded 0.10. The hardcoded fallback only fires before
+  // business has loaded; once it lands the default kicks in.
+  const gstRate = docGstRate ?? (business?.gst_rate != null ? Number(business.gst_rate) : 0.10)
+  const gst = calculateGST(subtotal, gstRate)
   const total = subtotal + gst
 
   function updateLineItem(index, field, value) {
@@ -272,6 +282,9 @@ export default function QuoteBuilder() {
       terms,
       subtotal,
       gst,
+      // Persist the rate alongside the amount so a future business-
+      // level rate change doesn't retroactively relabel this quote.
+      gst_rate: gstRate,
       total,
       status,
       recurring_settings: null,
@@ -654,7 +667,7 @@ export default function QuoteBuilder() {
                 <span className="text-gray-700 dark:text-gray-300">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">GST (10%)</span>
+                <span className="text-gray-500 dark:text-gray-400">GST ({+(gstRate * 100).toFixed(2)}%)</span>
                 <span className="text-gray-700 dark:text-gray-300">{formatCurrency(gst)}</span>
               </div>
               <div className="flex justify-between text-base font-semibold border-t border-gray-200 dark:border-gray-700 pt-2">

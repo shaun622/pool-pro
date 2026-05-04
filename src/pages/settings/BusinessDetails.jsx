@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Building2, Check, Image as ImageIcon, Palette, Trash2, Upload } from 'lucide-react'
+import { Building2, Check, Image as ImageIcon, Palette, Receipt, Trash2, Upload } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input, { Select } from '../../components/ui/Input'
@@ -42,6 +42,10 @@ export default function BusinessDetails() {
 
   const [form, setForm] = useState({
     name: '', abn: '', phone: '', email: '', logo_url: '', brand_colour: '#0EA5E9', timezone: 'Australia/Sydney',
+    // GST rate stored as decimal (0.10 = 10%) but edited in the form
+    // as a percent so the operator types "10" instead of "0.10". Save
+    // converts back to decimal before writing.
+    gst_rate_percent: 10,
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -58,6 +62,8 @@ export default function BusinessDetails() {
         logo_url: business.logo_url || '',
         brand_colour: business.brand_colour || '#0EA5E9',
         timezone: business.timezone || 'Australia/Sydney',
+        // numeric(5,4) arrives from PostgREST as a string ("0.1000") so coerce.
+        gst_rate_percent: business.gst_rate != null ? Number(business.gst_rate) * 100 : 10,
       })
     }
   }, [business])
@@ -70,7 +76,14 @@ export default function BusinessDetails() {
   async function handleSave() {
     try {
       setSaving(true)
-      await updateBusiness(form)
+      const { gst_rate_percent, ...rest } = form
+      const payload = {
+        ...rest,
+        // Convert percent → decimal for storage. Clamp to [0, 1] so a
+        // typo like "100" can't write a 1.0 rate that breaks invoices.
+        gst_rate: Math.max(0, Math.min(1, (Number(gst_rate_percent) || 10) / 100)),
+      }
+      await updateBusiness(payload)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
@@ -210,6 +223,29 @@ export default function BusinessDetails() {
             options={AUSTRALIAN_TIMEZONES}
           />
         </div>
+      </section>
+
+      {/* ── TAX & INVOICING ── */}
+      <section>
+        <p className="eyebrow mb-3">
+          <Receipt className="w-3.5 h-3.5" strokeWidth={2.5} />
+          Tax & invoicing · GST rate applied to new quotes and invoices
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="GST rate (%)"
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value={form.gst_rate_percent}
+            onChange={(e) => updateField('gst_rate_percent', e.target.value)}
+            placeholder="10"
+          />
+        </div>
+        <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-2">
+          Existing quotes and invoices keep the rate they were issued under — this only changes new docs.
+        </p>
       </section>
 
       {/* ── LOGO ── */}

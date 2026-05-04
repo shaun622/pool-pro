@@ -131,7 +131,14 @@ export default function PublicQuote() {
   const brandColor = business?.brand_colour || '#2563eb'
   const lineItems = quote?.line_items || []
   const subtotal = lineItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.unit_price || 0), 0)
-  const gst = Math.round(subtotal * 0.1 * 100) / 100
+  // Per-doc rate first (frozen at issue), then business default,
+  // then 0.10 fallback for legacy quotes that predate the column.
+  const gstRate = quote?.gst_rate != null
+    ? Number(quote.gst_rate)
+    : business?.gst_rate != null
+      ? Number(business.gst_rate)
+      : 0.10
+  const gst = Math.round(subtotal * gstRate * 100) / 100
   const total = subtotal + gst
   const alreadyResponded = quote?.status === 'accepted' || quote?.status === 'declined'
 
@@ -263,7 +270,7 @@ export default function PublicQuote() {
               <span className="text-gray-900">{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">GST (10%)</span>
+              <span className="text-gray-500">GST ({+(gstRate * 100).toFixed(2)}%)</span>
               <span className="text-gray-900">{formatCurrency(gst)}</span>
             </div>
             <div className="flex justify-between font-bold text-lg border-t pt-2">

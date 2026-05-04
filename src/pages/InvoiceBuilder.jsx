@@ -31,6 +31,10 @@ export default function InvoiceBuilder() {
   const [loading, setLoading] = useState(isEditing)
   const [confirmSendOpen, setConfirmSendOpen] = useState(false)
   const [prefillRef, setPrefillRef] = useState('')
+  // Per-doc gst_rate (null on legacy invoices that predate the column —
+  // those fall back to business.gst_rate, then to the 0.10 hardcoded
+  // default). New invoices freeze the business rate at save time.
+  const [docGstRate, setDocGstRate] = useState(null)
 
   // Pre-fill from query params (from Work Order or Quote conversion)
   useEffect(() => {
@@ -112,6 +116,7 @@ export default function InvoiceBuilder() {
       setIssuedDate(data.issued_date || '')
       setDueDate(data.due_date || '')
       setNotes(data.notes || '')
+      setDocGstRate(data.gst_rate != null ? Number(data.gst_rate) : null)
       setLoading(false)
     }
     fetchInvoice()
@@ -130,7 +135,10 @@ export default function InvoiceBuilder() {
     (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
     0
   )
-  const gst = calculateGST(subtotal)
+  // Effective rate: per-doc → business default → hardcoded 0.10. The
+  // hardcoded fallback only fires before business has loaded.
+  const gstRate = docGstRate ?? (business?.gst_rate != null ? Number(business.gst_rate) : 0.10)
+  const gst = calculateGST(subtotal, gstRate)
   const total = subtotal + gst
 
   function updateLineItem(index, field, value) {
@@ -162,6 +170,9 @@ export default function InvoiceBuilder() {
       line_items: lineItems.filter(li => li.description),
       subtotal,
       gst,
+      // Persist the rate alongside the amount so a future business-
+      // level rate change doesn't retroactively relabel this invoice.
+      gst_rate: gstRate,
       total,
       issued_date: issuedDate || null,
       due_date: dueDate || null,
@@ -339,7 +350,7 @@ export default function InvoiceBuilder() {
                 <span className="text-gray-700 dark:text-gray-300">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">GST (10%)</span>
+                <span className="text-gray-500 dark:text-gray-400">GST ({+(gstRate * 100).toFixed(2)}%)</span>
                 <span className="text-gray-700 dark:text-gray-300">{formatCurrency(gst)}</span>
               </div>
               <div className="flex justify-between text-base font-semibold border-t border-gray-200 dark:border-gray-700 pt-2">
