@@ -4,10 +4,9 @@ import { ThemeToggleCompact } from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
 import { cn } from '../../lib/utils'
 
-// `iconOnly` collapses the tab to its icon — used for Settings to
-// reclaim horizontal space now that Analytics lives inside Settings
-// (see Settings sidebar). Title attr keeps the label discoverable
-// on hover for sighted users and exposes it to screen readers.
+// Settings sits in row 1 next to the theme toggle (see render below)
+// rather than the tabs row, so the underline tabs are all about the
+// daily-use destinations.
 const tabs = [
   { path: '/',                label: 'Home',        Icon: Home },
   { path: '/schedule',        label: 'Schedule',    Icon: Calendar },
@@ -16,7 +15,6 @@ const tabs = [
   { path: '/clients',         label: 'Clients',     Icon: Users },
   { path: '/quotes',          label: 'Quotes',      Icon: FileText },
   { path: '/invoices',        label: 'Invoices',    Icon: Receipt },
-  { path: '/settings',        label: 'Settings',    Icon: SettingsIcon, iconOnly: true },
 ]
 
 export default function TopNav() {
@@ -53,15 +51,28 @@ export default function TopNav() {
         {/* CENTER: global search */}
         <GlobalSearch className="flex-1 max-w-2xl mx-auto" />
 
-        {/* RIGHT: theme toggle */}
+        {/* RIGHT: theme toggle + settings cog */}
         <div className="flex items-center gap-1 shrink-0">
           <ThemeToggleCompact />
+          <button
+            onClick={() => { navigate('/settings'); window.scrollTo(0, 0) }}
+            title="Settings"
+            aria-label="Settings"
+            className={cn(
+              'min-h-tap min-w-tap w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
+              location.pathname.startsWith('/settings')
+                ? 'bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/70',
+            )}
+          >
+            <SettingsIcon className="w-4 h-4" strokeWidth={2} />
+          </button>
         </div>
       </div>
 
       {/* ── ROW 2: underline tabs ──────────────────────────── */}
       <nav className="max-w-7xl mx-auto px-8 flex items-center gap-1 overflow-x-auto scrollbar-none border-b border-gray-200/60 dark:border-gray-800/60">
-        {tabs.map(({ path, label, Icon, iconOnly }) => {
+        {tabs.map(({ path, label, Icon }) => {
           const active = path === '/'
             ? location.pathname === '/'
             : location.pathname.startsWith(path)
@@ -69,20 +80,15 @@ export default function TopNav() {
             <button
               key={path}
               onClick={() => { navigate(path); window.scrollTo(0, 0) }}
-              title={iconOnly ? label : undefined}
-              aria-label={iconOnly ? label : undefined}
               className={cn(
-                'flex items-center gap-2 py-3.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
-                // Tighter horizontal padding for icon-only tabs so
-                // Settings doesn't sit in a wide blank slot.
-                iconOnly ? 'px-3' : 'px-5',
+                'flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
                 active
                   ? 'border-pool-500 text-pool-700 dark:text-pool-300'
                   : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               )}
             >
               <Icon className="w-4 h-4" strokeWidth={2} />
-              {!iconOnly && label}
+              {label}
             </button>
           )
         })}
