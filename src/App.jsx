@@ -152,6 +152,7 @@ export default function App() {
                   {/* Settings — nested shell. Sub-pages render into <Outlet />. */}
                   <Route path="/settings" element={<Settings />}>
                     <Route index               element={<BusinessDetails />} />
+                    <Route path="analytics"    element={<Reports />} />
                     <Route path="staff"        element={<Staff />} />
                     <Route path="chemicals"    element={<ChemicalLibrary />} />
                     <Route path="templates"    element={<CommunicationTemplates />} />
@@ -165,10 +166,10 @@ export default function App() {
                   {/* Redirects for cached bookmarks / PWA installs */}
                   <Route path="/settings/business" element={<Navigate to="/settings" replace />} />
                   <Route path="/subscription"      element={<Navigate to="/settings/billing" replace />} />
+                  <Route path="/reports"           element={<Navigate to="/settings/analytics" replace />} />
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/invoices/new" element={<InvoiceBuilder />} />
                   <Route path="/invoices/:id" element={<InvoiceBuilder />} />
-                  <Route path="/reports" element={<Reports />} />
                 </Route>
               </Route>
 

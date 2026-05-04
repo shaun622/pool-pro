@@ -1,9 +1,13 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, Calendar, ClipboardList, Users, Settings as SettingsIcon, FileText, Receipt, Repeat, BarChart3 } from 'lucide-react'
+import { Home, Calendar, ClipboardList, Users, Settings as SettingsIcon, FileText, Receipt, Repeat } from 'lucide-react'
 import { ThemeToggleCompact } from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
 import { cn } from '../../lib/utils'
 
+// `iconOnly` collapses the tab to its icon — used for Settings to
+// reclaim horizontal space now that Analytics lives inside Settings
+// (see Settings sidebar). Title attr keeps the label discoverable
+// on hover for sighted users and exposes it to screen readers.
 const tabs = [
   { path: '/',                label: 'Home',        Icon: Home },
   { path: '/schedule',        label: 'Schedule',    Icon: Calendar },
@@ -12,8 +16,7 @@ const tabs = [
   { path: '/clients',         label: 'Clients',     Icon: Users },
   { path: '/quotes',          label: 'Quotes',      Icon: FileText },
   { path: '/invoices',        label: 'Invoices',    Icon: Receipt },
-  { path: '/reports',         label: 'Analytics',   Icon: BarChart3 },
-  { path: '/settings',        label: 'Settings',    Icon: SettingsIcon },
+  { path: '/settings',        label: 'Settings',    Icon: SettingsIcon, iconOnly: true },
 ]
 
 export default function TopNav() {
@@ -58,7 +61,7 @@ export default function TopNav() {
 
       {/* ── ROW 2: underline tabs ──────────────────────────── */}
       <nav className="max-w-7xl mx-auto px-8 flex items-center gap-1 overflow-x-auto scrollbar-none border-b border-gray-200/60 dark:border-gray-800/60">
-        {tabs.map(({ path, label, Icon }) => {
+        {tabs.map(({ path, label, Icon, iconOnly }) => {
           const active = path === '/'
             ? location.pathname === '/'
             : location.pathname.startsWith(path)
@@ -66,15 +69,20 @@ export default function TopNav() {
             <button
               key={path}
               onClick={() => { navigate(path); window.scrollTo(0, 0) }}
+              title={iconOnly ? label : undefined}
+              aria-label={iconOnly ? label : undefined}
               className={cn(
-                'flex items-center gap-2 px-5 py-3.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
+                'flex items-center gap-2 py-3.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
+                // Tighter horizontal padding for icon-only tabs so
+                // Settings doesn't sit in a wide blank slot.
+                iconOnly ? 'px-3' : 'px-5',
                 active
                   ? 'border-pool-500 text-pool-700 dark:text-pool-300'
                   : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
               )}
             >
               <Icon className="w-4 h-4" strokeWidth={2} />
-              {label}
+              {!iconOnly && label}
             </button>
           )
         })}

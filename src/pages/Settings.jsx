@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Building2, Users, Beaker, Briefcase, Mail, Zap, Star,
-  Plug, Upload, CreditCard, LogOut, ChevronRight,
+  Plug, Upload, CreditCard, LogOut, ChevronRight, BarChart3,
   Settings as SettingsIcon,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -37,6 +37,7 @@ import { cn } from '../lib/utils'
 
 const SIDEBAR = [
   { to: '/settings',                label: 'Business details', Icon: Building2,    end: true },
+  { to: '/settings/analytics',      label: 'Analytics',        Icon: BarChart3 },
   { to: '/settings/staff',          label: 'Team & roles',     Icon: Users },
   { to: '/settings/chemicals',      label: 'Chemical library', Icon: Beaker },
   { to: '/settings/job-types',      label: 'Job types',        Icon: Briefcase },
@@ -51,7 +52,8 @@ const SIDEBAR = [
 // Mobile row-link card colors (icon-box tint per row)
 const MOBILE_ROW_COLORS = {
   'Business details': 'pool',
-  'Team & roles':     'violet',
+  Analytics:          'violet',
+  'Team & roles':     'blue',
   'Chemical library': 'emerald',
   'Job types':        'cyan',
   Templates:          'blue',

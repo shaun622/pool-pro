@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight,
-  Plus, Receipt, Send, Wallet,
+  Download, Plus, Receipt, Send, Wallet,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
@@ -128,6 +128,48 @@ export default function Invoices() {
     }
   }
 
+  // CSV export of the *filtered* invoice list — what's visible drives
+  // what's exported, so the operator can scope to e.g. "paid only" for
+  // the accountant. One row per invoice (header data, not line items —
+  // line items belong in the per-invoice PDF).
+  function csvCell(v) {
+    if (v == null) return ''
+    const s = String(v)
+    // Quote if it contains comma, quote, or newline (RFC 4180).
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  function exportCsv() {
+    const header = [
+      'Invoice number', 'Client', 'Status',
+      'Issued date', 'Due date', 'Paid date',
+      'Subtotal', 'GST', 'GST rate', 'Total',
+    ]
+    const rows = filteredInvoices.map(inv => [
+      inv._ref,
+      inv.clients?.name || '',
+      STATE_LABEL[inv.status] || inv.status,
+      inv.issued_date || '',
+      inv.due_date || '',
+      inv.paid_date ? String(inv.paid_date).slice(0, 10) : '',
+      Number(inv.subtotal || 0).toFixed(2),
+      Number(inv.gst || 0).toFixed(2),
+      // gst_rate is numeric(5,4) — render as %, two decimals.
+      inv.gst_rate != null ? `${(Number(inv.gst_rate) * 100).toFixed(2)}%` : '',
+      Number(inv._total || 0).toFixed(2),
+    ])
+    const csv = [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n')
+    // Excel-friendly UTF-8 BOM so it opens cleanly with non-ASCII names.
+    const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const today = new Date().toISOString().slice(0, 10)
+    const scope = stateFilter === 'all' ? 'all' : stateFilter
+    a.download = `poolmate-invoices-${scope}-${today}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (bizLoading || loading) {
     return (
       <PageWrapper width="wide">
@@ -158,9 +200,16 @@ export default function Invoices() {
         }
         title={heroTitle}
         action={
-          <Button leftIcon={Plus} onClick={() => navigate('/invoices/new')}>
-            New invoice
-          </Button>
+          <div className="flex items-center gap-2">
+            {enriched.length > 0 && (
+              <Button leftIcon={Download} variant="secondary" onClick={exportCsv}>
+                Export
+              </Button>
+            )}
+            <Button leftIcon={Plus} onClick={() => navigate('/invoices/new')}>
+              New invoice
+            </Button>
+          </div>
         }
       />
 

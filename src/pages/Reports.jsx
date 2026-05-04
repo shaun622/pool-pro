@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { BarChart3, Download } from 'lucide-react'
-import PageWrapper from '../components/layout/PageWrapper'
-import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import StatCard from '../components/ui/StatCard'
 import Button from '../components/ui/Button'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, cn } from '../lib/utils'
+
+// NOTE: Reports renders inside the Settings shell (route is
+// `/settings/analytics`), so it MUST NOT render its own PageWrapper
+// or PageHero — Settings.jsx provides both. Just emit the content.
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -228,20 +230,9 @@ export default function Reports() {
 
   if (loading) {
     return (
-      <PageWrapper width="wide">
-        <PageHero
-          eyebrow={
-            <span className="inline-flex items-center gap-2">
-              <BarChart3 className="w-3.5 h-3.5" strokeWidth={2.5} />
-              Last 6 months
-            </span>
-          }
-          title="Revenue · services · crew"
-        />
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </PageWrapper>
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
@@ -249,21 +240,20 @@ export default function Reports() {
   const trendStr = revenueTrend == null ? '' : `${revenueTrend >= 0 ? '+' : ''}${revenueTrend}%`
 
   return (
-    <PageWrapper width="wide">
-      <PageHero
-        eyebrow={
-          <span className="inline-flex items-center gap-2">
+    <>
+      {/* Header bar — Settings shell shows the page title "Analytics",
+          this row carries the eyebrow + action button only. */}
+      <div className="flex items-end justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400 inline-flex items-center gap-1.5">
             <BarChart3 className="w-3.5 h-3.5" strokeWidth={2.5} />
-            Last 6 months
-          </span>
-        }
-        title="Revenue · services · crew"
-        action={
-          <Button leftIcon={Download} variant="secondary" onClick={exportCsv}>
-            Export CSV
-          </Button>
-        }
-      />
+            Last 6 months · revenue · services · crew
+          </p>
+        </div>
+        <Button leftIcon={Download} variant="secondary" size="sm" onClick={exportCsv}>
+          Export CSV
+        </Button>
+      </div>
 
       {/* KPI strip — 4 pool-relevant metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4">
@@ -428,6 +418,6 @@ export default function Reports() {
           </ul>
         )}
       </Card>
-    </PageWrapper>
+    </>
   )
 }
