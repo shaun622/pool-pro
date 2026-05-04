@@ -269,10 +269,13 @@ export default function PublicQuote() {
               <span className="text-gray-500">Subtotal</span>
               <span className="text-gray-900">{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">GST ({+(gstRate * 100).toFixed(2)}%)</span>
-              <span className="text-gray-900">{formatCurrency(gst)}</span>
-            </div>
+            {/* Hide GST row for docs issued without GST (rate is 0). */}
+            {gstRate > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">GST ({+(gstRate * 100).toFixed(2)}%)</span>
+                <span className="text-gray-900">{formatCurrency(gst)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-lg border-t pt-2">
               <span className="text-gray-900">Total</span>
               <span style={{ color: brandColor }}>{formatCurrency(total)}</span>

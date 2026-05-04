@@ -42,6 +42,11 @@ export default function BusinessDetails() {
 
   const [form, setForm] = useState({
     name: '', abn: '', phone: '', email: '', logo_url: '', brand_colour: '#0EA5E9', timezone: 'Australia/Sydney',
+    // gst_enabled is the master switch: false means we're not GST-
+    // registered, so new docs save with rate=0 and the GST line is
+    // hidden in totals / PDFs. Toggling this off keeps the entered
+    // rate around so flipping back on is one click.
+    gst_enabled: true,
     // GST rate stored as decimal (0.10 = 10%) but edited in the form
     // as a percent so the operator types "10" instead of "0.10". Save
     // converts back to decimal before writing.
@@ -62,6 +67,9 @@ export default function BusinessDetails() {
         logo_url: business.logo_url || '',
         brand_colour: business.brand_colour || '#0EA5E9',
         timezone: business.timezone || 'Australia/Sydney',
+        // Treat absence as "registered" (current behaviour) for legacy
+        // rows that predate the gst_enabled column.
+        gst_enabled: business.gst_enabled !== false,
         // numeric(5,4) arrives from PostgREST as a string ("0.1000") so coerce.
         gst_rate_percent: business.gst_rate != null ? Number(business.gst_rate) * 100 : 10,
       })
@@ -77,11 +85,16 @@ export default function BusinessDetails() {
     try {
       setSaving(true)
       const { gst_rate_percent, ...rest } = form
+      // Use Number.isFinite so an empty field falls back to 10%, but
+      // explicit 0 is preserved (the previous `|| 10` snapped any 0
+      // back to 10, which was the bug operators hit when trying to
+      // disable GST by typing 0).
+      const pct = Number(gst_rate_percent)
+      const gstRate = Number.isFinite(pct) ? Math.max(0, Math.min(1, pct / 100)) : 0.10
       const payload = {
         ...rest,
-        // Convert percent → decimal for storage. Clamp to [0, 1] so a
-        // typo like "100" can't write a 1.0 rate that breaks invoices.
-        gst_rate: Math.max(0, Math.min(1, (Number(gst_rate_percent) || 10) / 100)),
+        gst_enabled: !!form.gst_enabled,
+        gst_rate: gstRate,
       }
       await updateBusiness(payload)
       setSaved(true)
@@ -229,9 +242,41 @@ export default function BusinessDetails() {
       <section>
         <p className="eyebrow mb-3">
           <Receipt className="w-3.5 h-3.5" strokeWidth={2.5} />
-          Tax & invoicing · GST rate applied to new quotes and invoices
+          Tax & invoicing · GST applied to new quotes and invoices
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        {/* Master GST toggle. Disabled state greys the rate input but
+            keeps the value so flipping back on doesn't lose the rate. */}
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-gray-200 dark:border-gray-800 px-4 py-3 mb-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Charge GST</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {form.gst_enabled
+                ? 'New quotes and invoices include GST at the rate below.'
+                : "Off — new quotes and invoices won't include GST. Turn on once you're GST-registered."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.gst_enabled}
+            onClick={() => updateField('gst_enabled', !form.gst_enabled)}
+            className={cn(
+              'relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors',
+              form.gst_enabled ? 'bg-pool-500' : 'bg-gray-300 dark:bg-gray-700',
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform translate-y-0.5',
+                form.gst_enabled ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
+              )}
+            />
+          </button>
+        </div>
+
+        <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4', form.gst_enabled ? '' : 'opacity-50 pointer-events-none')}>
           <Input
             label="GST rate (%)"
             type="number"
@@ -241,6 +286,7 @@ export default function BusinessDetails() {
             value={form.gst_rate_percent}
             onChange={(e) => updateField('gst_rate_percent', e.target.value)}
             placeholder="10"
+            disabled={!form.gst_enabled}
           />
         </div>
         <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-2">

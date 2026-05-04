@@ -135,9 +135,13 @@ export default function InvoiceBuilder() {
     (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
     0
   )
-  // Effective rate: per-doc → business default → hardcoded 0.10. The
-  // hardcoded fallback only fires before business has loaded.
-  const gstRate = docGstRate ?? (business?.gst_rate != null ? Number(business.gst_rate) : 0.10)
+  // Effective rate: per-doc (existing invoice) → business default →
+  // hardcoded 0.10. When the business has GST disabled, force rate=0
+  // for new invoices regardless of stored business.gst_rate.
+  const businessRate = business?.gst_enabled === false
+    ? 0
+    : (business?.gst_rate != null ? Number(business.gst_rate) : 0.10)
+  const gstRate = docGstRate ?? businessRate
   const gst = calculateGST(subtotal, gstRate)
   const total = subtotal + gst
 
@@ -349,10 +353,13 @@ export default function InvoiceBuilder() {
                 <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
                 <span className="text-gray-700 dark:text-gray-300">{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">GST ({+(gstRate * 100).toFixed(2)}%)</span>
-                <span className="text-gray-700 dark:text-gray-300">{formatCurrency(gst)}</span>
-              </div>
+              {/* Hide GST row when rate is 0 (unregistered or off). */}
+              {gstRate > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">GST ({+(gstRate * 100).toFixed(2)}%)</span>
+                  <span className="text-gray-700 dark:text-gray-300">{formatCurrency(gst)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-base font-semibold border-t border-gray-200 dark:border-gray-700 pt-2">
                 <span className="text-gray-900 dark:text-gray-100">Total</span>
                 <span className="text-gray-900 dark:text-gray-100">{formatCurrency(total)}</span>
