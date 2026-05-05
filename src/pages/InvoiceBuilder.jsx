@@ -7,6 +7,7 @@ import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
+import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, calculateGST } from '../lib/utils'
@@ -36,6 +37,36 @@ export default function InvoiceBuilder() {
   // those fall back to business.gst_rate, then to the 0.10 hardcoded
   // default). New invoices freeze the business rate at save time.
   const [docGstRate, setDocGstRate] = useState(null)
+
+  // Inline new-client modal — mirror of QuoteBuilder's pattern so the
+  // operator can add a customer without leaving the invoice flow.
+  const [newClientOpen, setNewClientOpen] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '', address: '' })
+  const [newClientSaving, setNewClientSaving] = useState(false)
+
+  async function handleCreateClient(e) {
+    e.preventDefault()
+    if (!newClientForm.name.trim() || !business?.id) return
+    setNewClientSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .insert({ ...newClientForm, business_id: business.id })
+        .select()
+        .single()
+      if (error) throw error
+      // Optimistically merge into the local list so the picker shows
+      // the new entry immediately, then auto-select.
+      setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      setClientId(data.id)
+      setNewClientOpen(false)
+      setNewClientForm({ name: '', email: '', phone: '', address: '' })
+    } catch (err) {
+      console.error('Error creating client:', err)
+    } finally {
+      setNewClientSaving(false)
+    }
+  }
 
   // Pre-fill from query params (from Work Order or Quote conversion)
   useEffect(() => {
@@ -252,12 +283,28 @@ export default function InvoiceBuilder() {
         <div className="space-y-5">
           {/* Client & Invoice number */}
           <Card className="p-4 space-y-4">
-            <Select
-              label="Client"
-              options={clientOptions}
-              value={clientId}
-              onChange={e => setClientId(e.target.value)}
-            />
+            <div>
+              <div className="flex items-end gap-2">
+                <div className="flex-1 min-w-0">
+                  <Select
+                    label="Client"
+                    options={clientOptions}
+                    value={clientId}
+                    onChange={e => setClientId(e.target.value)}
+                  />
+                </div>
+                {/* "+ New" button beside the picker — mirrors the
+                    QuoteBuilder pattern so the operator can add a
+                    customer without leaving the invoice flow. */}
+                <button
+                  type="button"
+                  onClick={() => setNewClientOpen(true)}
+                  className="min-h-[44px] px-3 rounded-lg border border-dashed border-pool-300 text-pool-600 dark:text-pool-400 text-sm font-medium hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors whitespace-nowrap shrink-0"
+                >
+                  + New
+                </button>
+              </div>
+            </div>
             <Input
               label="Invoice Number"
               value={invoiceNumber}
@@ -457,6 +504,50 @@ export default function InvoiceBuilder() {
             Confirm & Send
           </Button>
         </div>
+      </Modal>
+
+      {/* New Client Modal — mirror of the one on QuoteBuilder so the
+          operator can add a customer without bouncing to the Clients
+          page mid-flow. */}
+      <Modal open={newClientOpen} onClose={() => setNewClientOpen(false)} title="New Client">
+        <form onSubmit={handleCreateClient} className="space-y-4">
+          <Input
+            label="Name"
+            value={newClientForm.name}
+            onChange={e => setNewClientForm(prev => ({ ...prev, name: e.target.value }))}
+            required
+            placeholder="Full name"
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={newClientForm.email}
+            onChange={e => setNewClientForm(prev => ({ ...prev, email: e.target.value }))}
+            placeholder="email@example.com"
+          />
+          <Input
+            label="Phone"
+            type="tel"
+            value={newClientForm.phone}
+            onChange={e => setNewClientForm(prev => ({ ...prev, phone: e.target.value }))}
+            placeholder="0400 000 000"
+          />
+          <AddressAutocomplete
+            label="Address"
+            value={newClientForm.address}
+            onChange={(v) => setNewClientForm(prev => ({ ...prev, address: v }))}
+            onSelect={({ address }) => setNewClientForm(prev => ({ ...prev, address }))}
+            placeholder="Start typing a street address..."
+          />
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setNewClientOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1" loading={newClientSaving}>
+              Create Client
+            </Button>
+          </div>
+        </form>
       </Modal>
     </>
   )
