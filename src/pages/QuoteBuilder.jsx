@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { Mail, MapPin, Phone, User } from 'lucide-react'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -157,6 +158,14 @@ export default function QuoteBuilder() {
       .eq('client_id', clientId)
       .then(({ data }) => setClientPools(data || []))
   }, [clientId])
+
+  // Picked client — drives the "Bill to" preview card below the picker.
+  // useClients fetches '*' so every relevant field (name/phone/email/
+  // address) is already on the row.
+  const selectedClient = useMemo(
+    () => clients.find(c => c.id === clientId) || null,
+    [clients, clientId]
+  )
 
   const clientOptions = useMemo(
     () => [
@@ -536,6 +545,43 @@ export default function QuoteBuilder() {
               </div>
             )}
           </Card>
+
+          {/* Bill to — auto-populated client details once a client is
+              picked. Mirrors InvoiceBuilder's pattern so the operator
+              can sanity-check the quote is going to the right person
+              without bouncing to ClientDetail. Missing fields render
+              as a grey em-dash so the card height stays stable. */}
+          {selectedClient && (
+            <Card className="p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+                Bill to
+              </p>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start gap-2.5">
+                  <User className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0 mt-0.5" strokeWidth={2} />
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedClient.name}</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Phone className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0 mt-0.5" strokeWidth={2} />
+                  {selectedClient.phone
+                    ? <span className="text-gray-700 dark:text-gray-300">{selectedClient.phone}</span>
+                    : <span className="text-gray-400 dark:text-gray-500">—</span>}
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0 mt-0.5" strokeWidth={2} />
+                  {selectedClient.email
+                    ? <span className="text-gray-700 dark:text-gray-300 break-all">{selectedClient.email}</span>
+                    : <span className="text-gray-400 dark:text-gray-500">—</span>}
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0 mt-0.5" strokeWidth={2} />
+                  {selectedClient.address
+                    ? <span className="text-gray-700 dark:text-gray-300">{selectedClient.address}</span>
+                    : <span className="text-gray-400 dark:text-gray-500">—</span>}
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Line items */}
           <Card className="p-4">
