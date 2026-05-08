@@ -90,6 +90,7 @@ export default function NewService() {
   const isTech = userRole === 'tech'
   const photoInputRef = useRef(null)
   const extraPhotoInputRef = useRef(null)
+  const completionPhotoInputRef = useRef(null)
 
   // Pool photo
   const [servicePhoto, setServicePhoto] = useState(null)
@@ -103,6 +104,14 @@ export default function NewService() {
   const [extraPhotoPreview, setExtraPhotoPreview] = useState(null)
   const [extraPhotoMeta, setExtraPhotoMeta] = useState(null)
   const [capturingExtraPhoto, setCapturingExtraPhoto] = useState(false)
+  // Optional completion photo on the review step — proof of departure
+  // / "leaving the pool in a good state" shot. Same watermark
+  // pipeline; saved with tag='completion' so it's distinguishable
+  // from the arrival photo on report renderers.
+  const [completionPhoto, setCompletionPhoto] = useState(null)
+  const [completionPhotoPreview, setCompletionPhotoPreview] = useState(null)
+  const [completionPhotoMeta, setCompletionPhotoMeta] = useState(null)
+  const [capturingCompletionPhoto, setCapturingCompletionPhoto] = useState(false)
   const gpsRef = useRef(null) // pre-fetched GPS position
 
   // Pre-fetch GPS as soon as the page loads so permission is granted before photo
@@ -336,6 +345,17 @@ export default function NewService() {
             // Non-fatal — main test-kit photo already saved, service
             // record exists, completion flow continues. Logging only.
             console.error('Extra photo save failed:', err)
+          }
+        }
+        // Optional completion / departure photo from the review step.
+        // Tag='completion' so the renderer can pair it with the
+        // arrival shot ("here's the pool when I arrived ↔ when I left").
+        if (completionPhoto) {
+          try {
+            await saveServicePhoto(record.id, completionPhoto, completionPhotoMeta || {}, 'completion')
+          } catch (err) {
+            // Non-fatal — same reasoning as extra photo above.
+            console.error('Completion photo save failed:', err)
           }
         }
       }
@@ -1243,6 +1263,141 @@ export default function NewService() {
                 </span>
               </div>
             </Card>
+
+            {/* Optional completion photo — proof of departure. Same
+                watermark pipeline as the arrival photo (GPS +
+                timestamp baked into the image). Saved with
+                tag='completion' so it's distinguishable from the
+                arrival / extra shots on report renderers. */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                Completion photo <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(optional)</span>
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Snap a finishing shot — timestamp + GPS baked in automatically.
+              </p>
+              <input
+                ref={completionPhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  setCapturingCompletionPhoto(true)
+                  try {
+                    let lat = gpsRef.current?.latitude || null
+                    let lng = gpsRef.current?.longitude || null
+                    if (!lat) {
+                      try {
+                        const pos = await new Promise((resolve, reject) =>
+                          navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true, timeout: 8000, maximumAge: 30000
+                          })
+                        )
+                        lat = pos.coords.latitude
+                        lng = pos.coords.longitude
+                        gpsRef.current = pos.coords
+                      } catch (geoErr) {
+                        console.warn('GPS unavailable:', geoErr.message)
+                      }
+                    }
+                    const now = new Date()
+                    const meta = {
+                      lat, lng, timestamp: now.toISOString(),
+                      address: pool?.address || '',
+                      clientName: client?.name || '',
+                      businessName: business?.name || '',
+                    }
+                    setCompletionPhotoMeta(meta)
+                    const watermarked = await watermarkPhoto(file, meta)
+                    setCompletionPhoto(watermarked.blob)
+                    setCompletionPhotoPreview(watermarked.dataUrl)
+                  } catch (err) {
+                    console.error('Completion photo capture error:', err)
+                    setCompletionPhoto(file)
+                    const reader = new FileReader()
+                    reader.onload = (ev) => setCompletionPhotoPreview(ev.target.result)
+                    reader.readAsDataURL(file)
+                  } finally {
+                    setCapturingCompletionPhoto(false)
+                  }
+                }}
+              />
+              {completionPhotoPreview ? (
+                <div className="relative">
+                  <img
+                    src={completionPhotoPreview}
+                    alt="Completion photo"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover"
+                  />
+                  {completionPhotoMeta && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                        Verified Time
+                      </span>
+                      {completionPhotoMeta.lat && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                          Verified GPS
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => {
+                        setCompletionPhoto(null)
+                        setCompletionPhotoPreview(null)
+                        setCompletionPhotoMeta(null)
+                        if (completionPhotoInputRef.current) completionPhotoInputRef.current.value = ''
+                      }}
+                      className="flex-1 text-center text-sm font-medium text-red-500 hover:text-red-600 py-2 border border-gray-200 dark:border-gray-700 rounded-lg"
+                    >
+                      Remove
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCompletionPhoto(null)
+                        setCompletionPhotoPreview(null)
+                        setCompletionPhotoMeta(null)
+                        if (completionPhotoInputRef.current) completionPhotoInputRef.current.value = ''
+                        completionPhotoInputRef.current?.click()
+                      }}
+                      className="flex-1 text-center text-sm font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700 py-2 border border-gray-200 dark:border-gray-700 rounded-lg"
+                    >
+                      Retake
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => completionPhotoInputRef.current?.click()}
+                  disabled={capturingCompletionPhoto}
+                  className="w-full flex flex-col items-center justify-center gap-1.5 py-6 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
+                >
+                  {capturingCompletionPhoto ? (
+                    <>
+                      <svg className="w-7 h-7 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-xs font-medium text-pool-600 dark:text-pool-400">Processing photo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                      </svg>
+                      <span className="text-sm font-medium">Tap to take completion photo</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {/* Notes */}
             <TextArea
