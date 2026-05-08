@@ -43,13 +43,18 @@ export function useService() {
     if (error) throw error
   }, [])
 
+  // Save chemicals dosed during a service. Each row carries either
+  // dose_text (free-form, the new shape — "100g", "1kg", etc.) or
+  // the legacy (quantity, unit) pair if the caller still passes
+  // those. Display layers prefer dose_text when present.
   const saveChemicalsAdded = useCallback(async (serviceRecordId, chemicals) => {
     if (!chemicals.length) return
     const rows = chemicals.map(c => ({
       service_record_id: serviceRecordId,
       product_name: c.product_name,
-      quantity: c.quantity,
-      unit: c.unit,
+      dose_text: c.dose_text || null,
+      quantity: c.quantity != null && c.quantity !== '' ? c.quantity : null,
+      unit: c.unit || null,
       cost: c.cost || null,
     }))
     const { error } = await supabase.from('chemicals_added').insert(rows)

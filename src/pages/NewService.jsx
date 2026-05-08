@@ -189,15 +189,13 @@ export default function NewService() {
 
       const products = productsRes.data || []
       setChemicalProducts(products)
-      // Pre-populate one row per library product with empty quantity
-      // — the chemicals step renders ALL chemicals as a compact list
-      // and the tech just types the amount they used into whichever
-      // applies. On save we filter out entries with no quantity, so
-      // pre-populating doesn't bloat the saved record.
+      // Pre-populate one row per library product with empty dose
+      // text. Step 3 renders all chemicals as a compact list and the
+      // tech types the amount they used as freeform text — "100g",
+      // "1kg", whatever fits. Save filters out blank rows.
       setChemicalsAdded(products.map(p => ({
         product_name: p.name,
-        quantity: '',
-        unit: p.default_unit || 'L',
+        dose_text: '',
       })))
 
       const staffData = staffRes.data || []
@@ -292,14 +290,20 @@ export default function NewService() {
       // Save tasks
       await saveTasks(record.id, tasks)
 
-      // Save chemicals added (filter out empty entries)
-      const validChemicals = chemicalsAdded.filter(c => c.product_name && c.quantity)
+      // Save chemicals added — only rows where the tech entered a
+      // dose. dose_text is the freeform user input ("100g", "1kg",
+      // etc.); structured quantity/unit are no longer captured by
+      // the UI but stay nullable in the schema for legacy reads.
+      const validChemicals = chemicalsAdded.filter(c => c.product_name && c.dose_text && c.dose_text.trim())
       await saveChemicalsAdded(record.id, validChemicals.map(c => ({
-        ...c,
-        quantity: parseFloat(c.quantity) || 0,
+        product_name: c.product_name,
+        dose_text: c.dose_text.trim(),
       })))
 
-      // Save chemicals to product library (non-blocking)
+      // Bump use_count on the library row so the admin can see which
+      // chemicals are actually getting used. No new-row insert path —
+      // tech can't add chemicals from this flow anymore (admin-only
+      // via Settings → Chemicals).
       try {
         for (const c of validChemicals) {
           const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
@@ -307,13 +311,10 @@ export default function NewService() {
             await supabase.from('chemical_products')
               .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
               .eq('id', existing.id)
-          } else {
-            await supabase.from('chemical_products')
-              .insert({ business_id: business.id, name: c.product_name, default_unit: c.unit })
           }
         }
       } catch (e) {
-        console.warn('Chemical library save failed (non-critical):', e)
+        console.warn('Chemical use_count bump failed (non-critical):', e)
       }
 
       // Upload pool photo
@@ -1031,20 +1032,18 @@ export default function NewService() {
                     <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">
                       {chem.product_name}
                     </span>
+                    {/* Freeform text input — tech writes whatever
+                        matches what they actually dosed: "100g",
+                        "1kg", "200mL", "half scoop", etc. Saved as
+                        dose_text and rendered verbatim downstream. */}
                     <input
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      min="0"
-                      value={chem.quantity}
-                      onChange={e => updateChemical(i, 'quantity', e.target.value)}
-                      placeholder="0"
-                      className="input !w-24 text-right tabular-nums"
-                      aria-label={`${chem.product_name} amount`}
+                      type="text"
+                      value={chem.dose_text}
+                      onChange={e => updateChemical(i, 'dose_text', e.target.value)}
+                      placeholder="e.g. 100g"
+                      className="input !w-32 text-right"
+                      aria-label={`${chem.product_name} dose`}
                     />
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-8 text-left tabular-nums">
-                      {chem.unit}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -1181,12 +1180,12 @@ export default function NewService() {
               </div>
             </Card>
 
-            {/* Chemicals added summary — only the rows with a real
-                quantity entered. chemicalsAdded is pre-populated with
-                every library product on load, so most rows will be
-                blank for any given service. */}
+            {/* Chemicals added summary — only rows with a non-empty
+                dose_text. chemicalsAdded is pre-populated with every
+                library product, so most rows will be blank for any
+                given service. */}
             {(() => {
-              const used = chemicalsAdded.filter(c => c.quantity && Number(c.quantity) > 0)
+              const used = chemicalsAdded.filter(c => c.dose_text && c.dose_text.trim())
               if (used.length === 0) return null
               return (
                 <Card>
@@ -1195,7 +1194,7 @@ export default function NewService() {
                     {used.map((c, i) => (
                       <div key={i} className="flex items-center justify-between text-sm">
                         <span className="text-gray-700 dark:text-gray-300">{c.product_name}</span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{c.quantity} {c.unit}</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{c.dose_text}</span>
                       </div>
                     ))}
                   </div>

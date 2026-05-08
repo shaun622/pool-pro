@@ -249,7 +249,7 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog, 
                 {chemicalsAdded.map((c, i) => (
                   <div key={i} className="flex justify-between text-sm">
                     <span className="text-gray-600">{c.product_name}</span>
-                    <span className="font-medium text-gray-900">{c.quantity} {c.unit}</span>
+                    <span className="font-medium text-gray-900">{c.dose_text || `${c.quantity ?? ''} ${c.unit ?? ''}`.trim()}</span>
                   </div>
                 ))}
               </div>

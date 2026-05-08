@@ -200,7 +200,11 @@ export default function ServiceDetail() {
                   <div key={i} className="flex items-center justify-between py-1">
                     <span className="text-sm text-gray-700 dark:text-gray-300">{chem.product_name}</span>
                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {chem.quantity} {chem.unit}
+                      {/* dose_text is the freeform user input on
+                          new rows; legacy rows (pre-20260508 dose_text
+                          migration) fall back to structured
+                          quantity+unit. */}
+                      {chem.dose_text || `${chem.quantity ?? ''} ${chem.unit ?? ''}`.trim()}
                     </span>
                   </div>
                 ))}

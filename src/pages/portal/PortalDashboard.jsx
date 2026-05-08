@@ -239,8 +239,17 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, photos, ranges, p
                           </span>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-lg font-bold text-gray-900">{c.quantity}</span>
-                          <span className="text-xs text-gray-500 ml-1">{c.unit}</span>
+                          {/* dose_text on new rows is freeform
+                              ("100g", "1kg"); legacy rows fall back
+                              to structured quantity+unit. */}
+                          {c.dose_text ? (
+                            <span className="text-lg font-bold text-gray-900">{c.dose_text}</span>
+                          ) : (
+                            <>
+                              <span className="text-lg font-bold text-gray-900">{c.quantity}</span>
+                              <span className="text-xs text-gray-500 ml-1">{c.unit}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       {product?.suggested_dose && (
