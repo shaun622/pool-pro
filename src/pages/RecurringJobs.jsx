@@ -328,22 +328,28 @@ export default function RecurringJobs() {
   }
 
   // Permanently delete the recurring profile + every job materialized
-  // from it. Different from Cancel (which keeps the row at
-  // status=cancelled for history). Hard delete the linked jobs because
-  // the previous detach behaviour left orphan in_progress / scheduled
-  // jobs polluting the schedule: the schedule's path-1 query pulls
-  // every real job in range and covers their pool_id for dedupe, so a
-  // re-created profile's projection on the same day got displaced by
-  // the old orphan — that's "I just made a brand new recurring and it
-  // already says View Job / In Progress" repro.
+  // from it + clear the denormalised pool fields. Different from
+  // Cancel (which keeps the profile row at status=cancelled).
   //
-  // Completed pool services live in service_records (not jobs) so this
-  // doesn't lose chemical history. Completed ad-hoc jobs DO get deleted
-  // here — that's the trade-off for "delete recurring service" meaning
-  // "wipe the slate". If we ever need to keep historical completed
-  // jobs we can split the delete into status='completed' (retain) vs
-  // everything else (delete) — for now the operator's expectation is
-  // hard delete.
+  // Three things have to happen, all in one atomic-feeling sequence:
+  //   1. Hard delete jobs with this recurring_profile_id. Detach was
+  //      wrong — left orphan in_progress / scheduled jobs that path-1
+  //      of the Schedule projector picked up and showed as "Already
+  //      started" on what was supposed to be a brand new recurring.
+  //   2. Hard delete the profile.
+  //   3. Clear pools.next_due_at + pools.schedule_frequency for the
+  //      profile's pool. The pool fields are a denormalised mirror of
+  //      the profile schedule (AddRecurringModal writes them on
+  //      create), and the Schedule's path-2 projector reads them to
+  //      draw "pool service" stops independently of the profile. If
+  //      we leave them around, every deleted recurring service keeps
+  //      projecting forever — that's the "I deleted it, /recurring is
+  //      empty, but the schedule still shows stops" report.
+  //
+  // Completed pool services live in service_records (not jobs) so the
+  // chemical history stays. Completed ad-hoc jobs DO get hard-deleted
+  // along with their parent profile — operator's expectation is "wipe
+  // the slate" and that's how it now behaves.
   async function handleDeleteService() {
     if (!editing) return
     setDeletingService(true)
@@ -359,6 +365,16 @@ export default function RecurringJobs() {
         .delete()
         .eq('id', editing.id)
       if (error) throw error
+
+      // Clear the pool's denormalised mirror so path-2 stops projecting.
+      // We only clear fields the recurring lifecycle owns; address /
+      // other pool fields stay untouched.
+      if (editing.pool_id) {
+        await supabase
+          .from('pools')
+          .update({ next_due_at: null, schedule_frequency: null })
+          .eq('id', editing.pool_id)
+      }
       toast.success('Recurring service deleted')
       // If the deleted profile was selected in the desktop detail pane,
       // clear the selection so the empty-state shows.
@@ -373,9 +389,48 @@ export default function RecurringJobs() {
     }
   }
 
+  // Pausing or cancelling a profile must also clear the denormalised
+  // pool mirror, otherwise path-2 of the Schedule projector keeps
+  // emitting "pool service" stops as if the profile were live. Status
+  // moves *into* active (resume) re-anchor the pool fields from the
+  // current profile rule so projections come back.
   async function handleStatusChange(profileId, newStatus) {
     try {
       await supabase.from('recurring_job_profiles').update({ status: newStatus }).eq('id', profileId)
+
+      // Look up the pool_id + (for resume) the rule we need to mirror.
+      // Cheap single-row fetch keeps this self-contained without
+      // depending on whatever's loaded into local state.
+      const { data: profile } = await supabase
+        .from('recurring_job_profiles')
+        .select('pool_id, recurrence_rule, custom_interval_days, next_generation_at')
+        .eq('id', profileId)
+        .single()
+
+      if (profile?.pool_id) {
+        if (newStatus === 'paused' || newStatus === 'cancelled') {
+          await supabase
+            .from('pools')
+            .update({ next_due_at: null, schedule_frequency: null })
+            .eq('id', profile.pool_id)
+        } else if (newStatus === 'active') {
+          // Re-anchor the mirror to the profile so the schedule starts
+          // projecting again. next_generation_at is the next planned
+          // occurrence; if it's missing we fall back to today and let
+          // the operator adjust via the edit flow.
+          const freq = profile.recurrence_rule === 'custom' && profile.custom_interval_days
+            ? String(profile.custom_interval_days)
+            : profile.recurrence_rule
+          const nextDue = profile.next_generation_at
+            ? new Date(profile.next_generation_at + 'T09:00:00').toISOString()
+            : new Date().toISOString()
+          await supabase
+            .from('pools')
+            .update({ next_due_at: nextDue, schedule_frequency: freq })
+            .eq('id', profile.pool_id)
+        }
+      }
+
       fetchAll()
     } catch (err) {
       toast.error(err.message || 'Failed to update status')
