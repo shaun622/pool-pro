@@ -253,9 +253,8 @@ export default function NewService() {
     )
   }
 
-  function addChemical() {
-    setChemicalsAdded(prev => [...prev, { product_name: '', quantity: '', unit: 'L' }])
-  }
+  // (addChemical removed — manual entry from the service flow is now
+  // admin-only via Settings → Chemicals. Techs pick from the library.)
 
   function addFromLibrary(productId) {
     if (!productId) return
@@ -1056,23 +1055,12 @@ export default function NewService() {
                           </button>
                         ))}
                         {filtered.length === 0 && !query && (
-                          <p className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">No saved chemicals yet</p>
+                          <p className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">No chemicals in library</p>
                         )}
-                        {query && !exactMatch && (
-                          <button
-                            onMouseDown={e => e.preventDefault()}
-                            onClick={() => {
-                              setChemicalsAdded(prev => [...prev, { product_name: chemSearch.trim(), quantity: '', unit: 'L' }])
-                              setChemSearch('')
-                              setChemSearchFocused(false)
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 active:bg-gray-100 dark:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
-                          >
-                            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
-                              <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
-                            </div>
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Add "<span className="text-gray-900 dark:text-gray-100">{chemSearch.trim()}</span>"</span>
-                          </button>
+                        {query && filtered.length === 0 && (
+                          <p className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">
+                            No match. Ask an admin to add it from <span className="font-medium text-gray-600 dark:text-gray-300">Settings → Chemicals</span>.
+                          </p>
                         )}
                       </>
                     )
@@ -1092,12 +1080,15 @@ export default function NewService() {
                   <X className="w-5 h-5" strokeWidth={2} />
                 </button>
                 <div className="space-y-3 pr-8">
-                  <Input
-                    label="Product Name"
-                    value={chem.product_name}
-                    onChange={e => updateChemical(i, 'product_name', e.target.value)}
-                    placeholder="e.g. Liquid Chlorine"
-                  />
+                  {/* Product name is read-only — every chemical row
+                      now comes from the admin-managed library, so the
+                      tech can't rename it mid-service and drift the
+                      naming. To add a new chemical, an admin does it
+                      via Settings → Chemicals. */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Product</label>
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">{chem.product_name}</p>
+                  </div>
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <Input
@@ -1123,10 +1114,10 @@ export default function NewService() {
               </Card>
             ))}
 
-            {/* Manual add button */}
-            <Button variant="secondary" onClick={addChemical} className="w-full min-h-[48px]">
-              + Add Chemical Manually
-            </Button>
+            {/* No manual-add button. The chemical library is admin-
+                managed (Settings → Chemicals) so techs can only log
+                products that have been pre-approved — keeps the fleet's
+                chemical naming + units consistent across services. */}
 
             <div className="flex gap-3 mt-4">
               <Button variant="secondary" onClick={() => setStep(2)} className="flex-1 min-h-[48px]">

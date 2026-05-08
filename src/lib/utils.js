@@ -96,7 +96,7 @@ export const POOL_TYPES = ['chlorine', 'salt', 'mineral', 'freshwater']
 export const POOL_SHAPES = ['freeform', 'rectangular', 'lap']
 export const SCHEDULE_FREQUENCIES = ['weekly', 'fortnightly', 'monthly', '6_weekly', 'quarterly']
 export const PHOTO_TAGS = ['before', 'during', 'after', 'equipment', 'issue']
-export const CHEMICAL_UNITS = ['L', 'kg', 'g', 'tabs']
+export const CHEMICAL_UNITS = ['L', 'mL', 'kg', 'g', 'tabs']
 
 export const DEFAULT_TARGET_RANGES = {
   ph: [7.2, 7.6],
