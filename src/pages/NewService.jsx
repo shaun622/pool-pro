@@ -1264,14 +1264,16 @@ export default function NewService() {
               </div>
             </Card>
 
-            {/* Optional completion photo — proof of departure. Same
+            {/* Required completion photo — proof of departure. Same
                 watermark pipeline as the arrival photo (GPS +
                 timestamp baked into the image). Saved with
                 tag='completion' so it's distinguishable from the
-                arrival / extra shots on report renderers. */}
+                arrival / extra shots on report renderers. Gates the
+                Complete Service button — same shape as the arrival
+                gate at step 0. */}
             <div>
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Completion photo <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(optional)</span>
+                Completion photo <span className="text-red-500" aria-label="required">*</span>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                 Snap a finishing shot — timestamp + GPS baked in automatically.
@@ -1422,11 +1424,17 @@ export default function NewService() {
               <Button
                 onClick={handleComplete}
                 loading={submitting}
+                disabled={!completionPhoto}
                 className="flex-1 min-h-[52px] text-base font-semibold bg-green-600 hover:bg-green-700 active:bg-green-800"
               >
                 Complete Service
               </Button>
             </div>
+            {!completionPhoto && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">
+                Take a completion photo to finish the service
+              </p>
+            )}
           </div>
         )}
 
