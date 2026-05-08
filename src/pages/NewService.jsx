@@ -130,9 +130,20 @@ export default function NewService() {
   // Which chemical readings to show (start with pH + free chlorine)
   const [visibleReadings, setVisibleReadings] = useState([...DEFAULT_READINGS])
 
-  // Step 2: Task checklist — start with just "Checked water level"
+  // Step 2: Task checklist. Pre-loaded with the standard service
+  // checklist — required ones gate progression to the Chemicals step,
+  // optional ones are visible but skippable. Required tasks aren't
+  // removable from the list (the X delete button is suppressed) so
+  // the operator can't bypass the gate by deleting the row.
   const [tasks, setTasks] = useState([
-    { name: 'Checked water level', completed: false },
+    { name: 'Vacuumed',             required: true,  completed: false },
+    { name: 'Scrubbed water line',  required: true,  completed: false },
+    { name: 'Checked water level',  required: true,  completed: false },
+    { name: 'Emptied pump basket',  required: true,  completed: false },
+    { name: 'Backwash filter',      required: true,  completed: false },
+    { name: 'Emptied skimmer basket', required: false, completed: false },
+    { name: 'Checked equipment',      required: false, completed: false },
+    { name: 'Checked chlorinator',    required: false, completed: false },
   ])
   const [customTask, setCustomTask] = useState('')
 
@@ -363,6 +374,10 @@ export default function NewService() {
 
   const targetRanges = pool?.target_ranges || DEFAULT_TARGET_RANGES
   const completedCount = tasks.filter(t => t.completed).length
+  // Gate: every required task must be checked off before the tech can
+  // advance to Chemicals Added. Optional tasks are tracked but don't
+  // block progression.
+  const allRequiredDone = tasks.filter(t => t.required).every(t => t.completed)
   const isSaltPool = pool?.pool_type === 'salt'
 
   if (loading) {
@@ -870,7 +885,10 @@ export default function NewService() {
               <span className="text-sm text-gray-500 dark:text-gray-400">{completedCount}/{tasks.length}</span>
             </div>
 
-            {/* Active tasks */}
+            {/* Active tasks. Required tasks show a red * and have no
+                X (delete) button — preventing the operator from
+                bypassing the gate by removing the row. Optional tasks
+                stay removable. */}
             <div className="space-y-2">
               {tasks.map((task, i) => (
                 <div key={task.name} className="flex items-center gap-2">
@@ -892,14 +910,21 @@ export default function NewService() {
                         <Check className="w-3 h-3 text-white" strokeWidth={2} />
                       )}
                     </span>
-                    <span className="text-sm font-medium">{task.name}</span>
+                    <span className="text-sm font-medium">
+                      {task.name}
+                      {task.required && (
+                        <span className="text-red-500 ml-1" aria-label="required">*</span>
+                      )}
+                    </span>
                   </button>
-                  <button
-                    onClick={() => setTasks(prev => prev.filter((_, idx) => idx !== i))}
-                    className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors"
-                  >
-                    <X className="w-4 h-4" strokeWidth={2} />
-                  </button>
+                  {!task.required && (
+                    <button
+                      onClick={() => setTasks(prev => prev.filter((_, idx) => idx !== i))}
+                      className="min-w-tap min-h-tap flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors"
+                    >
+                      <X className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -967,10 +992,19 @@ export default function NewService() {
               <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
                 Back
               </Button>
-              <Button onClick={() => setStep(3)} className="flex-1 min-h-[48px]">
+              <Button
+                onClick={() => setStep(3)}
+                disabled={!allRequiredDone}
+                className="flex-1 min-h-[48px]"
+              >
                 Next: Chemicals
               </Button>
             </div>
+            {!allRequiredDone && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">
+                Complete all <span className="text-red-500">*</span> tasks to continue
+              </p>
+            )}
           </div>
         )}
 
