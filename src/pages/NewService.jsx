@@ -24,7 +24,13 @@ import {
   cn,
 } from '../lib/utils'
 
-const STEPS = ['Chemicals', 'Tasks', 'Added', 'Review']
+// Step 0 ("Arrival") gates the rest of the flow on a live, GPS+
+// timestamp watermarked photo. The tech can't enter chemical readings
+// until they've proven they're physically at the pool. Replaces the
+// old "pool & test kit" photo that lived inside the chemicals step
+// (the one photo we capture is now this arrival photo, taken with the
+// test kit visible — same shot, earlier in the flow, and required).
+const STEPS = ['Arrival', 'Chemicals', 'Tasks', 'Added', 'Review']
 
 const DEFAULT_READINGS = ['ph', 'total_chlorine']
 
@@ -379,8 +385,166 @@ export default function NewService() {
           </div>
         </div>}
 
-        {/* Step 1: Chemical Readings */}
+        {/* Step 0: Arrival photo gate — tech must capture a live,
+            watermarked photo before any chemical entry. Proof of being
+            on site: timestamp + GPS baked into the image (same
+            watermark the old pool & test kit photo used). */}
         {step === 0 && !completed && (
+          <div className="space-y-3">
+            <Card className="bg-pool-50 dark:bg-pool-950/40 border-pool-200">
+              <div className="flex items-start justify-between">
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name || 'Client'}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
+                </div>
+                <Badge variant={pool?.type || 'default'} className="shrink-0 capitalize">{pool?.type || 'pool'}</Badge>
+              </div>
+            </Card>
+
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Arrival photo</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Take a live photo at the pool to confirm you're on site. Timestamp and GPS are baked into the image automatically.
+              </p>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  setCapturingPhoto(true)
+                  try {
+                    let lat = gpsRef.current?.latitude || null
+                    let lng = gpsRef.current?.longitude || null
+                    if (!lat) {
+                      try {
+                        const pos = await new Promise((resolve, reject) =>
+                          navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true, timeout: 8000, maximumAge: 30000
+                          })
+                        )
+                        lat = pos.coords.latitude
+                        lng = pos.coords.longitude
+                        gpsRef.current = pos.coords
+                      } catch (geoErr) {
+                        console.warn('GPS unavailable:', geoErr.message)
+                      }
+                    }
+
+                    let gpsAddress = ''
+                    if (lat && lng) {
+                      try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`)
+                        const data = await res.json()
+                        const a = data.address || {}
+                        gpsAddress = [a.house_number, a.road, a.suburb, a.city || a.town, a.state].filter(Boolean).join(', ')
+                      } catch {
+                        gpsAddress = pool?.address || ''
+                      }
+                    }
+
+                    const now = new Date()
+                    const meta = {
+                      lat, lng, timestamp: now.toISOString(),
+                      address: gpsAddress || pool?.address || '',
+                      clientName: client?.name || '',
+                      businessName: business?.name || '',
+                    }
+                    setPhotoMeta(meta)
+                    const watermarked = await watermarkPhoto(file, meta)
+                    setServicePhoto(watermarked.blob)
+                    setPhotoPreview(watermarked.dataUrl)
+                  } catch (err) {
+                    console.error('Photo capture error:', err)
+                    setServicePhoto(file)
+                    const reader = new FileReader()
+                    reader.onload = (ev) => setPhotoPreview(ev.target.result)
+                    reader.readAsDataURL(file)
+                  } finally {
+                    setCapturingPhoto(false)
+                  }
+                }}
+              />
+              {photoPreview ? (
+                <div className="relative">
+                  <img
+                    src={photoPreview}
+                    alt="Arrival photo — verified"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover"
+                  />
+                  {photoMeta && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                        Verified Time
+                      </span>
+                      {photoMeta.lat && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                          Verified GPS
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      setServicePhoto(null)
+                      setPhotoPreview(null)
+                      setPhotoMeta(null)
+                      if (photoInputRef.current) photoInputRef.current.value = ''
+                      photoInputRef.current?.click()
+                    }}
+                    className="mt-2 w-full text-center text-sm font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700 py-2"
+                  >
+                    Retake Photo
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={capturingPhoto}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
+                >
+                  {capturingPhoto ? (
+                    <>
+                      <svg className="w-8 h-8 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-sm font-medium text-pool-600 dark:text-pool-400">Processing photo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                      </svg>
+                      <span className="text-sm font-medium">Tap to take photo</span>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">GPS & timestamp verified automatically</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            <Button
+              onClick={() => setStep(1)}
+              disabled={!servicePhoto}
+              className="w-full min-h-[48px] mt-2"
+            >
+              Continue
+            </Button>
+            {!servicePhoto && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">Photo required to continue</p>
+            )}
+          </div>
+        )}
+
+        {/* Step 1: Chemical Readings */}
+        {step === 1 && !completed && (
           <div className="space-y-3">
             {/* Client & Pool info */}
             <Card className="bg-pool-50 dark:bg-pool-950/40 border-pool-200">
@@ -545,154 +709,17 @@ export default function NewService() {
                 </div>
               )
             })()}
-            {/* Pool & Test Kit Photo — Verified with timestamp + GPS */}
-            <div className="mt-6">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Pool & Test Kit Photo</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Take a live photo — timestamp and GPS location will be verified automatically</p>
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  setCapturingPhoto(true)
-                  try {
-                    // Get GPS — use pre-fetched position or try fresh
-                    let lat = gpsRef.current?.latitude || null
-                    let lng = gpsRef.current?.longitude || null
-                    if (!lat) {
-                      try {
-                        const pos = await new Promise((resolve, reject) =>
-                          navigator.geolocation.getCurrentPosition(resolve, reject, {
-                            enableHighAccuracy: true, timeout: 8000, maximumAge: 30000
-                          })
-                        )
-                        lat = pos.coords.latitude
-                        lng = pos.coords.longitude
-                        gpsRef.current = pos.coords
-                      } catch (geoErr) {
-                        console.warn('GPS unavailable:', geoErr.message)
-                      }
-                    }
-
-                    // Reverse geocode to get actual street address from GPS
-                    let gpsAddress = ''
-                    if (lat && lng) {
-                      try {
-                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`)
-                        const data = await res.json()
-                        const a = data.address || {}
-                        gpsAddress = [a.house_number, a.road, a.suburb, a.city || a.town, a.state].filter(Boolean).join(', ')
-                      } catch {
-                        gpsAddress = pool?.address || ''
-                      }
-                    }
-
-                    const now = new Date()
-                    const meta = {
-                      lat, lng, timestamp: now.toISOString(),
-                      address: gpsAddress || pool?.address || '',
-                      clientName: client?.name || '',
-                      businessName: business?.name || '',
-                    }
-                    setPhotoMeta(meta)
-
-                    // Watermark the photo
-                    const watermarked = await watermarkPhoto(file, meta)
-                    setServicePhoto(watermarked.blob)
-                    setPhotoPreview(watermarked.dataUrl)
-                  } catch (err) {
-                    console.error('Photo capture error:', err)
-                    // Fallback — use original photo without watermark
-                    setServicePhoto(file)
-                    const reader = new FileReader()
-                    reader.onload = (ev) => setPhotoPreview(ev.target.result)
-                    reader.readAsDataURL(file)
-                  } finally {
-                    setCapturingPhoto(false)
-                  }
-                }}
-              />
-              {photoPreview ? (
-                <div className="relative">
-                  <img
-                    src={photoPreview}
-                    alt="Pool & test kit — verified"
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover"
-                  />
-                  {photoMeta && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                        Verified Time
-                      </span>
-                      {photoMeta.lat && (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded-full">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                          Verified GPS
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => {
-                      setServicePhoto(null)
-                      setPhotoPreview(null)
-                      setPhotoMeta(null)
-                      if (photoInputRef.current) photoInputRef.current.value = ''
-                      photoInputRef.current?.click()
-                    }}
-                    className="mt-2 w-full text-center text-sm font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700 py-2"
-                  >
-                    Retake Photo
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={capturingPhoto}
-                  className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
-                >
-                  {capturingPhoto ? (
-                    <>
-                      <svg className="w-8 h-8 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      <span className="text-sm font-medium text-pool-600 dark:text-pool-400">Processing photo...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                      </svg>
-                      <span className="text-sm font-medium">Tap to take photo</span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500">GPS & timestamp verified automatically</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
             <Button
-              onClick={() => setStep(1)}
-              disabled={!servicePhoto}
+              onClick={() => setStep(2)}
               className="w-full min-h-[48px] mt-4"
             >
               Next: Tasks
             </Button>
-            {!servicePhoto && (
-              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">Photo required to continue</p>
-            )}
           </div>
         )}
 
         {/* Step 2: Task Checklist */}
-        {step === 1 && !completed && (
+        {step === 2 && !completed && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Task Checklist</h2>
@@ -793,10 +820,10 @@ export default function NewService() {
             </div>
 
             <div className="flex gap-3 mt-4">
-              <Button variant="secondary" onClick={() => setStep(0)} className="flex-1 min-h-[48px]">
+              <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
                 Back
               </Button>
-              <Button onClick={() => setStep(2)} className="flex-1 min-h-[48px]">
+              <Button onClick={() => setStep(3)} className="flex-1 min-h-[48px]">
                 Next: Chemicals
               </Button>
             </div>
@@ -804,7 +831,7 @@ export default function NewService() {
         )}
 
         {/* Step 3: Chemicals Added */}
-        {step === 2 && !completed && (
+        {step === 3 && !completed && (
           <div className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chemicals Added</h2>
 
@@ -924,10 +951,10 @@ export default function NewService() {
             </Button>
 
             <div className="flex gap-3 mt-4">
-              <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
+              <Button variant="secondary" onClick={() => setStep(2)} className="flex-1 min-h-[48px]">
                 Back
               </Button>
-              <Button onClick={() => setStep(3)} className="flex-1 min-h-[48px]">
+              <Button onClick={() => setStep(4)} className="flex-1 min-h-[48px]">
                 Next: Review
               </Button>
             </div>
@@ -935,7 +962,7 @@ export default function NewService() {
         )}
 
         {/* Step 4: Review & Complete */}
-        {step === 3 && !completed && (
+        {step === 4 && !completed && (
           <div className="space-y-4">
             {/* Pool & Client header */}
             <Card className="bg-pool-50 dark:bg-pool-950/40 border-pool-200">
@@ -1096,7 +1123,7 @@ export default function NewService() {
             </p>
 
             <div className="flex gap-3">
-              <Button variant="secondary" onClick={() => setStep(2)} className="flex-1 min-h-[48px]">
+              <Button variant="secondary" onClick={() => setStep(3)} className="flex-1 min-h-[48px]">
                 Back
               </Button>
               <Button
