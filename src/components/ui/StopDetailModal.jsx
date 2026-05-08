@@ -736,6 +736,31 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
+  // Stop the whole pool-level schedule, not just one occurrence. For
+  // type='pool' stops only — these come from Schedule.jsx's path-2
+  // (legacy pool-driven projection), so there's no recurring profile
+  // to delete. Just null out the pool's schedule mirror; the pool row
+  // itself stays. After this runs the schedule should never project
+  // this pool again until the operator deliberately re-schedules it.
+  async function handleStopPoolSchedule() {
+    setDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('pools')
+        .update({ next_due_at: null, schedule_frequency: null })
+        .eq('id', stop.id)
+      if (error) throw error
+      setDeleteConfirm(null)
+      onClose?.()
+      onUpdated?.()
+    } catch (err) {
+      console.error('Stop schedule error:', err)
+      toast.error(err.message || 'Failed to stop schedule')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   async function handleDeleteSingle() {
     setDeleting(true)
     try {
@@ -1336,12 +1361,18 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                           </p>
                         )}
                       </div>
-                      {/* Single destructive action — only ever skips ONE
-                          occurrence from the Schedule view. Editing the
-                          recurrence pattern itself (drop a weekday, end
-                          the schedule, change days/time/etc.) lives on
-                          /recurring so the Schedule view can never
-                          accidentally nuke an entire schedule. */}
+                      {/* Action set differs by stop type:
+                          - type='job' (recurring profile-driven): only
+                            "Skip this one". To stop the schedule the
+                            operator goes to /recurring (the profile
+                            row exists there and supports it).
+                          - type='pool' (pool-level legacy / orphan):
+                            also offer "Stop this schedule" inline,
+                            because there's no profile in /recurring to
+                            edit — the schedule lives on the pool row
+                            itself. Without this the operator's only
+                            escape from a stranded pool projection is
+                            to skip forever. */}
                       <div className="flex gap-2">
                         <button
                           onClick={() => setDeleteConfirm(null)}
@@ -1362,21 +1393,30 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                           )}
                         </button>
                       </div>
-                      {/* Footer redirect — for any change beyond skipping
-                          a single occurrence, route the operator to the
-                          Recurring page where the whole schedule is
-                          editable safely. Keeps the Schedule view's
-                          delete blast radius to exactly one stop. */}
-                      <p className="text-[11px] text-center text-gray-500 dark:text-gray-400 pt-1">
-                        To edit the schedule or remove all future {dayLabel ? `${dayLabel}s` : 'occurrences'},{' '}
+                      {stop.type === 'pool' && (
                         <button
-                          type="button"
-                          onClick={() => { onClose?.(); navigate('/recurring-jobs') }}
-                          className="font-semibold text-pool-600 dark:text-pool-400 hover:underline"
+                          onClick={handleStopPoolSchedule}
+                          disabled={deleting}
+                          className="w-full mt-2 px-4 py-3 rounded-xl text-sm font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60 transition-colors min-h-tap"
                         >
-                          go to Recurring →
+                          Stop this schedule entirely
                         </button>
-                      </p>
+                      )}
+                      {/* Footer redirect only for profile-driven jobs —
+                          type='pool' has no profile to edit on /recurring,
+                          so don't send the operator to a dead end. */}
+                      {stop.type !== 'pool' && (
+                        <p className="text-[11px] text-center text-gray-500 dark:text-gray-400 pt-1">
+                          To edit the schedule or remove all future {dayLabel ? `${dayLabel}s` : 'occurrences'},{' '}
+                          <button
+                            type="button"
+                            onClick={() => { onClose?.(); navigate('/recurring-jobs') }}
+                            className="font-semibold text-pool-600 dark:text-pool-400 hover:underline"
+                          >
+                            go to Recurring →
+                          </button>
+                        </p>
+                      )}
                     </>
                   )
                 })()}
