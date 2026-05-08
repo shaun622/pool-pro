@@ -595,13 +595,94 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   }
 
   async function handleStartJob() {
-    onClose?.()
-    if (stop.type === 'job') {
-      await supabase.from('jobs').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', stop.id)
-      onUpdated?.()
-      navigate(`/work-orders/${stop.id}`)
-    } else {
+    if (stop.type !== 'job') {
+      // Pool service stops route into the chemical-readings flow, not
+      // the job detail page — no materialization needed.
+      onClose?.()
       navigate(`/pools/${stop.id}/service`)
+      return
+    }
+
+    // For projected recurring stops the synthetic id (`profile-<uuid>-
+    // YYYY-MM-DD`) doesn't match a real jobs row, so the previous
+    // UPDATE was a no-op and the navigate landed on a 404. Materialize
+    // the projection into a real jobs row before starting, then route
+    // to that real row. Mirror of the materialize logic in handleSave
+    // (see the projected branch around line 207) plus status +
+    // started_at so the job kicks off in_progress straight away.
+    let jobId = stop.id
+    const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
+
+    try {
+      if (isProjected) {
+        let profileId = form.recurring_profile_id
+        if (!profileId && typeof stop.id === 'string' && stop.id.startsWith('profile-')) {
+          profileId = stop.id.replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+        }
+        if (!profileId) throw new Error('Could not resolve the recurring profile for this stop.')
+
+        const { data: profileRow, error: profErr } = await supabase
+          .from('recurring_job_profiles')
+          .select('business_id, pool_id, recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
+          .eq('id', profileId)
+          .single()
+        if (profErr) throw profErr
+        if (!profileRow?.business_id) throw new Error('Recurring profile is missing a business — cannot start job.')
+
+        const origRecurringDate = stop.scheduled_date
+          || (typeof stop.id === 'string' && stop.id.startsWith('profile-')
+            ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1]
+            : null)
+
+        const { data: inserted, error: insErr } = await supabase
+          .from('jobs')
+          .insert({
+            business_id: profileRow.business_id,
+            client_id: stop.client_id,
+            pool_id: stop.pool_id || profileRow.pool_id || null,
+            recurring_profile_id: profileId,
+            replaces_recurring_date: origRecurringDate || null,
+            title: form.title || stop.title || 'Recurring Job',
+            status: 'in_progress',
+            started_at: new Date().toISOString(),
+            scheduled_date: form.scheduled_date || stop.scheduled_date || null,
+            scheduled_time: form.scheduled_time || stop.scheduled_time || null,
+            estimated_duration_minutes: form.estimated_duration_minutes ? Number(form.estimated_duration_minutes) : null,
+            price: form.price ? Number(form.price) : (stop.price ?? null),
+            notes: form.notes || stop.notes || null,
+            assigned_staff_id: form.assigned_staff_id || stop.assigned_staff_id || null,
+          })
+          .select('id')
+          .single()
+        if (insErr) throw insErr
+        jobId = inserted.id
+
+        // Advance the profile's next_generation_at past this occurrence
+        // so the projector doesn't re-emit it. Mirrors handleSave.
+        const dateForAdvance = form.scheduled_date || stop.scheduled_date
+        if (dateForAdvance) {
+          const next = computeNextOccurrence(dateForAdvance, profileRow)
+          if (next) {
+            await supabase.from('recurring_job_profiles').update({
+              next_generation_at: next.toISOString().split('T')[0],
+              last_generated_at: new Date().toISOString(),
+            }).eq('id', profileId)
+          }
+        }
+      } else {
+        const { error } = await supabase
+          .from('jobs')
+          .update({ status: 'in_progress', started_at: new Date().toISOString() })
+          .eq('id', stop.id)
+        if (error) throw error
+      }
+
+      onClose?.()
+      onUpdated?.()
+      navigate(`/work-orders/${jobId}`)
+    } catch (err) {
+      console.error('Start job error:', err)
+      toast.error(err.message || 'Could not start job')
     }
   }
 
