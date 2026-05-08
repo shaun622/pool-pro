@@ -150,8 +150,8 @@ export default function NewService() {
   // Step 3: Chemicals added
   const [chemicalsAdded, setChemicalsAdded] = useState([])
   const [chemicalProducts, setChemicalProducts] = useState([])
-  const [chemSearch, setChemSearch] = useState('')
-  const [chemSearchFocused, setChemSearchFocused] = useState(false)
+  // (chemSearch / chemSearchFocused removed — Step 3 no longer has
+  // a search box. Whole library renders inline.)
 
   // Step 4: Notes
   const [notes, setNotes] = useState('')
@@ -187,7 +187,18 @@ export default function NewService() {
         setLastReadings(lastServiceRes.data.chemical_logs[0])
       }
 
-      setChemicalProducts(productsRes.data || [])
+      const products = productsRes.data || []
+      setChemicalProducts(products)
+      // Pre-populate one row per library product with empty quantity
+      // — the chemicals step renders ALL chemicals as a compact list
+      // and the tech just types the amount they used into whichever
+      // applies. On save we filter out entries with no quantity, so
+      // pre-populating doesn't bloat the saved record.
+      setChemicalsAdded(products.map(p => ({
+        product_name: p.name,
+        quantity: '',
+        unit: p.default_unit || 'L',
+      })))
 
       const staffData = staffRes.data || []
       setStaffList(staffData)
@@ -253,28 +264,14 @@ export default function NewService() {
     )
   }
 
-  // (addChemical removed — manual entry from the service flow is now
-  // admin-only via Settings → Chemicals. Techs pick from the library.)
-
-  function addFromLibrary(productId) {
-    if (!productId) return
-    const product = chemicalProducts.find(p => p.id === productId)
-    if (!product) return
-    setChemicalsAdded(prev => [...prev, {
-      product_name: product.name,
-      quantity: '',
-      unit: product.default_unit || 'L',
-    }])
-  }
-
+  // (addChemical / addFromLibrary / removeChemical removed —
+  // chemicalsAdded is pre-populated with one row per library
+  // product on load, the tech only edits quantity. Empty rows
+  // get filtered out on save.)
   function updateChemical(index, field, value) {
     setChemicalsAdded(prev =>
       prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
     )
-  }
-
-  function removeChemical(index) {
-    setChemicalsAdded(prev => prev.filter((_, i) => i !== index))
   }
 
   async function handleComplete() {
@@ -1007,117 +1004,51 @@ export default function NewService() {
           </div>
         )}
 
-        {/* Step 3: Chemicals Added */}
+        {/* Step 3: Chemicals Added — flat list of every library
+            chemical with an inline quantity input. Tech types in the
+            amount they used; blanks are filtered out on save. No
+            search, no add button — the library is admin-managed via
+            Settings → Chemicals (canonical seven seeded by the
+            20260508 migration plus whatever the admin adds). */}
         {step === 3 && !completed && (
           <div className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chemicals Added</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">
+              Enter the amount of each chemical you used. Leave blank if not used.
+            </p>
 
-            {/* Search to quick-add from library */}
-            <div className="relative">
-              <input
-                value={chemSearch}
-                onChange={e => setChemSearch(e.target.value)}
-                onFocus={() => setChemSearchFocused(true)}
-                onBlur={() => setTimeout(() => setChemSearchFocused(false), 200)}
-                placeholder="Search or add chemical..."
-                className="input"
-              />
-
-              {/* Dropdown */}
-              {chemSearchFocused && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-elevated z-10 max-h-64 overflow-y-auto">
-                  {(() => {
-                    const query = chemSearch.toLowerCase().trim()
-                    const filtered = chemicalProducts.filter(p =>
-                      !query || p.name.toLowerCase().includes(query)
-                    )
-                    const exactMatch = chemicalProducts.some(p =>
-                      p.name.toLowerCase() === query
-                    )
-                    return (
-                      <>
-                        {filtered.map(p => (
-                          <button
-                            key={p.id}
-                            onMouseDown={e => e.preventDefault()}
-                            onClick={() => {
-                              addFromLibrary(p.id)
-                              setChemSearch('')
-                              setChemSearchFocused(false)
-                            }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-800 active:bg-gray-100 dark:bg-gray-800 transition-colors border-b border-gray-50 last:border-0"
-                          >
-                            <div className="w-7 h-7 rounded-lg bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
-                              <Plus className="w-3.5 h-3.5 text-pool-500" strokeWidth={2.5} />
-                            </div>
-                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.name}</span>
-                            <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">{p.default_unit || 'L'}</span>
-                          </button>
-                        ))}
-                        {filtered.length === 0 && !query && (
-                          <p className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">No chemicals in library</p>
-                        )}
-                        {query && filtered.length === 0 && (
-                          <p className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">
-                            No match. Ask an admin to add it from <span className="font-medium text-gray-600 dark:text-gray-300">Settings → Chemicals</span>.
-                          </p>
-                        )}
-                      </>
-                    )
-                  })()}
-                </div>
-              )}
-            </div>
-
-            {/* Chemical entry cards */}
-            {chemicalsAdded.map((chem, i) => (
-              <Card key={i} className="relative">
-                <button
-                  onClick={() => removeChemical(i)}
-                  className="absolute top-2 right-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-red-400 hover:text-red-600 dark:text-red-400"
-                  aria-label="Remove"
-                >
-                  <X className="w-5 h-5" strokeWidth={2} />
-                </button>
-                <div className="space-y-3 pr-8">
-                  {/* Product name is read-only — every chemical row
-                      now comes from the admin-managed library, so the
-                      tech can't rename it mid-service and drift the
-                      naming. To add a new chemical, an admin does it
-                      via Settings → Chemicals. */}
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Product</label>
-                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">{chem.product_name}</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <Input
-                        label="Quantity"
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        value={chem.quantity}
-                        onChange={e => updateChemical(i, 'quantity', e.target.value)}
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="w-24">
-                      <Select
-                        label="Unit"
-                        options={UNIT_OPTIONS}
-                        value={chem.unit}
-                        onChange={e => updateChemical(i, 'unit', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
+            {chemicalsAdded.length === 0 ? (
+              <Card>
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                  No chemicals in the library. Ask an admin to add some via{' '}
+                  <span className="font-medium text-gray-700 dark:text-gray-200">Settings → Chemicals</span>.
+                </p>
               </Card>
-            ))}
-
-            {/* No manual-add button. The chemical library is admin-
-                managed (Settings → Chemicals) so techs can only log
-                products that have been pre-approved — keeps the fleet's
-                chemical naming + units consistent across services. */}
+            ) : (
+              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+                {chemicalsAdded.map((chem, i) => (
+                  <div key={chem.product_name || i} className="flex items-center gap-3 px-4 py-3">
+                    <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {chem.product_name}
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="any"
+                      min="0"
+                      value={chem.quantity}
+                      onChange={e => updateChemical(i, 'quantity', e.target.value)}
+                      placeholder="0"
+                      className="input !w-24 text-right tabular-nums"
+                      aria-label={`${chem.product_name} amount`}
+                    />
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 w-8 text-left tabular-nums">
+                      {chem.unit}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex gap-3 mt-4">
               <Button variant="secondary" onClick={() => setStep(2)} className="flex-1 min-h-[48px]">
@@ -1250,20 +1181,27 @@ export default function NewService() {
               </div>
             </Card>
 
-            {/* Chemicals added summary */}
-            {chemicalsAdded.length > 0 && (
-              <Card>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemicals Added</h3>
-                <div className="space-y-2">
-                  {chemicalsAdded.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700 dark:text-gray-300">{c.product_name}</span>
-                      <span className="font-medium text-gray-900 dark:text-gray-100">{c.quantity} {c.unit}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
+            {/* Chemicals added summary — only the rows with a real
+                quantity entered. chemicalsAdded is pre-populated with
+                every library product on load, so most rows will be
+                blank for any given service. */}
+            {(() => {
+              const used = chemicalsAdded.filter(c => c.quantity && Number(c.quantity) > 0)
+              if (used.length === 0) return null
+              return (
+                <Card>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemicals Added</h3>
+                  <div className="space-y-2">
+                    {used.map((c, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700 dark:text-gray-300">{c.product_name}</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{c.quantity} {c.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )
+            })()}
 
             {/* Next service */}
             <Card className="bg-gray-50 dark:bg-gray-800">
