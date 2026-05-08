@@ -119,15 +119,71 @@ export default function RecurringJobs() {
 
   async function fetchAll() {
     setLoading(true)
-    const [profilesRes, clientsRes, staffRes, jobTypesRes] = await Promise.all([
+    // Pull legacy pool schedules alongside profiles so the operator
+    // can manage both from one page. Pool-level schedules
+    // (`pools.schedule_frequency` + `pools.next_due_at`) are written
+    // by the legacy "regular_service" pool flow in PoolFormFields and
+    // by AddRecurringModal as a denormalised mirror. The Schedule's
+    // path-2 projector reads them, so any pool with these fields set
+    // and no active profile pointing at it is producing schedule
+    // stops that aren't editable from /recurring today — that's the
+    // gap this fetch closes.
+    const [profilesRes, clientsRes, staffRes, jobTypesRes, legacyPoolsRes] = await Promise.all([
       supabase.from('recurring_job_profiles').select('*, clients(name), pools(address), staff_members:assigned_staff_id(name), job_type_templates:job_type_template_id(name, color)')
         .eq('business_id', business.id).order('created_at', { ascending: false }),
       supabase.from('clients').select('id, name, pools(id, address)').eq('business_id', business.id).order('name'),
       supabase.from('staff_members').select('id, name').eq('business_id', business.id).eq('is_active', true).order('name'),
       supabase.from('job_type_templates').select('id, name, color, default_tasks, estimated_duration_minutes, default_price')
         .eq('business_id', business.id).eq('is_active', true).order('name'),
+      supabase.from('pools')
+        .select('id, address, schedule_frequency, next_due_at, client_id, business_id, assigned_staff_id, clients(name)')
+        .eq('business_id', business.id)
+        .not('schedule_frequency', 'is', null)
+        .not('next_due_at', 'is', null),
     ])
-    setProfiles(profilesRes.data || [])
+    const realProfiles = profilesRes.data || []
+
+    // Drop any legacy pool that already has an active profile —
+    // those pool fields are just a denormalised mirror, not a
+    // separate schedule. The exclusion is in JS rather than a nested
+    // EXISTS to keep the query simple and the cost of one extra
+    // round-trip to a list of pool ids is irrelevant at this scale.
+    const activeProfilePoolIds = new Set(
+      realProfiles
+        .filter(p => p.is_active && p.pool_id)
+        .map(p => p.pool_id)
+    )
+    const legacyOnly = (legacyPoolsRes.data || []).filter(p => !activeProfilePoolIds.has(p.id))
+
+    // Wrap each legacy pool in a "pseudo-profile" so the existing
+    // render code can consume it without branching everywhere.
+    // Handlers branch on `__isLegacy` to do the right thing
+    // (delete clears pool fields; edit migrates to a real profile).
+    const legacyPseudoProfiles = legacyOnly.map(p => ({
+      id: `legacy-pool-${p.id}`,
+      __isLegacy: true,
+      __poolId: p.id,
+      title: 'Pool Service',
+      pool_id: p.id,
+      client_id: p.client_id,
+      business_id: p.business_id,
+      assigned_staff_id: p.assigned_staff_id || null,
+      clients: p.clients,
+      pools: { id: p.id, address: p.address },
+      // Map legacy schedule_frequency onto the recurrence_rule field
+      // the rest of the code expects.
+      recurrence_rule: p.schedule_frequency,
+      next_generation_at: p.next_due_at?.split('T')[0] || null,
+      last_generated_at: null,
+      is_active: true,
+      status: 'active',
+      service_type: 'pool',
+      duration_type: 'ongoing',
+      price: null,
+      created_at: p.next_due_at, // best-effort sort key
+    }))
+
+    setProfiles([...realProfiles, ...legacyPseudoProfiles])
     setClients(clientsRes.data || [])
     setStaff(staffRes.data || [])
     setJobTypes(jobTypesRes.data || [])
@@ -307,7 +363,31 @@ export default function RecurringJobs() {
         notes: form.notes.trim() || null,
         next_generation_at: form.first_date,
       }
-      if (editing) {
+      if (editing?.__isLegacy) {
+        // Migrate a legacy pool-level schedule into a real profile.
+        // The pool already has next_due_at + schedule_frequency set
+        // (that's what made it legacy). We INSERT a profile and then
+        // re-sync the pool fields to whatever the operator chose in
+        // this edit — same shape AddRecurringModal would write on a
+        // fresh create. After this, the active profile is the source
+        // of truth and the legacy fetch query no longer surfaces this
+        // pool because activeProfilePoolIds excludes it.
+        const { error: insertErr } = await supabase
+          .from('recurring_job_profiles')
+          .insert({ ...payload, business_id: business.id })
+        if (insertErr) throw insertErr
+        if (form.pool_id) {
+          const freq = form.recurrence_rule === 'custom'
+            ? `${form.custom_interval_days}`
+            : form.recurrence_rule
+          await supabase.from('pools').update({
+            schedule_frequency: freq,
+            next_due_at: form.first_date
+              ? new Date(form.first_date + 'T09:00:00').toISOString()
+              : null,
+          }).eq('id', form.pool_id)
+        }
+      } else if (editing) {
         await supabase.from('recurring_job_profiles').update(payload).eq('id', editing.id)
       } else {
         await supabase.from('recurring_job_profiles').insert({ ...payload, business_id: business.id })
@@ -354,26 +434,37 @@ export default function RecurringJobs() {
     if (!editing) return
     setDeletingService(true)
     try {
-      const { error: jobsErr } = await supabase
-        .from('jobs')
-        .delete()
-        .eq('recurring_profile_id', editing.id)
-      if (jobsErr) throw jobsErr
-
-      const { error } = await supabase
-        .from('recurring_job_profiles')
-        .delete()
-        .eq('id', editing.id)
-      if (error) throw error
-
-      // Clear the pool's denormalised mirror so path-2 stops projecting.
-      // We only clear fields the recurring lifecycle owns; address /
-      // other pool fields stay untouched.
-      if (editing.pool_id) {
-        await supabase
+      // Legacy entries are pool-only (no profile, no jobs). Just clear
+      // the pool's schedule mirror — that's the entire schedule for
+      // these rows.
+      if (editing.__isLegacy) {
+        const { error: poolErr } = await supabase
           .from('pools')
           .update({ next_due_at: null, schedule_frequency: null })
-          .eq('id', editing.pool_id)
+          .eq('id', editing.__poolId)
+        if (poolErr) throw poolErr
+      } else {
+        const { error: jobsErr } = await supabase
+          .from('jobs')
+          .delete()
+          .eq('recurring_profile_id', editing.id)
+        if (jobsErr) throw jobsErr
+
+        const { error } = await supabase
+          .from('recurring_job_profiles')
+          .delete()
+          .eq('id', editing.id)
+        if (error) throw error
+
+        // Clear the pool's denormalised mirror so path-2 stops projecting.
+        // We only clear fields the recurring lifecycle owns; address /
+        // other pool fields stay untouched.
+        if (editing.pool_id) {
+          await supabase
+            .from('pools')
+            .update({ next_due_at: null, schedule_frequency: null })
+            .eq('id', editing.pool_id)
+        }
       }
       toast.success('Recurring service deleted')
       // If the deleted profile was selected in the desktop detail pane,
@@ -563,7 +654,12 @@ export default function RecurringJobs() {
               <Card key={p.id} onClick={() => openEdit(p)}>
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.title}</p>
+                      {p.__isLegacy && (
+                        <Badge variant="warning" className="shrink-0 text-[9px] uppercase tracking-wider">Legacy</Badge>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.clients?.name || 'Unknown'}</p>
                     <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
                       {describeSchedule(p)}
@@ -609,10 +705,13 @@ export default function RecurringJobs() {
                       >
                         <span className="min-w-0">
                           <span className={cn(
-                            'block text-sm font-semibold truncate',
+                            'flex items-center gap-1.5 text-sm font-semibold',
                             isSelected ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100',
                           )}>
-                            {p.title}
+                            <span className="truncate">{p.title}</span>
+                            {p.__isLegacy && (
+                              <Badge variant="warning" className="shrink-0 text-[9px] uppercase tracking-wider">Legacy</Badge>
+                            )}
                           </span>
                           <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">
                             {p.clients?.name || 'Unknown'}
@@ -675,13 +774,23 @@ export default function RecurringJobs() {
                       <Repeat className="w-3.5 h-3.5" strokeWidth={2.5} />
                       Recurring service
                     </p>
-                    <Badge variant={STATE_BADGE[selectedProfile._state]}>
-                      {STATE_LABEL[selectedProfile._state]}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      {selectedProfile.__isLegacy && (
+                        <Badge variant="warning" className="text-[10px] uppercase tracking-wider">Legacy</Badge>
+                      )}
+                      <Badge variant={STATE_BADGE[selectedProfile._state]}>
+                        {STATE_LABEL[selectedProfile._state]}
+                      </Badge>
+                    </div>
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
                     {selectedProfile.title}
                   </h3>
+                  {selectedProfile.__isLegacy && (
+                    <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-1.5">
+                      Pool-level legacy schedule. Hit Edit to migrate it into a proper recurring profile.
+                    </p>
+                  )}
                   <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
                     {selectedProfile.clients?.name || 'Unknown client'}
                   </p>
@@ -735,7 +844,12 @@ export default function RecurringJobs() {
                     >
                       Edit
                     </Button>
-                    {selectedProfile._state === 'active' && (
+                    {/* Pause / Resume only make sense for real profile
+                        rows — they flip the profile's status. Legacy
+                        pool-level entries have no profile to flip; the
+                        operator should Edit (which migrates legacy →
+                        profile) and pause from there. */}
+                    {!selectedProfile.__isLegacy && selectedProfile._state === 'active' && (
                       <Button
                         size="sm"
                         variant="secondary"
@@ -745,7 +859,7 @@ export default function RecurringJobs() {
                         Pause
                       </Button>
                     )}
-                    {selectedProfile._state === 'paused' && (
+                    {!selectedProfile.__isLegacy && selectedProfile._state === 'paused' && (
                       <Button
                         size="sm"
                         variant="secondary"
