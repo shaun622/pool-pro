@@ -101,7 +101,9 @@ export const CHEMICAL_UNITS = ['L', 'kg', 'g', 'tabs']
 export const DEFAULT_TARGET_RANGES = {
   ph: [7.2, 7.6],
   free_cl: [1, 3],
-  total_cl: [1, 5],
+  // Total chlorine target capped at 3 ppm to match the slider's 0–3.0
+  // range in NewService.jsx (and the standard NZ/AU pool guideline).
+  total_cl: [1, 3],
   alk: [80, 120],
   stabiliser: [30, 50],
   calcium: [200, 400],

@@ -26,17 +26,32 @@ import {
 
 const STEPS = ['Chemicals', 'Tasks', 'Added', 'Review']
 
-const DEFAULT_READINGS = ['ph', 'free_chlorine']
+const DEFAULT_READINGS = ['ph', 'total_chlorine']
 
+// Free chlorine intentionally absent — the techs only ever record
+// total chlorine on this pool round, so the field's been removed
+// from the input UI. The CHEMICAL_LABELS entry stays in utils.js
+// so historical service records that DO have free_chlorine values
+// still render correctly on the detail / portal pages.
 const ALL_READING_FIELDS = [
   { key: 'ph', rangeKey: 'ph' },
-  { key: 'free_chlorine', rangeKey: 'free_cl' },
   { key: 'total_chlorine', rangeKey: 'total_cl' },
   { key: 'alkalinity', rangeKey: 'alk' },
   { key: 'stabiliser', rangeKey: 'stabiliser' },
   { key: 'calcium_hardness', rangeKey: 'calcium' },
   { key: 'salt', rangeKey: 'salt', saltOnly: true },
 ]
+
+// Readings that render as a slider instead of a free-form number
+// input. Constraining to a useful range and a 0.1 step matches what
+// the operator actually reads off the test kit and is much faster
+// on a phone with one hand. defaultPos is the visual thumb position
+// when state is empty — readings stay '' until the operator
+// interacts, so we never save a fake measurement.
+const SLIDER_FIELDS = {
+  ph:             { min: 6.8, max: 8.2, step: 0.1, defaultPos: 7.4 },
+  total_chlorine: { min: 0,   max: 3.0, step: 0.1, defaultPos: 1.5 },
+}
 
 const UNIT_OPTIONS = CHEMICAL_UNITS.map(u => ({ value: u, label: u }))
 
@@ -433,39 +448,42 @@ export default function NewService() {
                       {info?.label || key}
                       {info?.unit && <span className="text-gray-400 dark:text-gray-500 ml-1">{info.unit}</span>}
                     </label>
-                    {key === 'ph' ? (
-                      // pH gets a slider instead of a number input — the
-                      // useful range is narrow (6.8–8.2) and 0.1
-                      // increments are what the operator actually reads
-                      // off the test kit. Slider visually defaults to
-                      // 7.4 (mid-range) when untouched, but readings.ph
-                      // stays empty until the operator interacts so we
-                      // never save a fake measurement.
-                      <div>
-                        <div className="flex items-baseline gap-2 mb-2">
-                          <p className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
-                            {value !== '' ? Number(value).toFixed(1) : '—'}
-                          </p>
-                          {value === '' && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500">slide to record</p>
-                          )}
-                        </div>
-                        <input
-                          type="range"
-                          min="6.8"
-                          max="8.2"
-                          step="0.1"
-                          value={value !== '' ? Number(value) : 7.4}
-                          onChange={e => handleReadingChange(key, e.target.value)}
-                          className="w-full accent-pool-500 cursor-pointer"
-                          aria-label="pH reading"
-                        />
-                        <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1 tabular-nums">
-                          <span>6.8</span>
-                          {range && <span>target {range[0]}–{range[1]}</span>}
-                          <span>8.2</span>
-                        </div>
-                      </div>
+                    {SLIDER_FIELDS[key] ? (
+                      // Slider variant — see SLIDER_FIELDS for the
+                      // per-reading range/step/default. Visual thumb
+                      // sits at defaultPos when readings[key] is empty
+                      // but state stays '' until the operator
+                      // interacts, so we never save a fake measurement.
+                      (() => {
+                        const cfg = SLIDER_FIELDS[key]
+                        return (
+                          <div>
+                            <div className="flex items-baseline gap-2 mb-2">
+                              <p className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
+                                {value !== '' ? Number(value).toFixed(1) : '—'}
+                              </p>
+                              {value === '' && (
+                                <p className="text-xs text-gray-400 dark:text-gray-500">slide to record</p>
+                              )}
+                            </div>
+                            <input
+                              type="range"
+                              min={cfg.min}
+                              max={cfg.max}
+                              step={cfg.step}
+                              value={value !== '' ? Number(value) : cfg.defaultPos}
+                              onChange={e => handleReadingChange(key, e.target.value)}
+                              className="w-full accent-pool-500 cursor-pointer"
+                              aria-label={`${info?.label || key} reading`}
+                            />
+                            <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1 tabular-nums">
+                              <span>{cfg.min}</span>
+                              {range && <span>target {range[0]}–{range[1]}</span>}
+                              <span>{cfg.max.toFixed(1)}</span>
+                            </div>
+                          </div>
+                        )
+                      })()
                     ) : (
                       <input
                         type="number"
