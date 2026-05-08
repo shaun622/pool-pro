@@ -433,15 +433,50 @@ export default function NewService() {
                       {info?.label || key}
                       {info?.unit && <span className="text-gray-400 dark:text-gray-500 ml-1">{info.unit}</span>}
                     </label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      value={value}
-                      onChange={e => handleReadingChange(key, e.target.value)}
-                      placeholder={range ? `${range[0]} - ${range[1]}` : ''}
-                      className="input-lg w-full text-lg"
-                    />
+                    {key === 'ph' ? (
+                      // pH gets a slider instead of a number input — the
+                      // useful range is narrow (6.8–8.2) and 0.1
+                      // increments are what the operator actually reads
+                      // off the test kit. Slider visually defaults to
+                      // 7.4 (mid-range) when untouched, but readings.ph
+                      // stays empty until the operator interacts so we
+                      // never save a fake measurement.
+                      <div>
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <p className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none">
+                            {value !== '' ? Number(value).toFixed(1) : '—'}
+                          </p>
+                          {value === '' && (
+                            <p className="text-xs text-gray-400 dark:text-gray-500">slide to record</p>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="6.8"
+                          max="8.2"
+                          step="0.1"
+                          value={value !== '' ? Number(value) : 7.4}
+                          onChange={e => handleReadingChange(key, e.target.value)}
+                          className="w-full accent-pool-500 cursor-pointer"
+                          aria-label="pH reading"
+                        />
+                        <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1 tabular-nums">
+                          <span>6.8</span>
+                          {range && <span>target {range[0]}–{range[1]}</span>}
+                          <span>8.2</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="any"
+                        value={value}
+                        onChange={e => handleReadingChange(key, e.target.value)}
+                        placeholder={range ? `${range[0]} - ${range[1]}` : ''}
+                        className="input-lg w-full text-lg"
+                      />
+                    )}
                     {lastReadings && (
                       <div className="mt-0.5">{renderDelta(key)}</div>
                     )}
