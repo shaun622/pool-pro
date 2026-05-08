@@ -43,16 +43,19 @@ export function useService() {
     if (error) throw error
   }, [])
 
-  // Save chemicals dosed during a service. Each row carries either
-  // dose_text (free-form, the new shape — "100g", "1kg", etc.) or
-  // the legacy (quantity, unit) pair if the caller still passes
-  // those. Display layers prefer dose_text when present.
+  // Save chemicals dosed (and/or stock noted as remaining at the
+  // client) for a service. Each row carries dose_text (freeform —
+  // "100g", "1kg") and/or stock_remaining (also freeform — "3kg",
+  // "half a bag"). Either or both can be present; the caller filters
+  // out rows where both are blank. Legacy (quantity, unit) is kept
+  // nullable for back-compat with old reads.
   const saveChemicalsAdded = useCallback(async (serviceRecordId, chemicals) => {
     if (!chemicals.length) return
     const rows = chemicals.map(c => ({
       service_record_id: serviceRecordId,
       product_name: c.product_name,
       dose_text: c.dose_text || null,
+      stock_remaining: c.stock_remaining || null,
       quantity: c.quantity != null && c.quantity !== '' ? c.quantity : null,
       unit: c.unit || null,
       cost: c.cost || null,

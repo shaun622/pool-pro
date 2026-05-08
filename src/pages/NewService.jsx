@@ -189,13 +189,14 @@ export default function NewService() {
 
       const products = productsRes.data || []
       setChemicalProducts(products)
-      // Pre-populate one row per library product with empty dose
-      // text. Step 3 renders all chemicals as a compact list and the
-      // tech types the amount they used as freeform text — "100g",
-      // "1kg", whatever fits. Save filters out blank rows.
+      // Pre-populate one row per library product. Each row has two
+      // freeform text fields: dose_text (what the tech added) and
+      // stock_remaining (what's left in the bottle at the client).
+      // Both optional. Save filters out rows where both are blank.
       setChemicalsAdded(products.map(p => ({
         product_name: p.name,
         dose_text: '',
+        stock_remaining: '',
       })))
 
       const staffData = staffRes.data || []
@@ -290,14 +291,18 @@ export default function NewService() {
       // Save tasks
       await saveTasks(record.id, tasks)
 
-      // Save chemicals added — only rows where the tech entered a
-      // dose. dose_text is the freeform user input ("100g", "1kg",
-      // etc.); structured quantity/unit are no longer captured by
-      // the UI but stay nullable in the schema for legacy reads.
-      const validChemicals = chemicalsAdded.filter(c => c.product_name && c.dose_text && c.dose_text.trim())
+      // Save chemicals — keep rows where EITHER dose_text OR
+      // stock_remaining is non-empty. A "noticed salt is low, bring
+      // some" entry with no dose still saves so the office sees the
+      // restock signal; same for a dose with no remaining note.
+      const validChemicals = chemicalsAdded.filter(c => c.product_name && (
+        (c.dose_text && c.dose_text.trim()) ||
+        (c.stock_remaining && c.stock_remaining.trim())
+      ))
       await saveChemicalsAdded(record.id, validChemicals.map(c => ({
         product_name: c.product_name,
-        dose_text: c.dose_text.trim(),
+        dose_text: c.dose_text?.trim() || null,
+        stock_remaining: c.stock_remaining?.trim() || null,
       })))
 
       // Bump use_count on the library row so the admin can see which
@@ -1026,26 +1031,44 @@ export default function NewService() {
                 </p>
               </Card>
             ) : (
-              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden bg-white dark:bg-gray-900">
-                {chemicalsAdded.map((chem, i) => (
-                  <div key={chem.product_name || i} className="flex items-center gap-3 px-4 py-3">
-                    <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {chem.product_name}
-                    </span>
-                    {/* Freeform text input — tech writes whatever
-                        matches what they actually dosed: "100g",
-                        "1kg", "200mL", "half scoop", etc. Saved as
-                        dose_text and rendered verbatim downstream. */}
-                    <input
-                      type="text"
-                      value={chem.dose_text}
-                      onChange={e => updateChemical(i, 'dose_text', e.target.value)}
-                      placeholder="e.g. 100g"
-                      className="input !w-32 text-right"
-                      aria-label={`${chem.product_name} dose`}
-                    />
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {/* Header row — labels above the inputs so the tech
+                    knows which column is which. Hidden on narrow
+                    screens to keep the row compact. */}
+                <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_8rem_8rem] gap-3 px-4 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  <span>Chemical</span>
+                  <span className="text-center">Added</span>
+                  <span className="text-center">Remaining</span>
+                </div>
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden bg-white dark:bg-gray-900">
+                  {chemicalsAdded.map((chem, i) => (
+                    <div key={chem.product_name || i} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_8rem_8rem] gap-3 items-center">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {chem.product_name}
+                      </span>
+                      {/* Dose — what the tech added. Freeform so they
+                          can write "100g", "1kg", "half scoop", etc. */}
+                      <input
+                        type="text"
+                        value={chem.dose_text}
+                        onChange={e => updateChemical(i, 'dose_text', e.target.value)}
+                        placeholder="e.g. 100g"
+                        className="input !w-full text-right"
+                        aria-label={`${chem.product_name} added`}
+                      />
+                      {/* Stock remaining at the client — also
+                          freeform. Empty if the tech didn't note it. */}
+                      <input
+                        type="text"
+                        value={chem.stock_remaining}
+                        onChange={e => updateChemical(i, 'stock_remaining', e.target.value)}
+                        placeholder="e.g. 3kg"
+                        className="input !w-full text-right"
+                        aria-label={`${chem.product_name} stock remaining`}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1180,21 +1203,30 @@ export default function NewService() {
               </div>
             </Card>
 
-            {/* Chemicals added summary — only rows with a non-empty
-                dose_text. chemicalsAdded is pre-populated with every
-                library product, so most rows will be blank for any
-                given service. */}
+            {/* Chemicals summary — rows with a dose AND/OR a stock
+                remaining note. chemicalsAdded is pre-populated with
+                every library product, so most rows will be blank. */}
             {(() => {
-              const used = chemicalsAdded.filter(c => c.dose_text && c.dose_text.trim())
+              const used = chemicalsAdded.filter(c =>
+                (c.dose_text && c.dose_text.trim()) ||
+                (c.stock_remaining && c.stock_remaining.trim())
+              )
               if (used.length === 0) return null
               return (
                 <Card>
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemicals Added</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemicals</h3>
                   <div className="space-y-2">
                     {used.map((c, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700 dark:text-gray-300">{c.product_name}</span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{c.dose_text}</span>
+                      <div key={i} className="flex items-center justify-between text-sm gap-3">
+                        <span className="text-gray-700 dark:text-gray-300 min-w-0 truncate">{c.product_name}</span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100 shrink-0 tabular-nums">
+                          {c.dose_text?.trim() || <span className="text-gray-400 dark:text-gray-500">—</span>}
+                          {c.stock_remaining?.trim() && (
+                            <span className="text-gray-500 dark:text-gray-400 font-normal ml-2">
+                              · {c.stock_remaining.trim()} left
+                            </span>
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>

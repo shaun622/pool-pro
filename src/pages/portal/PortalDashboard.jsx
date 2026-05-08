@@ -244,11 +244,16 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, photos, ranges, p
                               to structured quantity+unit. */}
                           {c.dose_text ? (
                             <span className="text-lg font-bold text-gray-900">{c.dose_text}</span>
-                          ) : (
+                          ) : c.quantity ? (
                             <>
                               <span className="text-lg font-bold text-gray-900">{c.quantity}</span>
                               <span className="text-xs text-gray-500 ml-1">{c.unit}</span>
                             </>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                          {c.stock_remaining && (
+                            <p className="text-[11px] text-gray-500 mt-0.5">{c.stock_remaining} left</p>
                           )}
                         </div>
                       </div>

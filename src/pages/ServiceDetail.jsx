@@ -201,10 +201,15 @@ export default function ServiceDetail() {
                     <span className="text-sm text-gray-700 dark:text-gray-300">{chem.product_name}</span>
                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {/* dose_text is the freeform user input on
-                          new rows; legacy rows (pre-20260508 dose_text
-                          migration) fall back to structured
-                          quantity+unit. */}
-                      {chem.dose_text || `${chem.quantity ?? ''} ${chem.unit ?? ''}`.trim()}
+                          new rows; legacy rows fall back to structured
+                          quantity+unit. stock_remaining (if logged)
+                          renders after the dose as "· 3kg left". */}
+                      {chem.dose_text || `${chem.quantity ?? ''} ${chem.unit ?? ''}`.trim() || '—'}
+                      {chem.stock_remaining && (
+                        <span className="text-gray-500 dark:text-gray-400 font-normal ml-2">
+                          · {chem.stock_remaining} left
+                        </span>
+                      )}
                     </span>
                   </div>
                 ))}
