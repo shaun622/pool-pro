@@ -327,27 +327,32 @@ export default function RecurringJobs() {
     setModalOpen(false)
   }
 
-  // Permanently delete the recurring profile. Different from Cancel:
-  // Cancel keeps the row (status=cancelled) for history, Delete removes
-  // it entirely. Jobs that were materialized from this profile keep
-  // their history — we just null out recurring_profile_id on them
-  // before the delete so the FK doesn't block us. (The FK is plain
-  // `REFERENCES recurring_job_profiles` with no ON DELETE behaviour, so
-  // a straight delete fails with "violates foreign key constraint
-  // jobs_recurring_profile_id_fkey" once any job has been materialized
-  // from a Start / edit-save flow.)
+  // Permanently delete the recurring profile + every job materialized
+  // from it. Different from Cancel (which keeps the row at
+  // status=cancelled for history). Hard delete the linked jobs because
+  // the previous detach behaviour left orphan in_progress / scheduled
+  // jobs polluting the schedule: the schedule's path-1 query pulls
+  // every real job in range and covers their pool_id for dedupe, so a
+  // re-created profile's projection on the same day got displaced by
+  // the old orphan — that's "I just made a brand new recurring and it
+  // already says View Job / In Progress" repro.
+  //
+  // Completed pool services live in service_records (not jobs) so this
+  // doesn't lose chemical history. Completed ad-hoc jobs DO get deleted
+  // here — that's the trade-off for "delete recurring service" meaning
+  // "wipe the slate". If we ever need to keep historical completed
+  // jobs we can split the delete into status='completed' (retain) vs
+  // everything else (delete) — for now the operator's expectation is
+  // hard delete.
   async function handleDeleteService() {
     if (!editing) return
     setDeletingService(true)
     try {
-      // Detach materialized jobs first so the profile can drop. Jobs
-      // stay in the DB as standalone records; their work history is
-      // preserved.
-      const { error: detachErr } = await supabase
+      const { error: jobsErr } = await supabase
         .from('jobs')
-        .update({ recurring_profile_id: null })
+        .delete()
         .eq('recurring_profile_id', editing.id)
-      if (detachErr) throw detachErr
+      if (jobsErr) throw jobsErr
 
       const { error } = await supabase
         .from('recurring_job_profiles')

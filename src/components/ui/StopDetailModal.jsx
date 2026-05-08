@@ -596,20 +596,30 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
 
   async function handleStartJob() {
     if (stop.type !== 'job') {
-      // Pool service stops route into the chemical-readings flow, not
-      // the job detail page — no materialization needed.
+      // Plain pool service stops route into the chemical-readings flow.
       onClose?.()
       navigate(`/pools/${stop.id}/service`)
       return
     }
 
-    // For projected recurring stops the synthetic id (`profile-<uuid>-
-    // YYYY-MM-DD`) doesn't match a real jobs row, so the previous
-    // UPDATE was a no-op and the navigate landed on a 404. Materialize
-    // the projection into a real jobs row before starting, then route
-    // to that real row. Mirror of the materialize logic in handleSave
-    // (see the projected branch around line 207) plus status +
-    // started_at so the job kicks off in_progress straight away.
+    // POOL-TIED recurring profile: route to the same /pools/:id/service
+    // flow as a regular pool service — that's the "tech flow" with
+    // chemical readings, tasks, photos, etc. We deliberately do NOT
+    // materialize a jobs row in this path: the service_records table
+    // is the source of truth for completed pool services, and the
+    // recurring profile's next_generation_at gets advanced when the
+    // service is completed (via NewService.jsx's complete handler).
+    // Materializing here was leaving in_progress jobs polluting the
+    // schedule + the work orders list.
+    if (stop.pool_id) {
+      onClose?.()
+      navigate(`/pools/${stop.pool_id}/service`)
+      return
+    }
+
+    // NON-POOL recurring (ad-hoc work): keep the materialize-and-go-to-
+    // work-orders path. Synthetic projection id never matches a real
+    // jobs row, so we have to insert one before navigating.
     let jobId = stop.id
     const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
 
