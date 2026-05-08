@@ -329,12 +329,26 @@ export default function RecurringJobs() {
 
   // Permanently delete the recurring profile. Different from Cancel:
   // Cancel keeps the row (status=cancelled) for history, Delete removes
-  // it entirely. We don't touch jobs that were already generated from
-  // this profile — their recurring_profile_id orphans.
+  // it entirely. Jobs that were materialized from this profile keep
+  // their history — we just null out recurring_profile_id on them
+  // before the delete so the FK doesn't block us. (The FK is plain
+  // `REFERENCES recurring_job_profiles` with no ON DELETE behaviour, so
+  // a straight delete fails with "violates foreign key constraint
+  // jobs_recurring_profile_id_fkey" once any job has been materialized
+  // from a Start / edit-save flow.)
   async function handleDeleteService() {
     if (!editing) return
     setDeletingService(true)
     try {
+      // Detach materialized jobs first so the profile can drop. Jobs
+      // stay in the DB as standalone records; their work history is
+      // preserved.
+      const { error: detachErr } = await supabase
+        .from('jobs')
+        .update({ recurring_profile_id: null })
+        .eq('recurring_profile_id', editing.id)
+      if (detachErr) throw detachErr
+
       const { error } = await supabase
         .from('recurring_job_profiles')
         .delete()
