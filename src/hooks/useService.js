@@ -152,7 +152,11 @@ export function useService() {
     return data || []
   }, [])
 
-  const saveServicePhoto = useCallback(async (serviceRecordId, file, meta = {}) => {
+  // tag distinguishes the mandatory arrival/test-kit shot from
+  // optional "things" photos (water condition, equipment, issues
+  // found on site). Default stays 'test-kit' so existing callers that
+  // omit the tag keep the old behaviour.
+  const saveServicePhoto = useCallback(async (serviceRecordId, file, meta = {}, tag = 'test-kit') => {
     // If file is already a Blob (watermarked WebP), upload directly; otherwise convert
     const isBlob = file instanceof Blob && !(file instanceof File)
     const uploadBlob = isBlob ? file : await convertToWebP(file, 1200, 0.82)
@@ -168,7 +172,7 @@ export function useService() {
       service_record_id: serviceRecordId,
       storage_path: path,
       signed_url: urlData.publicUrl,
-      tag: 'test-kit',
+      tag,
     }
     if (meta.lat) row.latitude = meta.lat
     if (meta.lng) row.longitude = meta.lng
