@@ -207,11 +207,14 @@ function Schedule({ business }) {
   const [allPools, setAllPools] = useState([])
   const [allProfiles, setAllProfiles] = useState([])
   const [allStaff, setAllStaff] = useState([])
-  // Recent service_records — used to suppress pool projections on days
-  // when a pool was already serviced. Defensive: even if pool.next_due_at
-  // didn't advance for some reason, the projected "due today" stop still
-  // disappears from the view.
+  // Recent service_records — used both to (a) suppress raw pool
+  // projections on days when a pool was already serviced (defensive
+  // dedupe even if next_due_at didn't advance) and (b) emit a
+  // dimmed "completed" stop on the day a service actually happened
+  // so the operator can see what's been done at a glance instead of
+  // it just disappearing from the schedule.
   const [serviceDays, setServiceDays] = useState(new Set()) // "<pool_id>:<ymd>" keys
+  const [serviceRecords, setServiceRecords] = useState([])  // {pool_id, serviced_at}
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
   // The desktop week grid caps each day column at MAX_VISIBLE_STOPS_PER_DAY
@@ -280,6 +283,7 @@ function Schedule({ business }) {
     setAllPools(poolsRes.data || [])
     setAllProfiles(profilesRes.data || [])
     setAllStaff(staffRes.data || [])
+    setServiceRecords(servicesRes.data || [])
     // Build a set of "<pool_id>:<ymd>" keys for fast lookup in the projector.
     const days = new Set()
     for (const r of servicesRes.data || []) {
@@ -482,6 +486,36 @@ function Schedule({ business }) {
       }
     }
 
+    // 5. Completed pool services in the visible week. NewService.jsx
+    // creates a service_record on completion + advances the pool's
+    // next_due_at past today, which means paths 2/3 don't emit a
+    // stop for the completion day anymore — the day just disappears
+    // from the schedule. Operator wants to SEE the completion (with
+    // dim opacity-50 + line-through styling) so the Tuesday they
+    // serviced the pool isn't blank. We emit a status='completed'
+    // pool stop here from each service_record. Dedupe: skip if path
+    // 1 (real jobs) already covered the pool for that day — a
+    // materialized job that was completed will already be on the
+    // schedule with status='completed' from path 1.
+    const poolById = new Map()
+    for (const p of allPools) poolById.set(p.id, p)
+    for (const r of serviceRecords) {
+      if (!r.pool_id || !r.serviced_at) continue
+      const d = new Date(r.serviced_at)
+      if (isNaN(d.getTime())) continue
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      if (dayStart < weekStart || dayStart > weekEnd) continue
+      if (isPoolCovered(dayStart, r.pool_id)) continue
+      const pool = poolById.get(r.pool_id)
+      if (!pool) continue
+      const completedStop = poolToStop(
+        { ...pool, next_due_at: r.serviced_at },
+        { isCompleted: true }
+      )
+      ensure(dayStart).stops.push(completedStop)
+      coverPool(dayStart, r.pool_id)
+    }
+
     // Sort each day strictly by time (overdue stops are styled with the
     // overdue badge but no longer jump to the top — they slot in at their
     // own scheduled time so the day reads chronologically).
@@ -495,7 +529,7 @@ function Schedule({ business }) {
     const flat = new Map()
     for (const [k, v] of byDay.entries()) flat.set(k, v.stops)
     return flat
-  }, [allJobs, allPools, allProfiles, weekStart, serviceDays])
+  }, [allJobs, allPools, allProfiles, weekStart, serviceDays, serviceRecords])
 
   const weekDays = useMemo(() => {
     const days = []
@@ -792,12 +826,14 @@ function StackRow({ stop, onClick }) {
   const titleText = stop.client_name
     ? `${stop.client_name} · ${stop.title}`
     : stop.title
+  const isDone = stop.status === 'completed'
   return (
     <button
       onClick={onClick}
       className={cn(
         'block w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors border-l-[3px]',
         meta.accent,
+        isDone && 'opacity-60',
       )}
     >
       <div className="flex items-start gap-3">
@@ -807,12 +843,15 @@ function StackRow({ stop, onClick }) {
         <div className="flex-1 min-w-0">
           <p className={cn(
             'text-[13px] font-semibold text-gray-900 dark:text-gray-100 truncate',
-            stop.status === 'cancelled' && 'line-through text-gray-500',
+            (stop.status === 'cancelled' || isDone) && 'line-through text-gray-500',
           )}>
             {titleText}
           </p>
           {stop.address && (
-            <p className="text-[11.5px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+            <p className={cn(
+              'text-[11.5px] text-gray-500 dark:text-gray-400 truncate mt-0.5',
+              isDone && 'line-through',
+            )}>
               {stop.address}
             </p>
           )}
@@ -917,6 +956,7 @@ function EventCard({ stop, onClick }) {
     ? `${stop.client_name} · ${stop.title}`
     : stop.title
   const sub = stop.address || (stop.client_name ? null : null)
+  const isDone = stop.status === 'completed'
   return (
     <button
       onClick={onClick}
@@ -924,6 +964,9 @@ function EventCard({ stop, onClick }) {
         'block w-full text-left rounded-md border-l-[3px] px-2 py-1.5 transition-colors',
         meta.accent,
         meta.cardBg,
+        // Completed stops dim out so the day's done work fades into
+        // the background and what's outstanding stays prominent.
+        isDone && 'opacity-50',
       )}
     >
       {time && (
@@ -931,12 +974,15 @@ function EventCard({ stop, onClick }) {
       )}
       <p className={cn(
         'text-[12px] font-semibold text-gray-900 dark:text-gray-100 leading-tight truncate mt-0.5',
-        stop.status === 'cancelled' && 'line-through text-gray-500 dark:text-gray-500',
+        (stop.status === 'cancelled' || isDone) && 'line-through text-gray-500 dark:text-gray-500',
       )}>
         {titleText}
       </p>
       {sub && (
-        <p className="text-[10.5px] text-gray-500 dark:text-gray-400 leading-tight truncate">{sub}</p>
+        <p className={cn(
+          'text-[10.5px] text-gray-500 dark:text-gray-400 leading-tight truncate',
+          isDone && 'line-through',
+        )}>{sub}</p>
       )}
     </button>
   )
@@ -1120,10 +1166,14 @@ function TodayRow({ stop, onClick }) {
   const titleText = stop.client_name
     ? `${stop.client_name} · ${stop.title}`
     : stop.title
+  const isDone = stop.status === 'completed'
   return (
     <button
       onClick={onClick}
-      className="block w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+      className={cn(
+        'block w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors',
+        isDone && 'opacity-60',
+      )}
     >
       <div className="flex items-center gap-4">
         <p className="tabular-nums text-sm text-pool-700 dark:text-pool-400 w-12 shrink-0">
@@ -1132,12 +1182,15 @@ function TodayRow({ stop, onClick }) {
         <div className="flex-1 min-w-0">
           <p className={cn(
             'text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-1',
-            stop.status === 'cancelled' && 'line-through text-gray-500'
+            (stop.status === 'cancelled' || isDone) && 'line-through text-gray-500'
           )}>
             {titleText}
           </p>
           {stop.address && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
+            <p className={cn(
+              'text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5',
+              isDone && 'line-through',
+            )}>
               {stop.address}
             </p>
           )}
@@ -1360,20 +1413,24 @@ function profileToStop(profile, occurrenceDate) {
   }
 }
 
-function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
+function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false } = {}) {
   const due = p.next_due_at ? new Date(p.next_due_at) : null
   const hh = due ? String(due.getHours()).padStart(2, '0') : null
   const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
   const sortTime = hh && mm ? `${hh}:${mm}` : '09:00'
+  // Status precedence: completed > overdue > due. EventCard / row
+  // renderers check status === 'completed' for the dim + strike-
+  // through styling.
+  const status = isCompleted ? 'completed' : (isOverdue ? 'overdue' : 'due')
   return {
     type: 'pool',
-    id: p.id,
+    id: isCompleted ? `completed-${p.id}-${due ? due.toISOString().slice(0, 10) : ''}` : p.id,
     pool_id: p.id,
     client_id: p.client_id,
     title: 'Pool Service',
     client_name: p.clients?.name,
     address: p.address,
-    status: isOverdue ? 'overdue' : 'due',
+    status,
     next_due_at: p.next_due_at,
     schedule_frequency: p.schedule_frequency,
     access_notes: p.access_notes,
@@ -1388,6 +1445,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
     lng: p.longitude ? Number(p.longitude) : null,
     isOverdue,
     daysOverdue,
+    isCompleted,
     tech_name: p.staff?.name || null,
     tech_photo: p.staff?.photo_url || null,
     assigned_staff_id: p.assigned_staff_id || null,
