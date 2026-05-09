@@ -269,10 +269,14 @@ function Schedule({ business }) {
         .eq('business_id', business.id)
         .eq('is_active', true),
       // Completed services in the visible window — used to suppress pool
-      // projections on days when the pool was already serviced.
+      // projections on days when the pool was already serviced AND to
+      // emit the dim "completed" stop in path 5. We need the record id
+      // so StopDetailModal can hard-delete it when the operator clicks
+      // Delete on a completed stop (the synthetic stop id won't match
+      // anything in pools / jobs — has to delete the service_record).
       supabase
         .from('service_records')
-        .select('pool_id, serviced_at')
+        .select('id, pool_id, serviced_at')
         .eq('business_id', business.id)
         .eq('status', 'completed')
         .gte('serviced_at', from.toISOString())
@@ -507,7 +511,7 @@ function Schedule({ business }) {
       if (!pool) continue
       const completedStop = poolToStop(
         { ...pool, next_due_at: r.serviced_at },
-        { isCompleted: true }
+        { isCompleted: true, serviceRecordId: r.id }
       )
       ensure(dayStart).stops.push(completedStop)
       coverPool(dayStart, r.pool_id)
@@ -1410,7 +1414,7 @@ function profileToStop(profile, occurrenceDate) {
   }
 }
 
-function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false } = {}) {
+function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false, serviceRecordId = null } = {}) {
   const due = p.next_due_at ? new Date(p.next_due_at) : null
   const hh = due ? String(due.getHours()).padStart(2, '0') : null
   const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
@@ -1443,6 +1447,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false
     isOverdue,
     daysOverdue,
     isCompleted,
+    service_record_id: serviceRecordId,
     tech_name: p.staff?.name || null,
     tech_photo: p.staff?.photo_url || null,
     assigned_staff_id: p.assigned_staff_id || null,

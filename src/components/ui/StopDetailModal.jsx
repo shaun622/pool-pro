@@ -706,6 +706,24 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   async function handleDeleteSingle() {
     setDeleting(true)
     try {
+      // Completed pool stops on the schedule are sourced from
+      // service_records, not from pools.next_due_at. The stop's id is
+      // synthetic (`completed-<poolId>-<YYYY-MM-DD>`), so the regular
+      // pool / jobs delete paths below can't touch the row that's
+      // actually keeping it on the schedule. Hard-delete the
+      // service_record by its real id so the stop disappears on the
+      // next reload — that's the only thing path 5 reads.
+      if (stop.isCompleted && stop.service_record_id) {
+        const { error } = await supabase
+          .from('service_records')
+          .delete()
+          .eq('id', stop.service_record_id)
+        if (error) throw error
+        setDeleteConfirm(null)
+        onClose?.()
+        onUpdated?.()
+        return
+      }
       if (stop.type === 'job') {
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
         if (isProjected) {
@@ -770,6 +788,22 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     // Simple non-recurring delete
     setDeleting(true)
     try {
+      // Same completed-stop short-circuit as handleDeleteSingle. A
+      // completed stop dialogs as 'recurring' (because the pool has
+      // schedule_frequency) so it usually doesn't land here, but this
+      // guard keeps the behaviour right if someone routes the dialog
+      // differently in the future.
+      if (stop.isCompleted && stop.service_record_id) {
+        const { error } = await supabase
+          .from('service_records')
+          .delete()
+          .eq('id', stop.service_record_id)
+        if (error) throw error
+        setDeleteConfirm(null)
+        onClose?.()
+        onUpdated?.()
+        return
+      }
       if (stop.type === 'job') {
         const { error } = await supabase.from('jobs').delete().eq('id', stop.id)
         if (error) throw error
@@ -1281,13 +1315,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                   const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
                   const weekday = stopDate ? new Date(stopDate + 'T00:00:00').getDay() : null
                   const dayLabel = weekday != null ? DAYS_OF_WEEK.find(d => d.value === weekday)?.long : null
+                  // Completed stops are historical service_records, not
+                  // future occurrences — different copy + a single
+                  // "Delete record" button so the operator understands
+                  // they're erasing the history row, not skipping a
+                  // future visit.
+                  const isCompleted = !!stop.isCompleted
                   return (
                     <>
                       <div className="text-center">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                          Skip this {dayLabel || 'occurrence'}?
+                          {isCompleted
+                            ? 'Delete this completed service?'
+                            : `Skip this ${dayLabel || 'occurrence'}?`}
                         </h3>
-                        {loadedProfile ? (
+                        {isCompleted ? (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Removes the record (chemistry readings, photos) from history. The recurring schedule stays intact.
+                          </p>
+                        ) : loadedProfile ? (
                           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             Part of: <span className="font-semibold text-gray-700 dark:text-gray-200">{describeSchedule(loadedProfile)}</span>. {dayLabel ? `Future ${dayLabel}s stay scheduled.` : 'The schedule stays intact.'}
                           </p>
@@ -1322,21 +1368,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                         >
                           {deleting ? (
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : isCompleted ? (
+                            'Delete record'
                           ) : (
                             'Skip this one'
                           )}
                         </button>
                       </div>
-                      <p className="text-[11px] text-center text-gray-500 dark:text-gray-400 pt-1">
-                        To edit the schedule or remove all future {dayLabel ? `${dayLabel}s` : 'occurrences'},{' '}
-                        <button
-                          type="button"
-                          onClick={() => { onClose?.(); navigate('/recurring-jobs') }}
-                          className="font-semibold text-pool-600 dark:text-pool-400 hover:underline"
-                        >
-                          go to Recurring →
-                        </button>
-                      </p>
+                      {!isCompleted && (
+                        <p className="text-[11px] text-center text-gray-500 dark:text-gray-400 pt-1">
+                          To edit the schedule or remove all future {dayLabel ? `${dayLabel}s` : 'occurrences'},{' '}
+                          <button
+                            type="button"
+                            onClick={() => { onClose?.(); navigate('/recurring-jobs') }}
+                            className="font-semibold text-pool-600 dark:text-pool-400 hover:underline"
+                          >
+                            go to Recurring →
+                          </button>
+                        </p>
+                      )}
                     </>
                   )
                 })()}
