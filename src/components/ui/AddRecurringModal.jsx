@@ -13,8 +13,6 @@ import { useToast } from '../../contexts/ToastContext'
 import RecurrencePicker from './RecurrencePicker'
 import {
   RECURRENCE_OPTIONS,
-  expectedDayCount,
-  isMultiDayWeekly,
   computeNthFromDate,
 } from '../../lib/recurringScheduling'
 
@@ -55,14 +53,12 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     }
   }, [clientDropdownOpen])
 
-  // Schedule. The first service date is the anchor for everything: its
-  // day-of-week is locked into the bi/tri-weekly chip grid, and the
-  // monthly Nth-occurrence is computed from it (no more separate
-  // dropdown). extraDays is the operator's *additional* picks beyond
-  // the anchor day.
+  // Schedule. The first service date is the anchor: its day-of-week
+  // is the projection weekday, and for monthly the Nth-occurrence is
+  // computed from it (no separate dropdown). Recurring services are
+  // single-day-per-occurrence — two services per week = two profiles.
   const [recurrenceRule, setRecurrenceRule] = useState('weekly')
   const [customDays, setCustomDays] = useState(7)
-  const [extraDays, setExtraDays] = useState([]) // weekday integers 0..6
   const [firstDate, setFirstDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
 
@@ -102,17 +98,13 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   function reset() {
     setClientId(''); setPoolId(''); setAssignedStaffId('')
     setClientSearch(''); setClientDropdownOpen(false)
-    setRecurrenceRule('weekly'); setCustomDays(7); setExtraDays([])
+    setRecurrenceRule('weekly'); setCustomDays(7)
     setFirstDate(new Date().toISOString().split('T')[0]); setNotes('')
     setDurationType('ongoing'); setEndDate(''); setTotalVisits('')
     setShowNewClient(false); setShowNewPool(false); setShowNewTech(false)
     setEditingClient(false); setEditClientForm({ name: '', email: '', phone: '', address: '' })
     setLocalStaff([])
   }
-
-  // RecurrencePicker owns the rule/extraDays/customDays interactions
-  // (incl. resetting extras when the rule flips and capping the chip
-  // count). We just consume its onChange in the JSX below.
 
   function handleClose() { reset(); onClose() }
 
@@ -160,22 +152,17 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     try {
       const freqLabel = recurrenceRule === 'custom' ? `Every ${customDays} days` : RECURRENCE_OPTIONS.find(o => o.value === recurrenceRule)?.label || recurrenceRule
 
-      // First service date drives every day-of-week field. For bi/tri
-      // it's the locked anchor day in the array. For monthly it's both
-      // preferred_day_of_week AND the source of the Nth via
-      // computeNthFromDate (no separate dropdown anymore).
+      // First service date drives the day-of-week. For monthly it's
+      // both preferred_day_of_week AND the source of the Nth via
+      // computeNthFromDate (no separate dropdown). preferred_days_of_week
+      // is always null — single-day-per-occurrence only.
       const anchorDate = new Date(firstDate + 'T00:00:00')
       const anchorWd = anchorDate.getDay()
-      const isMulti = isMultiDayWeekly(recurrenceRule)
 
       let preferred_day_of_week = null
-      let preferred_days_of_week = null
+      const preferred_days_of_week = null
       let monthly_week_of_month = null
-      if (isMulti) {
-        preferred_days_of_week = [anchorWd, ...extraDays]
-          .filter((v, i, arr) => arr.indexOf(v) === i)
-          .sort((a, b) => a - b)
-      } else if (recurrenceRule === 'monthly') {
+      if (recurrenceRule === 'monthly') {
         preferred_day_of_week = anchorWd
         monthly_week_of_month = computeNthFromDate(anchorDate)
       } else if (recurrenceRule === 'weekly' || recurrenceRule === 'fortnightly') {
@@ -244,28 +231,17 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase())
   )
 
-  // Estimated end date for num_visits. For multi-day weekly each visit
-  // is roughly (7 / N) days apart on average; for monthly Nth-weekday
-  // we approximate 30 days. Approximations are fine — this string is
-  // surfaced only as a "approx finishes" hint.
+  // Estimated end date for num_visits — approximated for monthly and
+  // beyond. Surfaced only as a "approx finishes" hint, so rough is fine.
   const intervalDaysValue = (() => {
     if (recurrenceRule === 'custom') return Number(customDays) || 7
-    if (recurrenceRule === 'bi_weekly')  return Math.round(7 / 2)
-    if (recurrenceRule === 'tri_weekly') return Math.round(7 / 3)
     return ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[recurrenceRule] || 7)
   })()
   const estimatedEndDate = durationType === 'num_visits' && totalVisits && firstDate
     ? (() => { const d = new Date(firstDate); d.setDate(d.getDate() + intervalDaysValue * (Number(totalVisits) - 1)); return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) })()
     : null
 
-  // Validation. The first service date contributes its own weekday
-  // automatically, so bi/tri-weekly only needs (expected - 1) extra
-  // chips picked. Schema CHECK enforces array length server-side.
-  const expectedDays = expectedDayCount(recurrenceRule)
-  const daysOk = expectedDays == null
-    ? true
-    : extraDays.length === expectedDays - 1
-  const canSubmit = clientId && poolId && firstDate && !saving && daysOk
+  const canSubmit = clientId && poolId && firstDate && !saving
     && (durationType !== 'until_date' || !!endDate)
     && (durationType !== 'num_visits' || (Number(totalVisits) > 0))
 
@@ -414,9 +390,8 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
 
           {/* ── SCHEDULE ──────────────────────────────────── */}
           <Section icon={CalendarIcon} iconColor="text-emerald-600 dark:text-emerald-400" iconBg="bg-emerald-50 dark:bg-emerald-950/40" label="Schedule">
-            {/* First service date — drives the locked weekday for
-                bi/tri, the Nth-occurrence for monthly, and the
-                projection anchor. */}
+            {/* First service date — drives the projection weekday and
+                (for monthly) the Nth-occurrence anchor. */}
             <Input
               label="First service date"
               type="date"
@@ -425,10 +400,9 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
             />
 
             <RecurrencePicker
-              value={{ rule: recurrenceRule, extraDays, customDays }}
+              value={{ rule: recurrenceRule, customDays }}
               onChange={(next) => {
                 setRecurrenceRule(next.rule)
-                setExtraDays(next.extraDays)
                 setCustomDays(next.customDays)
               }}
               firstDate={firstDate}

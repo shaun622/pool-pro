@@ -72,12 +72,11 @@ function frequencyToDays(freq) {
   if (f === 'monthly' || f === 'every_month' || f === '1m') return 30
   if (f === '6_weekly' || f === 'every_6_weeks' || f === '6w') return 42
   if (f === 'quarterly' || f === '3m') return 90
-  // bi_weekly / tri_weekly are multi-day-per-week rules — they don't have
-  // a single "interval in days" representation. Returning null tells the
-  // pool projector to project ONCE at next_due_at; the recurring profile
-  // (which always exists for these rules — the StopDetailModal /
-  // AddRecurringModal save handlers spawn one when needed) drives the
-  // remaining occurrences via path 3, which uses preferred_days_of_week.
+  // Legacy multi-day rules (bi_weekly/tri_weekly) were removed but a
+  // pool's denormalised `schedule_frequency` may still carry the string
+  // until the migration runs. Returning null suppresses path-2 projection
+  // for these — path 3 will pick them up after the migration flips them
+  // to weekly.
   if (f === 'bi_weekly' || f === 'tri_weekly') return null
   const n = parseInt(f, 10)
   if (!isNaN(n) && n > 0) return n
@@ -426,11 +425,9 @@ function Schedule({ business }) {
     for (const profile of allProfiles) {
       if (!isProfileActive(profile)) continue
 
-      // occurrencesInRange covers all three rule shapes:
+      // occurrencesInRange covers two rule shapes:
       //   - cadence interval (weekly / fortnightly / 6_weekly / quarterly /
       //     legacy monthly / custom): walks anchor by interval days
-      //   - bi_weekly / tri_weekly: enumerates preferred_days_of_week per
-      //     week within the visible range
       //   - monthly with monthly_week_of_month: computes Nth weekday of
       //     each month touching the range
       const occurrences = occurrencesInRange(profile, weekStart, weekEnd)

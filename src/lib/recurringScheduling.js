@@ -1,41 +1,38 @@
 // Date math + dropdown options for recurring job profiles.
 //
-// The schema supports two distinct shapes:
-//   1. Cadence + single day (weekly / fortnightly / 6_weekly / quarterly /
-//      monthly-legacy / custom): one occurrence every N days, anchored on
-//      the profile's next_generation_at.
-//   2. Multi-day weekly (bi_weekly / tri_weekly): preferred_days_of_week
-//      is an int[] of weekdays (0=Sun..6=Sat), occurrence on each one
-//      every week.
-//   3. Monthly Nth-weekday: monthly_week_of_month + preferred_day_of_week
-//      describe "1st Monday of every month", "last Friday", etc.
+// Recurring services are SINGLE-DAY-PER-OCCURRENCE only. The previous
+// multi-day weekly rules (bi_weekly = 2/week, tri_weekly = 3/week)
+// were removed in 20260509120000_drop_multiday_recurrence.sql — the
+// chip grid kept drifting from operator intent and the projection
+// branches caused recurring "ghost day" bugs in the schedule view.
+// If a customer needs 2× weekly, the operator creates two separate
+// `weekly` profiles anchored on different weekdays.
 //
-// Helpers here are the single source of truth for those rules so the
-// Schedule projection, the StopDetailModal materialisation paths, and
-// the recurring create/edit forms can't drift out of sync.
+// Two rule shapes remain:
+//   1. Cadence + single day (weekly / fortnightly / 6_weekly /
+//      quarterly / monthly-legacy / custom): one occurrence every N
+//      days, anchored on the profile's next_generation_at.
+//   2. Monthly Nth-weekday: monthly_week_of_month +
+//      preferred_day_of_week describe "1st Monday of every month",
+//      "last Friday", etc.
 
 export const RECURRENCE_LABELS = {
   weekly:      'Weekly',
   fortnightly: 'Fortnightly',
-  bi_weekly:   'Bi-weekly (2/week)',
-  tri_weekly:  'Tri-weekly (3/week)',
   monthly:     'Monthly',
   '6_weekly':  'Every 6 weeks',
   quarterly:   'Quarterly',
   custom:      'Custom',
 }
 
-// Options shown in the new-create / edit pickers. Ordered from most
-// frequent to least frequent so the common high-cadence cases (tri /
-// bi / weekly) sit at the head of the pill row. Legacy values
-// (6_weekly, quarterly) are still valid in the DB but no longer
-// offered to operators creating new profiles.
+// Options shown in the new-create / edit pickers. Ordered most
+// frequent first.
 export const RECURRENCE_OPTIONS = [
-  { value: 'tri_weekly',  label: 'Tri-weekly (3/week)' },
-  { value: 'bi_weekly',   label: 'Bi-weekly (2/week)' },
   { value: 'weekly',      label: 'Weekly' },
   { value: 'fortnightly', label: 'Fortnightly' },
   { value: 'monthly',     label: 'Monthly' },
+  { value: '6_weekly',    label: 'Every 6 weeks' },
+  { value: 'quarterly',   label: 'Quarterly' },
   { value: 'custom',      label: 'Custom' },
 ]
 
@@ -57,19 +54,6 @@ export const MONTH_WEEK_OPTIONS = [
   { value: 5, label: 'Last' },
 ]
 
-// How many distinct days a multi-day-per-week rule expects. Returns null
-// for cadence rules so the form knows to render the single-day picker.
-export function expectedDayCount(rule) {
-  if (rule === 'bi_weekly')  return 2
-  if (rule === 'tri_weekly') return 3
-  return null
-}
-
-// True when the rule is a "many days per week" pattern.
-export function isMultiDayWeekly(rule) {
-  return rule === 'bi_weekly' || rule === 'tri_weekly'
-}
-
 // True when the rule uses Nth-weekday semantics (only set for monthly
 // when monthly_week_of_month is populated; legacy monthly profiles
 // fall back to the cadence path).
@@ -77,10 +61,9 @@ export function isNthWeekdayMonthly(profile) {
   return profile?.recurrence_rule === 'monthly' && profile.monthly_week_of_month != null
 }
 
-// Cadence interval in days for the simple "+N days" rules. Multi-day
-// weekly and Nth-weekday monthly are NOT representable as a fixed
-// interval — callers should branch via isMultiDayWeekly / isNthWeekdayMonthly
-// before falling back here.
+// Cadence interval in days for the simple "+N days" rules.
+// Nth-weekday monthly is NOT representable as a fixed interval —
+// callers should branch via isNthWeekdayMonthly before falling back.
 export function cadenceIntervalDays(profile) {
   if (!profile) return null
   switch (profile.recurrence_rule) {
@@ -118,16 +101,13 @@ export function computeNthFromDate(date) {
 }
 
 // Build the human-readable preview line shown under the schedule
-// pickers — "Mondays and Thursdays every week", "Monthly on the 2nd
-// Monday", "Every other Tuesday", etc.
+// picker — "Every Monday", "Monthly on the 2nd Monday", "Every other
+// Tuesday", etc.
 //
 // rule:        the recurrence_rule
 // firstDate:   Date | YYYY-MM-DD string of the first service date
-// extraDays:   array of weekday integers (0..6) for the chips the
-//              operator picked in addition to the date's own weekday
-//              (only relevant for bi/tri-weekly)
 // customDays:  number for `custom`
-export function derivedScheduleLabel(rule, firstDate, extraDays, customDays) {
+export function derivedScheduleLabel(rule, firstDate, customDays) {
   if (!firstDate) return ''
   const d = typeof firstDate === 'string'
     ? new Date(firstDate + 'T00:00:00')
@@ -135,28 +115,18 @@ export function derivedScheduleLabel(rule, firstDate, extraDays, customDays) {
   if (isNaN(d.getTime())) return ''
   const anchorWd = d.getDay()
   const anchorLong = DAYS_OF_WEEK.find(o => o.value === anchorWd)?.long || ''
-  const anchorPlural = anchorLong ? `${anchorLong}s` : ''
 
   if (rule === 'weekly')      return anchorLong ? `Every ${anchorLong}` : ''
   if (rule === 'fortnightly') return anchorLong ? `Every other ${anchorLong}` : ''
-
-  if (rule === 'bi_weekly' || rule === 'tri_weekly') {
-    const all = [anchorWd, ...(extraDays || [])]
-      .filter((v, i, arr) => arr.indexOf(v) === i)
-      .sort((a, b) => a - b)
-    const expected = expectedDayCount(rule)
-    if (all.length < expected) return `${anchorPlural} + pick ${expected - all.length} more`
-    const labels = all.map(v => `${DAYS_OF_WEEK.find(o => o.value === v)?.long || ''}s`)
-    if (labels.length === 2) return `${labels[0]} and ${labels[1]} every week`
-    if (labels.length === 3) return `${labels[0]}, ${labels[1]}, and ${labels[2]} every week`
-    return `${labels.join(', ')} every week`
-  }
 
   if (rule === 'monthly') {
     const n = computeNthFromDate(d)
     const nLabel = MONTH_WEEK_OPTIONS.find(o => o.value === n)?.label || ''
     return nLabel && anchorLong ? `Monthly on the ${nLabel} ${anchorLong}` : ''
   }
+
+  if (rule === '6_weekly') return anchorLong ? `Every 6 weeks (${anchorLong})` : 'Every 6 weeks'
+  if (rule === 'quarterly') return anchorLong ? `Every 90 days (${anchorLong})` : 'Every 90 days'
 
   if (rule === 'custom') {
     const n = Number(customDays) || 0
@@ -205,18 +175,6 @@ export function computeNextOccurrence(date, profile) {
     ? new Date(date + 'T00:00:00')
     : new Date(date)
   base.setHours(0, 0, 0, 0)
-
-  if (isMultiDayWeekly(profile.recurrence_rule)) {
-    const days = (profile.preferred_days_of_week || []).slice().sort((a, b) => a - b)
-    if (!days.length) return null
-    // Walk forward day-by-day; the next match is at most 7 days out.
-    for (let offset = 1; offset <= 7; offset++) {
-      const test = new Date(base)
-      test.setDate(test.getDate() + offset)
-      if (days.includes(test.getDay())) return test
-    }
-    return null
-  }
 
   if (isNthWeekdayMonthly(profile)) {
     // Try the Nth occurrence in (date's month + 1) first; fall back to
@@ -271,12 +229,9 @@ function skippedDateSet(profile) {
 // rangeStart/rangeEnd should be Dates (any time-of-day; we normalise).
 // Returns an array of Date objects, each at local midnight.
 //
-// profile.skipped_dates filters the enumeration — the operator's "move
-// just this one" / "skip just this one" actions append to that array,
-// so the projection stops showing the moved occurrence's old date.
-// Critical for bi/tri-weekly where advancing next_generation_at alone
-// doesn't suppress a single occurrence (the multi-day branch ignores
-// the anchor field entirely).
+// profile.skipped_dates filters the enumeration — the operator's
+// "skip just this one" actions append to that array, so the
+// projection stops showing the skipped occurrence's date.
 export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   if (!profile) return []
   const start = new Date(rangeStart); start.setHours(0, 0, 0, 0)
@@ -284,21 +239,6 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   if (start > end) return []
   const skipped = skippedDateSet(profile)
   const notSkipped = (d) => !skipped.has(ymdLocal(d))
-
-  if (isMultiDayWeekly(profile.recurrence_rule)) {
-    const days = (profile.preferred_days_of_week || []).slice()
-    if (!days.length) return []
-    const out = []
-    const cursor = new Date(start)
-    while (cursor <= end) {
-      if (days.includes(cursor.getDay())) {
-        const d = new Date(cursor); d.setHours(0, 0, 0, 0)
-        if (notSkipped(d)) out.push(d)
-      }
-      cursor.setDate(cursor.getDate() + 1)
-    }
-    return out
-  }
 
   if (isNthWeekdayMonthly(profile)) {
     const day = profile.preferred_day_of_week
@@ -335,34 +275,33 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
 }
 
 // Map a form's RecurrencePicker state + first-date into the set of DB
-// columns we'd write on the recurring_job_profiles row. Centralises the
-// "weekly stores preferred_day_of_week, bi/tri stores
-// preferred_days_of_week, monthly stores both + monthly_week_of_month"
-// logic so AddRecurringModal, RecurringJobs, and StopDetailModal all
-// produce identical writes for the same picker state.
+// columns we'd write on the recurring_job_profiles row. Centralises
+// the "weekly stores preferred_day_of_week, monthly stores both +
+// monthly_week_of_month" logic so AddRecurringModal, RecurringJobs,
+// and StopDetailModal all produce identical writes for the same
+// picker state.
 //
 // Returns an object suitable to spread into an insert/update payload:
 //   { recurrence_rule, custom_interval_days, preferred_day_of_week,
 //     preferred_days_of_week, monthly_week_of_month }
 //
+// preferred_days_of_week is always null (legacy multi-day column kept
+// nullable on the schema for back-compat; the app no longer writes
+// to it).
+//
 // firstDate must be a YYYY-MM-DD string or Date (we just need its
 // weekday). Pass null/empty when no anchor — the day-of-week fields
 // will all be null in that case.
-export function profileFieldsFromForm({ rule, extraDays, customDays, firstDate }) {
+export function profileFieldsFromForm({ rule, customDays, firstDate }) {
   const anchorDate = firstDate
     ? (typeof firstDate === 'string' ? new Date(firstDate + 'T00:00:00') : new Date(firstDate))
     : null
   const anchorWd = anchorDate && !isNaN(anchorDate.getTime()) ? anchorDate.getDay() : null
 
   let preferred_day_of_week = null
-  let preferred_days_of_week = null
   let monthly_week_of_month = null
 
-  if (isMultiDayWeekly(rule) && anchorWd != null) {
-    preferred_days_of_week = [anchorWd, ...(extraDays || [])]
-      .filter((v, i, arr) => arr.indexOf(v) === i)
-      .sort((a, b) => a - b)
-  } else if (rule === 'monthly' && anchorWd != null) {
+  if (rule === 'monthly' && anchorWd != null) {
     preferred_day_of_week = anchorWd
     monthly_week_of_month = computeNthFromDate(anchorDate)
   } else if ((rule === 'weekly' || rule === 'fortnightly') && anchorWd != null) {
@@ -373,112 +312,28 @@ export function profileFieldsFromForm({ rule, extraDays, customDays, firstDate }
     recurrence_rule: rule,
     custom_interval_days: rule === 'custom' ? (Number(customDays) || 7) : null,
     preferred_day_of_week,
-    preferred_days_of_week,
+    preferred_days_of_week: null,
     monthly_week_of_month,
   }
 }
 
 // True when the rule needs a recurring_job_profile to fully express
-// itself (multi-day weekly, monthly-Nth). Pool/job rows alone can't
-// store those — StopDetailModal uses this to decide whether to spawn
-// a profile when one doesn't already exist.
+// itself (monthly-Nth). Pool/job rows alone can't store that —
+// StopDetailModal uses this to decide whether to spawn a profile when
+// one doesn't already exist.
 export function ruleRequiresProfile(rule, monthlyWeekOfMonth) {
-  if (isMultiDayWeekly(rule)) return true
   if (rule === 'monthly' && monthlyWeekOfMonth != null) return true
   return false
 }
 
-// Return the patch object the StopDetailModal can apply to a profile
-// to drop a single weekday from its recurrence. Handles rule-type
-// transitions when dropping leaves the array too short for the
-// current rule's CHECK constraint:
-//   tri_weekly [Mon,Tue,Wed] - drop Wed → bi_weekly [Mon,Tue]
-//   bi_weekly  [Mon,Wed]      - drop Wed → weekly with preferred_day_of_week=Mon
-//   weekly / fortnightly / monthly / custom — not multi-day, returns
-//     null (caller should hide the "drop this day" option for these).
-//
-// When transitioning to a cadence rule (weekly), next_generation_at
-// is recomputed to the next occurrence of the remaining day from
-// today. Cadence projections walk from the anchor by interval and
-// ignore preferred_day_of_week — without aligning the anchor here
-// the projector would keep firing on the OLD anchor's day-of-week
-// (the day-of-the-just-dropped-day) which is exactly the wrong
-// behaviour.
-//
-// Returns { patch, becameInvalid } where:
-//   patch is the column-update object to send to Supabase
-//   becameInvalid is true when removing the day would leave nothing
-//     (the operator should be redirected to "End the whole schedule"
-//     instead — bi_weekly with [Mon] dropped would be empty).
-export function dropDayFromProfile(profile, weekday) {
-  if (!profile || !isMultiDayWeekly(profile.recurrence_rule)) return null
-  if (weekday == null) return null
-  const current = (profile.preferred_days_of_week || [])
-    .filter((d) => d !== weekday)
-    .sort((a, b) => a - b)
-  if (current.length === 0) {
-    return { becameInvalid: true, patch: null }
-  }
-  if (current.length === 1) {
-    // Down to a single day → switch to weekly. Cadence rules use
-    // next_generation_at as the anchor, so realign it to the next
-    // occurrence of the remaining day from today; otherwise the
-    // projector keeps firing on whatever day the old anchor was.
-    const remainingDay = current[0]
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const next = new Date(today)
-    while (next.getDay() !== remainingDay) {
-      next.setDate(next.getDate() + 1)
-    }
-    return {
-      becameInvalid: false,
-      patch: {
-        recurrence_rule: 'weekly',
-        preferred_day_of_week: remainingDay,
-        preferred_days_of_week: null,
-        next_generation_at: ymdLocal(next),
-      },
-    }
-  }
-  if (current.length === 2) {
-    // Two days remain → bi_weekly. Multi-day projections enumerate
-    // preferred_days_of_week directly, ignoring the anchor, so
-    // next_generation_at can stay as-is here.
-    return {
-      becameInvalid: false,
-      patch: {
-        recurrence_rule: 'bi_weekly',
-        preferred_day_of_week: null,
-        preferred_days_of_week: current,
-      },
-    }
-  }
-  // 3+ days remain (only possible if we add quad_weekly etc. later).
-  // Keep current rule and just trim the array.
-  return {
-    becameInvalid: false,
-    patch: {
-      preferred_days_of_week: current,
-    },
-  }
-}
-
 // Pretty-print the schedule for the recurring detail card / list.
 // Examples:
-//   "Mon, Wed, Fri every week"
 //   "1st Monday of every month"
-//   "Weekly · Tue"
+//   "Weekly"
 //   "Every 14 days"
 export function describeSchedule(profile) {
   if (!profile) return ''
   const r = profile.recurrence_rule
-  if (isMultiDayWeekly(r)) {
-    const days = (profile.preferred_days_of_week || [])
-      .slice().sort((a, b) => a - b)
-      .map(d => DAYS_OF_WEEK.find(o => o.value === d)?.label || '')
-      .filter(Boolean)
-    return days.length ? `${days.join(', ')} every week` : RECURRENCE_LABELS[r]
-  }
   if (isNthWeekdayMonthly(profile)) {
     const dayLabel = DAYS_OF_WEEK.find(o => o.value === profile.preferred_day_of_week)?.long
     const nLabel   = MONTH_WEEK_OPTIONS.find(o => o.value === profile.monthly_week_of_month)?.label

@@ -21,9 +21,6 @@ import { formatDate, formatCurrency, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 import RecurrencePicker from '../components/ui/RecurrencePicker'
 import {
-  RECURRENCE_LABELS as RECURRENCE_LABEL,
-  expectedDayCount,
-  isMultiDayWeekly,
   describeSchedule,
   computeNthFromDate,
 } from '../lib/recurringScheduling'
@@ -76,13 +73,11 @@ const emptyForm = {
   recurrence_rule: 'weekly', custom_interval_days: '',
   preferred_time: '', assigned_staff_id: '',
   price: '', notes: '',
-  // Date-first picker state. The first service date is the anchor
-  // for everything: its weekday is the locked chip in bi/tri-weekly,
-  // and the monthly Nth occurrence is computed from it. extraDays
-  // are the operator's *additional* picks beyond the anchor (only
-  // used by bi/tri-weekly).
+  // First service date is the anchor: its weekday drives projection,
+  // and for monthly the Nth-occurrence is computed from it. Recurring
+  // services are single-day-per-occurrence — two services per week =
+  // two profiles anchored on different days.
   first_date: new Date().toISOString().split('T')[0],
-  extra_days: [],
 }
 
 const PAGE_SIZE = 25
@@ -241,20 +236,11 @@ export default function RecurringJobs() {
 
   function openEdit(profile) {
     setEditing(profile)
-    // The first service date is whatever the profile is anchored on.
-    // For bi/tri-weekly, derive the "extra days" by stripping the
-    // anchor's own weekday from the saved array — the form rebuilds
-    // the full array on save.
+    // First service date is whatever the profile is anchored on. The
+    // weekday is derived from this date — no separate per-day state.
     const firstDate = profile.next_generation_at
       ? String(profile.next_generation_at).split('T')[0]
       : new Date().toISOString().split('T')[0]
-    const anchorWd = new Date(firstDate + 'T00:00:00').getDay()
-    const savedDays = Array.isArray(profile.preferred_days_of_week)
-      ? profile.preferred_days_of_week.slice().sort((a, b) => a - b)
-      : []
-    const extraDays = isMultiDayWeekly(profile.recurrence_rule)
-      ? savedDays.filter(d => d !== anchorWd)
-      : []
     setForm({
       client_id: profile.client_id || '',
       pool_id: profile.pool_id || '',
@@ -267,14 +253,9 @@ export default function RecurringJobs() {
       price: profile.price || '',
       notes: profile.notes || '',
       first_date: firstDate,
-      extra_days: extraDays,
     })
     setModalOpen(true)
   }
-
-  // RecurrencePicker owns the rule/extras/customDays interactions
-  // (incl. resetting extras when the rule flips and capping the chip
-  // count). The form just consumes its onChange in the JSX below.
 
   // Client creation lives in <NewClientModal> — same modal used at
   // /clients and inside AddRecurringModal. The legacy inline name-only
@@ -318,29 +299,17 @@ export default function RecurringJobs() {
   async function handleSave(e) {
     e.preventDefault()
     if (!form.client_id || !form.title.trim() || !form.first_date) return
-    // Block save when bi/tri-weekly hasn't filled the extra-day chips.
-    // The anchor day contributes 1 automatically, so we expect
-    // (expected - 1) extras.
-    const expectedDays = expectedDayCount(form.recurrence_rule)
-    if (expectedDays != null && (form.extra_days || []).length !== expectedDays - 1) {
-      toast.error(`Pick ${expectedDays - 1} more day${expectedDays - 1 === 1 ? '' : 's'} for ${RECURRENCE_LABEL[form.recurrence_rule] || form.recurrence_rule}`)
-      return
-    }
     setSaving(true)
     try {
-      // First service date drives every day-of-week / Nth field.
+      // First service date drives the day-of-week / Nth field. Single
+      // weekday only — preferred_days_of_week stays null.
       const anchorDate = new Date(form.first_date + 'T00:00:00')
       const anchorWd = anchorDate.getDay()
-      const isMulti = isMultiDayWeekly(form.recurrence_rule)
 
       let preferred_day_of_week = null
-      let preferred_days_of_week = null
+      const preferred_days_of_week = null
       let monthly_week_of_month = null
-      if (isMulti) {
-        preferred_days_of_week = [anchorWd, ...form.extra_days]
-          .filter((v, i, arr) => arr.indexOf(v) === i)
-          .sort((a, b) => a - b)
-      } else if (form.recurrence_rule === 'monthly') {
+      if (form.recurrence_rule === 'monthly') {
         preferred_day_of_week = anchorWd
         monthly_week_of_month = computeNthFromDate(anchorDate)
       } else if (form.recurrence_rule === 'weekly' || form.recurrence_rule === 'fortnightly') {
@@ -937,13 +906,11 @@ export default function RecurringJobs() {
           <RecurrencePicker
             value={{
               rule: form.recurrence_rule,
-              extraDays: form.extra_days,
               customDays: form.custom_interval_days,
             }}
             onChange={(next) => setForm(prev => ({
               ...prev,
               recurrence_rule: next.rule,
-              extra_days: next.extraDays,
               custom_interval_days: next.customDays,
             }))}
             firstDate={form.first_date}

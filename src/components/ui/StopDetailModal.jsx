@@ -14,7 +14,6 @@ import { FREQUENCY_LABELS, SCHEDULE_FREQUENCIES, cn } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
 import {
   computeNextOccurrence,
-  isMultiDayWeekly,
   describeSchedule,
   DAYS_OF_WEEK,
 } from '../../lib/recurringScheduling'
@@ -35,9 +34,8 @@ function numberedIcon(n, color = '#0CA5EB') {
 
 // The inline "make this recurring" toggle inside the job edit form
 // stays narrow on purpose — it just lets the operator quick-create a
-// profile from an existing job. Bi/tri-weekly need a day-picker UI which
-// doesn't fit here; for that the operator should use the Recurring
-// services page. Custom is omitted for the same reason.
+// profile from an existing job. Custom is omitted; for that the
+// operator should use the Recurring services page.
 const RECURRENCE_OPTIONS = [
   { value: 'weekly', label: 'Weekly' },
   { value: 'fortnightly', label: 'Fortnightly' },
@@ -89,10 +87,6 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           assigned_staff_id: stop.assigned_staff_id || '',
           is_recurring: false,
           recurrence_rule: 'weekly',
-          // Used by RecurrencePicker for bi/tri and custom rules. Anchor
-          // weekday is derived from scheduled_date so we only store the
-          // *additional* picks here.
-          extra_days: [],
           custom_interval_days: 7,
           recurring_profile_id: null,
           client_phone: stop.phone || '',
@@ -114,26 +108,13 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               const profile = data?.[0]
               if (!profile) return
               setLoadedProfile(profile)
-              setForm(f => {
-                const anchorDate = f.scheduled_date || profile.next_generation_at?.split('T')[0]
-                const anchorWd = anchorDate
-                  ? new Date(anchorDate + 'T00:00:00').getDay()
-                  : null
-                const savedDays = Array.isArray(profile.preferred_days_of_week)
-                  ? profile.preferred_days_of_week.slice().sort((a, b) => a - b)
-                  : []
-                const extras = isMultiDayWeekly(profile.recurrence_rule) && anchorWd != null
-                  ? savedDays.filter(d => d !== anchorWd)
-                  : []
-                return {
-                  ...f,
-                  is_recurring: true,
-                  recurrence_rule: profile.recurrence_rule || 'weekly',
-                  recurring_profile_id: profile.id,
-                  extra_days: extras,
-                  custom_interval_days: profile.custom_interval_days || 7,
-                }
-              })
+              setForm(f => ({
+                ...f,
+                is_recurring: true,
+                recurrence_rule: profile.recurrence_rule || 'weekly',
+                recurring_profile_id: profile.id,
+                custom_interval_days: profile.custom_interval_days || 7,
+              }))
             })
         }
       } else {
@@ -146,7 +127,6 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           next_due_at: stop.next_due_at ? stop.next_due_at.split('T')[0] : '',
           next_due_time: stop.next_due_at ? new Date(stop.next_due_at).toTimeString().slice(0, 5) : '',
           schedule_frequency: stop.schedule_frequency || 'weekly',
-          extra_days: [],
           custom_interval_days: 7,
           recurring_profile_id: null,
           access_notes: stop.access_notes || '',
@@ -168,25 +148,12 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               const profile = data?.[0]
               if (!profile) return
               setLoadedProfile(profile)
-              setForm(f => {
-                const anchorDate = f.next_due_at || profile.next_generation_at?.split('T')[0]
-                const anchorWd = anchorDate
-                  ? new Date(anchorDate + 'T00:00:00').getDay()
-                  : null
-                const savedDays = Array.isArray(profile.preferred_days_of_week)
-                  ? profile.preferred_days_of_week.slice().sort((a, b) => a - b)
-                  : []
-                const extras = isMultiDayWeekly(profile.recurrence_rule) && anchorWd != null
-                  ? savedDays.filter(d => d !== anchorWd)
-                  : []
-                return {
-                  ...f,
-                  schedule_frequency: profile.recurrence_rule || f.schedule_frequency,
-                  recurring_profile_id: profile.id,
-                  extra_days: extras,
-                  custom_interval_days: profile.custom_interval_days || 7,
-                }
-              })
+              setForm(f => ({
+                ...f,
+                schedule_frequency: profile.recurrence_rule || f.schedule_frequency,
+                recurring_profile_id: profile.id,
+                custom_interval_days: profile.custom_interval_days || 7,
+              }))
             })
         }
       }
@@ -742,27 +709,21 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       if (stop.type === 'job') {
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
         if (isProjected) {
-          // Skip this single occurrence. For single-day cadence rules
-          // advancing next_generation_at is enough; for bi/tri-weekly
-          // we ALSO have to add the date to skipped_dates because the
-          // multi-day projector ignores the anchor field. Use both
-          // mechanisms uniformly so the bug doesn't reappear if a
-          // future projection path forgets one.
+          // Skip this single occurrence by advancing next_generation_at.
+          // Recurring is single-day-per-occurrence now, so the projector
+          // never re-emits the skipped date once the anchor moves past it.
           const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
           const { data: profile } = await supabase
             .from('recurring_job_profiles')
-            .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month, pool_id, skipped_dates')
+            .select('recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month, pool_id')
             .eq('id', profileId)
             .single()
           if (profile) {
             const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
             if (stopDate) {
               const next = computeNextOccurrence(stopDate, profile)
-              const skipped = Array.isArray(profile.skipped_dates) ? profile.skipped_dates : []
-              const newSkipped = !skipped.includes(stopDate) ? [...skipped, stopDate] : skipped
               const updates = {
                 last_generated_at: new Date().toISOString(),
-                skipped_dates: newSkipped,
               }
               if (next) updates.next_generation_at = next.toISOString().split('T')[0]
               await supabase.from('recurring_job_profiles').update(updates).eq('id', profileId)
