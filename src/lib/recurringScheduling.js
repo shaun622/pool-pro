@@ -240,6 +240,24 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   const skipped = skippedDateSet(profile)
   const notSkipped = (d) => !skipped.has(ymdLocal(d))
 
+  // Floor: never emit an occurrence earlier than the day the profile
+  // was created. Without this, the cadence path's backward walk
+  // (`while (cursor > end) cursor -= interval`) happily lands the
+  // cursor on dates that pre-date the profile entirely — e.g. a profile
+  // created on a Sat with first service date next Mon would emit a
+  // ghost stop on the *previous* Mon when the operator views this
+  // week. The floor matches what the operator means by "this is when
+  // the schedule started" — historical fact, not user-editable.
+  // Missing created_at (legacy rows) falls back to no floor.
+  const createdFloor = (() => {
+    if (!profile.created_at) return null
+    const d = new Date(profile.created_at)
+    if (isNaN(d.getTime())) return null
+    d.setHours(0, 0, 0, 0)
+    return d
+  })()
+  const notBeforeCreated = (d) => !createdFloor || d >= createdFloor
+
   if (isNthWeekdayMonthly(profile)) {
     const day = profile.preferred_day_of_week
     const n = profile.monthly_week_of_month
@@ -248,7 +266,8 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
     const lastM = new Date(end.getFullYear(), end.getMonth(), 1)
     while (m <= lastM) {
       const candidate = nthWeekdayOfMonth(m.getFullYear(), m.getMonth(), n, day)
-      if (candidate && candidate >= start && candidate <= end && notSkipped(candidate)) {
+      if (candidate && candidate >= start && candidate <= end
+          && notSkipped(candidate) && notBeforeCreated(candidate)) {
         out.push(candidate)
       }
       m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
@@ -268,7 +287,7 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   while (cursor < start) cursor.setDate(cursor.getDate() + interval)
   const out = []
   while (cursor <= end) {
-    if (notSkipped(cursor)) out.push(new Date(cursor))
+    if (notSkipped(cursor) && notBeforeCreated(cursor)) out.push(new Date(cursor))
     cursor.setDate(cursor.getDate() + interval)
   }
   return out
