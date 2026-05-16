@@ -465,6 +465,12 @@ export default function QuoteBuilder() {
 
   async function deleteQuote() {
     if (!id) return
+    // jobs.quote_id → quotes has no ON DELETE clause; a converted quote
+    // would FK-violate on plain delete. Null the back-ref first, then
+    // drop the row. line_items is JSONB on the row so no separate
+    // cleanup needed.
+    const { error: jobsErr } = await supabase.from('jobs').update({ quote_id: null }).eq('quote_id', id)
+    if (jobsErr) { console.error('Error clearing jobs.quote_id:', jobsErr); throw jobsErr }
     const { error } = await supabase.from('quotes').delete().eq('id', id)
     if (error) { console.error('Error deleting quote:', error); throw error }
     navigate('/work-orders?tab=quotes', { replace: true })

@@ -47,11 +47,15 @@ export function useClients() {
     return data
   }, [])
 
+  // Hard-delete via SQL function (migration 20260509140000). A plain
+  // `delete from clients where id = $1` FK-violates as soon as the
+  // client has any pools / recurring profiles / jobs / quotes / invoices /
+  // surveys / documents / service history. The RPC walks the FK graph
+  // deepest-leaves-first inside a single transaction and authorises
+  // against current_business_id() so other businesses' clients can't be
+  // touched.
   const deleteClient = useCallback(async (id) => {
-    const { error } = await supabase
-      .from('clients')
-      .delete()
-      .eq('id', id)
+    const { error } = await supabase.rpc('delete_client', { p_client_id: id })
     if (error) throw error
     setClients(prev => prev.filter(c => c.id !== id))
   }, [])

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, Plus, Search, Users } from 'lucide-react'
+import { ArrowRight, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, Plus, Search, Trash2, Users } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -10,12 +10,14 @@ import StatCard from '../components/ui/StatCard'
 import Input, { TextArea } from '../components/ui/Input'
 import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import NewClientModal from '../components/ui/NewClientModal'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../contexts/ToastContext'
 import { formatDate, cn } from '../lib/utils'
 
 // ─── STATUS LOGIC ──────────────────────────────────
@@ -93,14 +95,36 @@ const PAGE_SIZE = 25
 export default function Clients() {
   const navigate = useNavigate()
   const { business } = useBusiness()
-  const { clients, loading: clientsLoading } = useClients()
+  const { clients, loading: clientsLoading, deleteClient } = useClients()
   const { pools, loading: poolsLoading } = usePools()
+  const toast = useToast()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [jobs, setJobs] = useState([])
   const [page, setPage] = useState(0)
+  // Delete-from-detail-card dialog state. We track the target client
+  // separately from selectedClientId so the detail panel keeps its
+  // contents while the confirm dialog is open.
+  const [confirmDeleteClient, setConfirmDeleteClient] = useState(null)
+  const [deletingClient, setDeletingClient] = useState(false)
+
+  async function handleDeleteClient() {
+    if (!confirmDeleteClient) return
+    setDeletingClient(true)
+    try {
+      await deleteClient(confirmDeleteClient.id)
+      toast.success('Client deleted')
+      // Collapse the detail panel — its target row no longer exists.
+      if (selectedClientId === confirmDeleteClient.id) setSelectedClientId(null)
+      setConfirmDeleteClient(null)
+    } catch (err) {
+      toast.error(err?.message || 'Failed to delete client')
+    } finally {
+      setDeletingClient(false)
+    }
+  }
 
   const loading = clientsLoading || poolsLoading
 
@@ -501,19 +525,49 @@ export default function Clients() {
                       )}
                     </div>
 
-                    <button
-                      onClick={() => navigate(`/clients/${selectedClient.id}`)}
-                      className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
-                    >
-                      Open profile
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
-                    </button>
+                    <div className="mt-5 flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/clients/${selectedClient.id}`)}
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
+                      >
+                        Open profile
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
+                      </button>
+                      {/* Delete sits far-right via ml-auto so it's
+                          discoverable but visually separated from the
+                          "Open profile" primary action. Matches the
+                          /recurring detail card pattern. */}
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        leftIcon={Trash2}
+                        onClick={() => setConfirmDeleteClient(selectedClient)}
+                        className="ml-auto"
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </Card>
                 )}
               </div>
             </div>
           </>
         )}
+
+        {/* Hard-delete confirmation. Cascades through pools, recurring
+            profiles, jobs, quotes, invoices, surveys, documents, and all
+            service history via the delete_client SQL function. */}
+        <ConfirmModal
+          open={!!confirmDeleteClient}
+          onClose={() => !deletingClient && setConfirmDeleteClient(null)}
+          title="Delete this client?"
+          description={confirmDeleteClient
+            ? `Permanently removes ${confirmDeleteClient.name} and all their pools, scheduled services, quotes, invoices, and service history. Cannot be undone.`
+            : ''}
+          destructive
+          confirmLabel={deletingClient ? 'Deleting…' : 'Delete client'}
+          onConfirm={handleDeleteClient}
+        />
 
         {/* FAB */}
         {!loading && clients.length > 0 && (

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight, CheckCircle2, ChevronLeft, ChevronRight,
-  FileText, Plus, Send, Wallet,
+  FileText, Plus, Send, Trash2, Wallet,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
@@ -10,8 +10,10 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import StatCard from '../components/ui/StatCard'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
+import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency, cn } from '../lib/utils'
 
@@ -71,8 +73,14 @@ const PAGE_SIZE = 25
 export default function Quotes() {
   const { business, loading: bizLoading } = useBusiness()
   const navigate = useNavigate()
+  const toast = useToast()
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
+  // Delete-from-detail-card dialog state. We track the target quote
+  // separately from selectedQuoteId so the panel keeps its contents
+  // while the confirm dialog is open.
+  const [confirmDeleteQuote, setConfirmDeleteQuote] = useState(null)
+  const [deletingQuote, setDeletingQuote] = useState(false)
   const [selectedQuoteId, setSelectedQuoteId] = useState(null)
   const [page, setPage] = useState(0)
 
@@ -136,6 +144,34 @@ export default function Quotes() {
       .eq('id', quote.id)
     if (!error) {
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, status: 'accepted', pipeline_stage: 'accepted' } : q))
+    }
+  }
+
+  // Hard-delete a quote. Two-step because jobs.quote_id → quotes is a
+  // FK with no ON DELETE clause; deleting a quote that's been converted
+  // to a job would FK-violate. Null the back-ref first, then delete the
+  // quote row. line_items is JSONB on the quotes row, no extra cleanup
+  // needed.
+  async function handleDeleteQuote() {
+    if (!confirmDeleteQuote) return
+    setDeletingQuote(true)
+    try {
+      const id = confirmDeleteQuote.id
+      const { error: jobsErr } = await supabase
+        .from('jobs')
+        .update({ quote_id: null })
+        .eq('quote_id', id)
+      if (jobsErr) throw jobsErr
+      const { error } = await supabase.from('quotes').delete().eq('id', id)
+      if (error) throw error
+      setQuotes(prev => prev.filter(q => q.id !== id))
+      if (selectedQuoteId === id) setSelectedQuoteId(null)
+      toast.success('Quote deleted')
+      setConfirmDeleteQuote(null)
+    } catch (err) {
+      toast.error(err?.message || 'Failed to delete quote')
+    } finally {
+      setDeletingQuote(false)
     }
   }
 
@@ -367,8 +403,13 @@ export default function Quotes() {
                     </p>
                   </div>
 
-                  {/* Actions */}
-                  <div className="mt-5 flex items-center justify-between gap-3">
+                  {/* Actions. Delete pushes far-right via ml-auto so
+                      "Mark accepted" sits between it and "Open quote"
+                      when it's shown; if "Mark accepted" is hidden
+                      (already accepted/declined), Delete simply lands
+                      on the far right next to the link. Matches the
+                      /recurring detail card pattern. */}
+                  <div className="mt-5 flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => navigate(`/quotes/${selectedQuote.id}`)}
                       className="inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
@@ -386,6 +427,15 @@ export default function Quotes() {
                         Mark accepted
                       </Button>
                     )}
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      leftIcon={Trash2}
+                      onClick={() => setConfirmDeleteQuote(selectedQuote)}
+                      className="ml-auto"
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </Card>
               )}
@@ -393,6 +443,22 @@ export default function Quotes() {
           </div>
         </>
       )}
+
+      {/* Hard-delete confirmation. handleDeleteQuote nulls jobs.quote_id
+          first so a converted quote can be removed without FK violation;
+          the job itself stays. line_items is JSONB on the row so the
+          quote delete cleans up everything in one shot. */}
+      <ConfirmModal
+        open={!!confirmDeleteQuote}
+        onClose={() => !deletingQuote && setConfirmDeleteQuote(null)}
+        title="Delete this quote?"
+        description={confirmDeleteQuote
+          ? `Permanently removes ${getQuoteRef(confirmDeleteQuote)} and any line items. If this quote was converted to a job, the job stays but loses its quote reference. Cannot be undone.`
+          : ''}
+        destructive
+        confirmLabel={deletingQuote ? 'Deleting…' : 'Delete quote'}
+        onConfirm={handleDeleteQuote}
+      />
     </PageWrapper>
   )
 }
