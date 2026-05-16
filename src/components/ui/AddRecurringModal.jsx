@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, X, Pencil, User, Droplet, Calendar as CalendarIcon, Repeat, Mail, Phone, MapPin, Plus } from 'lucide-react'
+import { Search, X, Pencil, User, Droplet, Calendar as CalendarIcon, Mail, Phone, MapPin, Plus, Trash2 } from 'lucide-react'
 import Modal from './Modal'
 import Button from './Button'
 import Input, { Select, TextArea } from './Input'
@@ -13,8 +13,26 @@ import { useToast } from '../../contexts/ToastContext'
 import RecurrencePicker from './RecurrencePicker'
 import {
   RECURRENCE_OPTIONS,
-  computeNthFromDate,
+  profileFieldsFromForm,
 } from '../../lib/recurringScheduling'
+
+// One schedule = one recurring_job_profiles row. The modal lets the
+// operator stack multiple schedules for the same client + pool in one
+// transaction (e.g. weekly Tuesday + weekly Friday → two profiles).
+// Each schedule owns its own date / rule / duration / tech / notes;
+// client + pool are shared at the top of the modal.
+function blankSchedule() {
+  return {
+    recurrenceRule: 'weekly',
+    customDays: 7,
+    firstDate: new Date().toISOString().split('T')[0],
+    durationType: 'ongoing',
+    endDate: '',
+    totalVisits: '',
+    assignedStaffId: '',
+    notes: '',
+  }
+}
 
 export default function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
   const toast = useToast()
@@ -23,10 +41,9 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   const [clientPools, setClientPools] = useState([])
   const [localStaff, setLocalStaff] = useState([])
 
-  // Selections
+  // Selections (shared across all schedules)
   const [clientId, setClientId] = useState('')
   const [poolId, setPoolId] = useState('')
-  const [assignedStaffId, setAssignedStaffId] = useState('')
 
   // Client search dropdown
   const [clientSearch, setClientSearch] = useState('')
@@ -53,19 +70,15 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     }
   }, [clientDropdownOpen])
 
-  // Schedule. The first service date is the anchor: its day-of-week
-  // is the projection weekday, and for monthly the Nth-occurrence is
-  // computed from it (no separate dropdown). Recurring services are
-  // single-day-per-occurrence — two services per week = two profiles.
-  const [recurrenceRule, setRecurrenceRule] = useState('weekly')
-  const [customDays, setCustomDays] = useState(7)
-  const [firstDate, setFirstDate] = useState(new Date().toISOString().split('T')[0])
-  const [notes, setNotes] = useState('')
+  // Schedules. Each entry is one independent recurring_job_profile row.
+  // Always at least 1; "+ Add another schedule" appends a blankSchedule().
+  // Per-schedule fields: date, rule, customDays, duration, technician, notes.
+  const [schedules, setSchedules] = useState([blankSchedule()])
 
-  // Duration
-  const [durationType, setDurationType] = useState('ongoing')
-  const [endDate, setEndDate] = useState('')
-  const [totalVisits, setTotalVisits] = useState('')
+  // Which schedule index initiated "+ Add Technician"? Set when the
+  // operator clicks the option in a ScheduleSection's tech dropdown so
+  // the freshly-created tech auto-selects on the right schedule.
+  const [pendingTechScheduleIdx, setPendingTechScheduleIdx] = useState(null)
 
   // Nested modal state
   const [showNewClient, setShowNewClient] = useState(false)
@@ -96,14 +109,26 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   }, [clientId])
 
   function reset() {
-    setClientId(''); setPoolId(''); setAssignedStaffId('')
+    setClientId(''); setPoolId('')
     setClientSearch(''); setClientDropdownOpen(false)
-    setRecurrenceRule('weekly'); setCustomDays(7)
-    setFirstDate(new Date().toISOString().split('T')[0]); setNotes('')
-    setDurationType('ongoing'); setEndDate(''); setTotalVisits('')
+    setSchedules([blankSchedule()])
+    setPendingTechScheduleIdx(null)
     setShowNewClient(false); setShowNewPool(false); setShowNewTech(false)
     setEditingClient(false); setEditClientForm({ name: '', email: '', phone: '', address: '' })
     setLocalStaff([])
+  }
+
+  // Schedules array mutators. Always keep length >= 1 — removeSchedule
+  // refuses to drop the last row (the "Remove" button is hidden in that
+  // state anyway, this is just a safety net).
+  function patchSchedule(idx, patch) {
+    setSchedules(prev => prev.map((s, i) => i === idx ? { ...s, ...patch } : s))
+  }
+  function addSchedule() {
+    setSchedules(prev => [...prev, blankSchedule()])
+  }
+  function removeSchedule(idx) {
+    setSchedules(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
   }
 
   function handleClose() { reset(); onClose() }
@@ -124,7 +149,12 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
 
   function handleTechCreated(newTech) {
     setLocalStaff(prev => [...prev, newTech])
-    setAssignedStaffId(newTech.id)
+    // Auto-select the new tech on whichever schedule initiated the
+    // "+ Add Technician" action. Falls back to schedule 0 if (somehow)
+    // the index didn't get tracked — safer than dropping the selection.
+    const targetIdx = pendingTechScheduleIdx ?? 0
+    patchSchedule(targetIdx, { assignedStaffId: newTech.id })
+    setPendingTechScheduleIdx(null)
   }
 
   async function handleSaveClientEdit() {
@@ -147,72 +177,67 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   }
 
   async function handleSubmit() {
-    if (!clientId || !poolId || !firstDate) return
+    if (!clientId || !poolId || schedules.length === 0) return
+    if (!schedules.every(s => s.firstDate)) return
     setSaving(true)
     try {
-      const freqLabel = recurrenceRule === 'custom' ? `Every ${customDays} days` : RECURRENCE_OPTIONS.find(o => o.value === recurrenceRule)?.label || recurrenceRule
+      // Build one insert payload per schedule. profileFieldsFromForm
+      // centralises the rule → (preferred_day_of_week, monthly_week_of_month,
+      // custom_interval_days) mapping so AddRecurringModal, RecurringJobs,
+      // and StopDetailModal all produce identical writes for the same
+      // picker state.
+      const payloads = schedules.map(s => {
+        const fields = profileFieldsFromForm({
+          rule: s.recurrenceRule,
+          customDays: s.customDays,
+          firstDate: s.firstDate,
+        })
+        const freqLabel = s.recurrenceRule === 'custom'
+          ? `Every ${s.customDays} days`
+          : RECURRENCE_OPTIONS.find(o => o.value === s.recurrenceRule)?.label || s.recurrenceRule
+        return {
+          business_id: business.id,
+          client_id: clientId,
+          pool_id: poolId,
+          title: `Pool Service — ${freqLabel}`,
+          ...fields,
+          assigned_staff_id: s.assignedStaffId || null,
+          notes: s.notes.trim() || null,
+          is_active: true,
+          next_generation_at: s.firstDate,
+          duration_type: s.durationType,
+          end_date: s.durationType === 'until_date' ? s.endDate : null,
+          total_visits: s.durationType === 'num_visits' ? Number(s.totalVisits) : null,
+          completed_visits: 0,
+          status: 'active',
+        }
+      })
 
-      // First service date drives the day-of-week. For monthly it's
-      // both preferred_day_of_week AND the source of the Nth via
-      // computeNthFromDate (no separate dropdown). preferred_days_of_week
-      // is always null — single-day-per-occurrence only.
-      const anchorDate = new Date(firstDate + 'T00:00:00')
-      const anchorWd = anchorDate.getDay()
-
-      let preferred_day_of_week = null
-      const preferred_days_of_week = null
-      let monthly_week_of_month = null
-      if (recurrenceRule === 'monthly') {
-        preferred_day_of_week = anchorWd
-        monthly_week_of_month = computeNthFromDate(anchorDate)
-      } else if (recurrenceRule === 'weekly' || recurrenceRule === 'fortnightly') {
-        preferred_day_of_week = anchorWd
-      }
-
-      // A pool should only ever have ONE active recurring service at a
-      // time. Without this, every "+ New recurring" creates an additional
-      // active profile, the schedule projection runs path 3 against ALL
-      // of them, and the operator sees the same pool on multiple days
-      // ("indo test on Fri AND Sat" was the canonical bug here). Mark
-      // any existing actives inactive before inserting the new one — the
-      // rows stay around for history, just stop projecting.
-      await supabase
-        .from('recurring_job_profiles')
-        .update({ is_active: false, status: 'cancelled' })
-        .eq('pool_id', poolId)
-        .eq('is_active', true)
-
-      const insertPayload = {
-        business_id: business.id,
-        client_id: clientId,
-        pool_id: poolId,
-        title: `Pool Service — ${freqLabel}`,
-        recurrence_rule: recurrenceRule,
-        custom_interval_days: recurrenceRule === 'custom' ? Number(customDays) : null,
-        preferred_day_of_week,
-        preferred_days_of_week,
-        monthly_week_of_month,
-        assigned_staff_id: assignedStaffId || null,
-        notes: notes.trim() || null,
-        is_active: true,
-        next_generation_at: firstDate,
-        duration_type: durationType,
-        end_date: durationType === 'until_date' ? endDate : null,
-        total_visits: durationType === 'num_visits' ? Number(totalVisits) : null,
-        completed_visits: 0,
-        status: 'active',
-      }
-      const { error } = await supabase.from('recurring_job_profiles').insert(insertPayload)
+      // No more pre-insert "deactivate existing actives for this pool"
+      // step — multiple active profiles per pool is now the supported
+      // model (the partial unique index that enforced one-per-pool was
+      // dropped in migration 20260509130000). Operator manages stacked
+      // schedules via /recurring if they want to retire one.
+      const { error } = await supabase.from('recurring_job_profiles').insert(payloads)
       if (error) throw error
 
-      // Update pool frequency, next_due_at, and assigned tech
+      // Pool denormalised mirror: written from schedules[0] only. Path-2
+      // (the pool-level projector that reads schedule_frequency /
+      // next_due_at) is suppressed for any pool with at least one active
+      // profile, so this mirror only matters for pool-detail card copy
+      // and /recurring's legacy fetch — "primary schedule" is the right
+      // value there.
+      const primary = schedules[0]
       const poolUpdate = {
-        schedule_frequency: recurrenceRule === 'custom' ? `${customDays}` : recurrenceRule,
-        next_due_at: firstDate,
+        schedule_frequency: primary.recurrenceRule === 'custom' ? `${primary.customDays}` : primary.recurrenceRule,
+        next_due_at: primary.firstDate,
       }
-      if (assignedStaffId) poolUpdate.assigned_staff_id = assignedStaffId
+      if (primary.assignedStaffId) poolUpdate.assigned_staff_id = primary.assignedStaffId
       await supabase.from('pools').update(poolUpdate).eq('id', poolId)
 
+      if (payloads.length > 1) {
+        toast.success(`Created ${payloads.length} recurring services`)
+      }
       onCreated()
       reset()
     } catch (err) {
@@ -222,28 +247,37 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   }
 
   const selectedClient = clients.find(c => c.id === clientId)
-  const selectedPool = clientPools.find(p => p.id === poolId)
   const allTechs = [...staff, ...localStaff.filter(ls => !staff.some(s => s.id === ls.id))]
-  const selectedTech = allTechs.find(s => s.id === assignedStaffId)
 
   // Filtered client list for search dropdown
   const filteredClients = clients.filter(c =>
     !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase())
   )
 
-  // Estimated end date for num_visits — approximated for monthly and
-  // beyond. Surfaced only as a "approx finishes" hint, so rough is fine.
-  const intervalDaysValue = (() => {
-    if (recurrenceRule === 'custom') return Number(customDays) || 7
-    return ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[recurrenceRule] || 7)
-  })()
-  const estimatedEndDate = durationType === 'num_visits' && totalVisits && firstDate
-    ? (() => { const d = new Date(firstDate); d.setDate(d.getDate() + intervalDaysValue * (Number(totalVisits) - 1)); return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) })()
-    : null
+  // Submit gate: shared bits + every schedule must individually validate.
+  // Empty firstDate, missing endDate for until_date, or zero totalVisits
+  // for num_visits each disable submit until corrected.
+  const schedulesValid = schedules.every(s => {
+    if (!s.firstDate) return false
+    if (s.durationType === 'until_date' && !s.endDate) return false
+    if (s.durationType === 'num_visits' && !(Number(s.totalVisits) > 0)) return false
+    return true
+  })
+  const canSubmit = !!clientId && !!poolId && !saving && schedulesValid
 
-  const canSubmit = clientId && poolId && firstDate && !saving
-    && (durationType !== 'until_date' || !!endDate)
-    && (durationType !== 'num_visits' || (Number(totalVisits) > 0))
+  // Soft-warn when two schedules in this draft would project on the same
+  // weekday — they'd both insert, but the schedule projector dedupes
+  // per-day-per-pool so only one stop renders. Operator can still proceed.
+  const sameDayCollision = (() => {
+    const days = schedules.map(s => s.firstDate ? new Date(s.firstDate + 'T00:00:00').getDay() : null)
+    const seen = new Set()
+    for (const d of days) {
+      if (d == null) continue
+      if (seen.has(d)) return true
+      seen.add(d)
+    }
+    return false
+  })()
 
   return (
     <>
@@ -388,108 +422,47 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
             )}
           </Section>
 
-          {/* ── SCHEDULE ──────────────────────────────────── */}
+          {/* ── SCHEDULES ─────────────────────────────────── */}
+          {/* One ScheduleSection per row in `schedules`. With a single
+              schedule the section renders without a numbered header so
+              this looks identical to the old single-schedule modal.
+              "+ Add another schedule" stacks more independent rows. */}
           <Section icon={CalendarIcon} iconColor="text-emerald-600 dark:text-emerald-400" iconBg="bg-emerald-50 dark:bg-emerald-950/40" label="Schedule">
-            {/* First service date — drives the projection weekday and
-                (for monthly) the Nth-occurrence anchor. */}
-            <Input
-              label="First service date"
-              type="date"
-              value={firstDate}
-              onChange={e => setFirstDate(e.target.value)}
-            />
-
-            <RecurrencePicker
-              value={{ rule: recurrenceRule, customDays }}
-              onChange={(next) => {
-                setRecurrenceRule(next.rule)
-                setCustomDays(next.customDays)
-              }}
-              firstDate={firstDate}
-            />
-
-            {/* Duration cards */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Duration</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: 'ongoing', label: 'Ongoing', desc: 'Until cancelled' },
-                  { value: 'until_date', label: 'Until date', desc: 'Specific end' },
-                  { value: 'num_visits', label: 'Fixed visits', desc: 'Set number' },
-                ].map(opt => (
-                  <button key={opt.value} type="button" onClick={() => setDurationType(opt.value)}
-                    className={cn(
-                      'p-3 rounded-xl border-2 transition-all text-left',
-                      durationType === opt.value
-                        ? 'border-pool-500 bg-pool-50 dark:bg-pool-950/40'
-                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600'
-                    )}>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{opt.label}</p>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{opt.desc}</p>
-                  </button>
-                ))}
-              </div>
-
-              {durationType === 'until_date' && (
-                <div className="mt-3 space-y-2">
-                  <Input label="End date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                  <div className="flex gap-2">
-                    {[{ label: '3 months', months: 3 }, { label: '6 months', months: 6 }, { label: '12 months', months: 12 }].map(preset => (
-                      <button key={preset.months} type="button"
-                        onClick={() => {
-                          const d = new Date(firstDate || new Date())
-                          d.setMonth(d.getMonth() + preset.months)
-                          setEndDate(d.toISOString().split('T')[0])
-                        }}
-                        className="flex-1 py-1.5 px-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-[11px] font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {durationType === 'num_visits' && (
-                <div className="mt-3 space-y-2">
-                  <Input label="Number of visits" type="number" min="1" value={totalVisits}
-                    onChange={e => setTotalVisits(e.target.value)} placeholder="e.g. 12" />
-                  {estimatedEndDate && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Approx. finishes <span className="font-semibold text-gray-700 dark:text-gray-300">{estimatedEndDate}</span>
-                    </p>
-                  )}
-                </div>
+            <div className="space-y-4">
+              {schedules.map((s, idx) => (
+                <ScheduleSection
+                  key={idx}
+                  index={idx}
+                  schedule={s}
+                  onChange={(patch) => patchSchedule(idx, patch)}
+                  onRemove={schedules.length > 1 ? () => removeSchedule(idx) : null}
+                  showHeader={schedules.length > 1}
+                  allTechs={allTechs}
+                  onAddTech={() => { setPendingTechScheduleIdx(idx); setShowNewTech(true) }}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={addSchedule}
+                className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-pool-300 dark:border-pool-700 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors min-h-tap"
+              >
+                <Plus className="w-4 h-4" strokeWidth={2.5} /> Add another schedule
+              </button>
+              {sameDayCollision && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-1.5">
+                  Two schedules anchor on the same weekday for this pool. Both will save, but the calendar will only show one stop per day.
+                </p>
               )}
             </div>
-          </Section>
-
-          {/* ── ASSIGNMENT ────────────────────────────────── */}
-          <Section icon={Repeat} iconColor="text-violet-600 dark:text-violet-400" iconBg="bg-violet-50 dark:bg-violet-950/40" label="Assignment">
-            <Select
-              label="Technician"
-              value={assignedStaffId}
-              onChange={e => {
-                if (e.target.value === '__add__') {
-                  setShowNewTech(true)
-                } else {
-                  setAssignedStaffId(e.target.value)
-                }
-              }}
-              options={[
-                { value: '', label: 'Unassigned' },
-                ...allTechs.map(s => ({ value: s.id, label: s.name })),
-                { value: '__add__', label: '+ Add Technician' },
-              ]}
-            />
-            <TextArea label="Notes" value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="e.g. Back gate code 1234, dog in yard, etc." rows={2} />
           </Section>
 
           {/* ── ACTIONS ──────────────────────────────────── */}
           <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
             <Button variant="secondary" onClick={handleClose} disabled={saving} className="flex-1">Cancel</Button>
             <Button onClick={handleSubmit} loading={saving} disabled={!canSubmit} className="flex-1">
-              Create Recurring Service
+              {schedules.length === 1
+                ? 'Create Recurring Service'
+                : `Create ${schedules.length} Recurring Services`}
             </Button>
           </div>
         </div>
@@ -515,6 +488,152 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
         onCreated={handleTechCreated}
       />
     </>
+  )
+}
+
+// Per-schedule controls. One of these renders per row in `schedules`.
+// Date + RecurrencePicker drive the cadence; duration cards toggle the
+// conditional end-date / num-visits inputs; technician + notes live
+// here too so each schedule can be independently assigned.
+function ScheduleSection({ index, schedule, onChange, onRemove, showHeader, allTechs, onAddTech }) {
+  const rule = schedule.recurrenceRule
+  const customDays = schedule.customDays
+  const firstDate = schedule.firstDate
+  const durationType = schedule.durationType
+
+  // Estimated end date for num_visits — approximated for monthly and
+  // beyond. Surfaced only as a "approx finishes" hint, so rough is fine.
+  const intervalDaysValue = rule === 'custom'
+    ? Number(customDays) || 7
+    : ({ weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[rule] || 7)
+  const estimatedEndDate = durationType === 'num_visits' && schedule.totalVisits && firstDate
+    ? (() => {
+        const d = new Date(firstDate)
+        d.setDate(d.getDate() + intervalDaysValue * (Number(schedule.totalVisits) - 1))
+        return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+      })()
+    : null
+
+  return (
+    <div className={cn(
+      'space-y-3',
+      // Numbered schedules visually nest in a card so multi-schedule
+      // setups are scannable. Single-schedule case keeps the original
+      // flat layout so the common path is unchanged.
+      showHeader && 'rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/40 p-4'
+    )}>
+      {showHeader && (
+        <div className="flex items-center justify-between -mt-1">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            Schedule {index + 1}
+          </h4>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors min-h-tap px-2"
+              aria-label={`Remove schedule ${index + 1}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={2} /> Remove
+            </button>
+          )}
+        </div>
+      )}
+
+      <Input
+        label="First service date"
+        type="date"
+        value={firstDate}
+        onChange={e => onChange({ firstDate: e.target.value })}
+      />
+
+      <RecurrencePicker
+        value={{ rule, customDays }}
+        onChange={next => onChange({ recurrenceRule: next.rule, customDays: next.customDays })}
+        firstDate={firstDate}
+      />
+
+      {/* Duration cards */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Duration</label>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { value: 'ongoing', label: 'Ongoing', desc: 'Until cancelled' },
+            { value: 'until_date', label: 'Until date', desc: 'Specific end' },
+            { value: 'num_visits', label: 'Fixed visits', desc: 'Set number' },
+          ].map(opt => (
+            <button key={opt.value} type="button" onClick={() => onChange({ durationType: opt.value })}
+              className={cn(
+                'p-3 rounded-xl border-2 transition-all text-left',
+                durationType === opt.value
+                  ? 'border-pool-500 bg-pool-50 dark:bg-pool-950/40'
+                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600'
+              )}>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{opt.label}</p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+
+        {durationType === 'until_date' && (
+          <div className="mt-3 space-y-2">
+            <Input label="End date" type="date" value={schedule.endDate} onChange={e => onChange({ endDate: e.target.value })} />
+            <div className="flex gap-2">
+              {[{ label: '3 months', months: 3 }, { label: '6 months', months: 6 }, { label: '12 months', months: 12 }].map(preset => (
+                <button key={preset.months} type="button"
+                  onClick={() => {
+                    const d = new Date(firstDate || new Date())
+                    d.setMonth(d.getMonth() + preset.months)
+                    onChange({ endDate: d.toISOString().split('T')[0] })
+                  }}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-[11px] font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {durationType === 'num_visits' && (
+          <div className="mt-3 space-y-2">
+            <Input label="Number of visits" type="number" min="1" value={schedule.totalVisits}
+              onChange={e => onChange({ totalVisits: e.target.value })} placeholder="e.g. 12" />
+            {estimatedEndDate && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Approx. finishes <span className="font-semibold text-gray-700 dark:text-gray-300">{estimatedEndDate}</span>
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Technician */}
+      <Select
+        label="Technician"
+        value={schedule.assignedStaffId}
+        onChange={e => {
+          if (e.target.value === '__add__') {
+            onAddTech()
+          } else {
+            onChange({ assignedStaffId: e.target.value })
+          }
+        }}
+        options={[
+          { value: '', label: 'Unassigned' },
+          ...allTechs.map(s => ({ value: s.id, label: s.name })),
+          { value: '__add__', label: '+ Add Technician' },
+        ]}
+      />
+
+      {/* Notes */}
+      <TextArea
+        label="Notes"
+        value={schedule.notes}
+        onChange={e => onChange({ notes: e.target.value })}
+        placeholder="e.g. Back gate code 1234, dog in yard, etc."
+        rows={2}
+      />
+    </div>
   )
 }
 

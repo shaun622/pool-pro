@@ -1,0 +1,25 @@
+-- Allow multiple active recurring_job_profiles per pool.
+--
+-- Migration 20260502160000 added a partial unique index
+--   recurring_job_profiles_one_active_per_pool (pool_id) WHERE is_active
+-- to enforce one active profile per pool, because in the multi-day-rule
+-- era a second active profile would project onto the same days as the
+-- first and show up as duplicate stops.
+--
+-- That era is over: multi-day rules (bi_weekly, tri_weekly) were
+-- removed in 20260509120000_drop_multiday_recurrence.sql. Recurring
+-- services are now single-day-per-occurrence, and the schedule
+-- projector dedupes per-day-per-pool. Two profiles on the same pool
+-- but different weekdays project independently — that's the supported
+-- "2× weekly" model going forward (Tue weekly + Fri weekly = two
+-- profiles anchored on different days, no chip grid).
+--
+-- The "Add another schedule" button in the New Recurring modal relies
+-- on this — it stacks N independent profiles for one client + pool in
+-- a single transaction. Dropping the unique index is the only thing
+-- gating that flow.
+--
+-- Existing rows stay valid; the constraint just no longer blocks
+-- future inserts.
+
+drop index if exists public.recurring_job_profiles_one_active_per_pool;
