@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight, CheckCircle2, ChevronLeft, ChevronRight,
-  FileText, Plus, Send, Trash2, Wallet,
+  Eye, FileText, Plus, Send, Trash2, Wallet,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
@@ -417,6 +417,17 @@ export default function Quotes() {
                       Open quote
                       <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={2.5} />
                     </button>
+                    {/* Preview opens the customer-facing quote page in a
+                        new tab, in read-only preview mode (Accept/Decline
+                        suppressed). */}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      leftIcon={Eye}
+                      onClick={() => window.open(`/quote/${selectedQuote.public_token}?preview=1`, '_blank', 'noopener,noreferrer')}
+                    >
+                      Preview
+                    </Button>
                     {selectedQuote._stage !== 'accepted' && selectedQuote._stage !== 'declined' && (
                       <Button
                         size="sm"

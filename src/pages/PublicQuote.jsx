@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -35,6 +35,12 @@ function StatusBanner({ status }) {
 
 export default function PublicQuote() {
   const { token } = useParams()
+  // ?preview=1 — the operator is viewing the quote as a customer would.
+  // Suppresses the Accept / Decline actions so a preview can't change
+  // the quote's real status, and shows a banner up top. The operator's
+  // /quotes and QuoteBuilder Preview buttons append this param.
+  const [searchParams] = useSearchParams()
+  const isPreview = searchParams.get('preview') === '1'
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -165,6 +171,16 @@ export default function PublicQuote() {
       </header>
 
       <div className="max-w-2xl mx-auto w-full px-4 py-6 flex-1">
+        {/* Preview banner — operator-only, never seen by a customer */}
+        {isPreview && (
+          <div className="mb-4 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-center">
+            <p className="text-sm font-bold text-amber-800">Preview mode</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              This is exactly what your customer sees. Accept &amp; Decline are disabled here.
+            </p>
+          </div>
+        )}
+
         {/* Error Banner */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -291,8 +307,9 @@ export default function PublicQuote() {
           </Card>
         )}
 
-        {/* Accept / Decline Buttons */}
-        {!alreadyResponded && !responded && (
+        {/* Accept / Decline Buttons — hidden in preview so the operator
+            can't accidentally change the quote's status. */}
+        {!isPreview && !alreadyResponded && !responded && (
           <div className="grid grid-cols-2 gap-3 mb-6">
             <Button
               variant="danger"

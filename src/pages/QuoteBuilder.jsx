@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Mail, MapPin, Phone, User } from 'lucide-react'
+import { Eye, Mail, MapPin, Phone, User } from 'lucide-react'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -46,6 +46,9 @@ export default function QuoteBuilder() {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(isEditing)
   const [quoteStatus, setQuoteStatus] = useState('draft')
+  // public_token of the loaded quote — drives the "Preview as customer"
+  // button. Only populated when editing a saved quote.
+  const [quoteToken, setQuoteToken] = useState(null)
   // Per-doc gst_rate (null on legacy quotes that predate the column —
   // those fall back to business.gst_rate, then to the 0.10 hardcoded
   // default in calculateGST). New quotes inherit business.gst_rate at
@@ -140,6 +143,7 @@ export default function QuoteBuilder() {
       setTerms(data.terms || '')
       setQuoteStatus(data.status || 'draft')
       setDocGstRate(data.gst_rate != null ? Number(data.gst_rate) : null)
+      setQuoteToken(data.public_token || null)
       setLoading(false)
     }
     fetchQuote()
@@ -737,6 +741,22 @@ export default function QuoteBuilder() {
               </div>
             </div>
           </Card>
+
+          {/* Preview — opens the read-only customer view in a new tab.
+              Only available once the quote is saved (a public_token
+              exists). Shows the last-saved state, so the operator
+              should Save Draft first if they want unsaved edits to
+              appear. */}
+          {isEditing && quoteToken && (
+            <Button
+              variant="secondary"
+              leftIcon={Eye}
+              className="w-full min-h-tap mb-3"
+              onClick={() => window.open(`/quote/${quoteToken}?preview=1`, '_blank', 'noopener,noreferrer')}
+            >
+              Preview as customer
+            </Button>
+          )}
 
           {/* Actions */}
           {isEditing && (quoteStatus === 'sent' || quoteStatus === 'viewed' || quoteStatus === 'follow_up') ? (
