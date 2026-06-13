@@ -17,6 +17,7 @@ import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import { supabase } from '../lib/supabase'
 import { geocodeAddress } from '../lib/mapbox'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
+import EditPoolModal from '../components/ui/EditPoolModal'
 import { useToast } from '../contexts/ToastContext'
 import { Briefcase, Calendar, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
 import {
@@ -36,7 +37,7 @@ export default function ClientDetail() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { updateClient, deleteClient } = useClients()
-  const { pools, loading: poolsLoading, createPool, updatePool, deletePool } = usePools(id)
+  const { pools, loading: poolsLoading, createPool, updatePool, deletePool, refetch: refetchPools } = usePools(id)
   const { staff: staffList, loading: staffLoading } = useStaff()
 
   const [client, setClient] = useState(null)
@@ -64,6 +65,7 @@ export default function ClientDetail() {
   const [poolForm, setPoolForm] = useState(emptyPool)
   const [poolSaving, setPoolSaving] = useState(false)
   const [poolToDelete, setPoolToDelete] = useState(null)
+  const [poolToEdit, setPoolToEdit] = useState(null)
   const [poolDeleting, setPoolDeleting] = useState(false)
 
   // Schedule modal
@@ -574,6 +576,17 @@ export default function ClientDetail() {
                     </Button>
                     <button
                       type="button"
+                      aria-label="Edit pool"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPoolToEdit(pool)
+                      }}
+                      className="shrink-0 w-11 h-11 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-pool-50 hover:border-pool-200 hover:text-pool-600 transition-colors flex items-center justify-center"
+                    >
+                      <Pencil className="w-4 h-4" strokeWidth={2} />
+                    </button>
+                    <button
+                      type="button"
                       aria-label="Remove pool"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -740,6 +753,15 @@ export default function ClientDetail() {
           </Button>
         </div>
       </Modal>
+
+      {/* Edit Pool Modal — attribute edits (name/address/details); the
+          pool's schedule stays managed by the recurring flow + Schedule modal. */}
+      <EditPoolModal
+        open={!!poolToEdit}
+        onClose={() => setPoolToEdit(null)}
+        pool={poolToEdit}
+        onSaved={() => { setPoolToEdit(null); refetchPools() }}
+      />
 
       {/* Schedule Modal */}
       <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule Service">

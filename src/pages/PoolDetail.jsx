@@ -8,7 +8,9 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
+import EditPoolModal from '../components/ui/EditPoolModal'
 import EmptyState from '../components/ui/EmptyState'
+import { Pencil } from 'lucide-react'
 import { useService } from '../hooks/useService'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
@@ -51,6 +53,7 @@ export default function PoolDetail() {
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [scheduleDate, setScheduleDate] = useState('')
   const [scheduling, setScheduling] = useState(false)
+  const [editPoolOpen, setEditPoolOpen] = useState(false)
 
   useEffect(() => {
     loadPool()
@@ -139,7 +142,15 @@ export default function PoolDetail() {
 
   return (
     <>
-      <Header title={pool.name || pool.address || 'Pool Detail'} backTo={-1} />
+      <Header
+        title={pool.name || pool.address || 'Pool Detail'}
+        backTo={-1}
+        right={
+          <Button size="sm" variant="secondary" leftIcon={Pencil} onClick={() => setEditPoolOpen(true)}>
+            Edit
+          </Button>
+        }
+      />
       <PageWrapper>
         <div className="space-y-4">
           {/* Client Info */}
@@ -449,6 +460,18 @@ export default function PoolDetail() {
           </div>
         </div>
       </Modal>
+
+      <EditPoolModal
+        open={editPoolOpen}
+        onClose={() => setEditPoolOpen(false)}
+        pool={pool}
+        onSaved={(updated) => {
+          // Merge attribute changes but keep the richer clients(*) join
+          // and target_ranges already loaded into local state.
+          setPool(prev => ({ ...prev, ...updated, clients: prev.clients }))
+          setEditPoolOpen(false)
+        }}
+      />
     </>
   )
 }
