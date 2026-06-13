@@ -9,21 +9,14 @@ import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
 import StatCard from '../components/ui/StatCard'
-import Input, { Select, TextArea } from '../components/ui/Input'
-import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
-import NewClientModal from '../components/ui/NewClientModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
-import RecurrencePicker from '../components/ui/RecurrencePicker'
-import {
-  describeSchedule,
-  computeNthFromDate,
-} from '../lib/recurringScheduling'
+import { describeSchedule } from '../lib/recurringScheduling'
 
 // Profile status logic — combines is_active + status field into a single state
 function getProfileState(p) {
@@ -68,18 +61,6 @@ function durationLabel(p) {
   return 'Ongoing'
 }
 
-const emptyForm = {
-  client_id: '', pool_id: '', job_type_template_id: '', title: '',
-  recurrence_rule: 'weekly', custom_interval_days: '',
-  preferred_time: '', assigned_staff_id: '',
-  price: '', notes: '',
-  // First service date is the anchor: its weekday drives projection,
-  // and for monthly the Nth-occurrence is computed from it. Recurring
-  // services are single-day-per-occurrence — two services per week =
-  // two profiles anchored on different days.
-  first_date: new Date().toISOString().split('T')[0],
-}
-
 const PAGE_SIZE = 25
 
 export default function RecurringJobs() {
@@ -91,7 +72,8 @@ export default function RecurringJobs() {
   const [staff, setStaff] = useState([])
   const [jobTypes, setJobTypes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
+  // One AddRecurringModal serves both create and edit. editing===null →
+  // create; editing===<profile> → edit (passed as editProfile).
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false)
@@ -101,9 +83,6 @@ export default function RecurringJobs() {
   // recurring_profile_id just orphans).
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [deletingService, setDeletingService] = useState(false)
-  const [form, setForm] = useState(emptyForm)
-  const [saving, setSaving] = useState(false)
-  const [showNewClient, setShowNewClient] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState(null)
   const [stateFilter, setStateFilter] = useState('all')
   const [page, setPage] = useState(0)
@@ -226,154 +205,26 @@ export default function RecurringJobs() {
     return filtered.find(p => p.id === selectedProfileId) || filtered[0]
   }, [filtered, selectedProfileId])
 
-  const clientPools = form.client_id
-    ? (clients.find(c => c.id === form.client_id)?.pools || [])
-    : []
-
   function openAdd() {
+    setEditing(null)
     setAddModalOpen(true)
   }
 
+  // Edit reuses the same AddRecurringModal as create — it just passes the
+  // profile as editProfile. The modal loads its own state from the row.
   function openEdit(profile) {
     setEditing(profile)
-    // First service date is whatever the profile is anchored on. The
-    // weekday is derived from this date — no separate per-day state.
-    const firstDate = profile.next_generation_at
-      ? String(profile.next_generation_at).split('T')[0]
-      : new Date().toISOString().split('T')[0]
-    setForm({
-      client_id: profile.client_id || '',
-      pool_id: profile.pool_id || '',
-      job_type_template_id: profile.job_type_template_id || '',
-      title: profile.title || '',
-      recurrence_rule: profile.recurrence_rule || 'weekly',
-      custom_interval_days: profile.custom_interval_days || '',
-      preferred_time: profile.preferred_time || '',
-      assigned_staff_id: profile.assigned_staff_id || '',
-      price: profile.price || '',
-      notes: profile.notes || '',
-      first_date: firstDate,
-    })
-    setModalOpen(true)
+    setAddModalOpen(true)
   }
 
-  // Client creation lives in <NewClientModal> — same modal used at
-  // /clients and inside AddRecurringModal. The legacy inline name-only
-  // "quick create" was removed because it skipped the email/phone
-  // duplicate guard and routinely produced phantom clients.
-  function handleNewClientCreated(client) {
-    // The modal returns the inserted row (or the existing client if
-    // the operator clicked "Use existing"). Fold it into the local
-    // clients list and select it on the form. The pools relation
-    // isn't included here, so refetchAll picks up that side after.
-    setClients(prev => prev.some(c => c.id === client.id)
-      ? prev
-      : [...prev, { ...client, pools: client.pools || [] }].sort((a, b) => a.name.localeCompare(b.name)))
-    setForm(prev => ({ ...prev, client_id: client.id, pool_id: '' }))
-    setShowNewClient(false)
-  }
-
-  function onJobTypeChange(templateId) {
-    setForm(prev => {
-      const jt = jobTypes.find(j => j.id === templateId)
-      return {
-        ...prev,
-        job_type_template_id: templateId,
-        title: jt?.name || prev.title,
-        price: jt?.default_price || prev.price,
-      }
-    })
-  }
-
-  function calcNextGeneration() {
-    const now = new Date()
-    const intervals = {
-      weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90,
-      custom: Number(form.custom_interval_days) || 7,
-    }
-    const days = intervals[form.recurrence_rule] || 7
-    const next = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
-    return next.toISOString()
-  }
-
-  async function handleSave(e) {
-    e.preventDefault()
-    if (!form.client_id || !form.title.trim() || !form.first_date) return
-    setSaving(true)
-    try {
-      // First service date drives the day-of-week / Nth field. Single
-      // weekday only — preferred_days_of_week stays null.
-      const anchorDate = new Date(form.first_date + 'T00:00:00')
-      const anchorWd = anchorDate.getDay()
-
-      let preferred_day_of_week = null
-      const preferred_days_of_week = null
-      let monthly_week_of_month = null
-      if (form.recurrence_rule === 'monthly') {
-        preferred_day_of_week = anchorWd
-        monthly_week_of_month = computeNthFromDate(anchorDate)
-      } else if (form.recurrence_rule === 'weekly' || form.recurrence_rule === 'fortnightly') {
-        preferred_day_of_week = anchorWd
-      }
-
-      const payload = {
-        client_id: form.client_id,
-        pool_id: form.pool_id || null,
-        job_type_template_id: form.job_type_template_id || null,
-        title: form.title.trim(),
-        recurrence_rule: form.recurrence_rule,
-        custom_interval_days: form.recurrence_rule === 'custom' ? Number(form.custom_interval_days) || 7 : null,
-        preferred_day_of_week,
-        preferred_days_of_week,
-        monthly_week_of_month,
-        preferred_time: form.preferred_time || null,
-        assigned_staff_id: form.assigned_staff_id || null,
-        price: form.price ? Number(form.price) : null,
-        notes: form.notes.trim() || null,
-        next_generation_at: form.first_date,
-      }
-      if (editing?.__isLegacy) {
-        // Migrate a legacy pool-level schedule into a real profile.
-        // The pool already has next_due_at + schedule_frequency set
-        // (that's what made it legacy). We INSERT a profile and then
-        // re-sync the pool fields to whatever the operator chose in
-        // this edit — same shape AddRecurringModal would write on a
-        // fresh create. After this, the active profile is the source
-        // of truth and the legacy fetch query no longer surfaces this
-        // pool because activeProfilePoolIds excludes it.
-        const { error: insertErr } = await supabase
-          .from('recurring_job_profiles')
-          .insert({ ...payload, business_id: business.id })
-        if (insertErr) throw insertErr
-        if (form.pool_id) {
-          const freq = form.recurrence_rule === 'custom'
-            ? `${form.custom_interval_days}`
-            : form.recurrence_rule
-          await supabase.from('pools').update({
-            schedule_frequency: freq,
-            next_due_at: form.first_date
-              ? new Date(form.first_date + 'T09:00:00').toISOString()
-              : null,
-          }).eq('id', form.pool_id)
-        }
-      } else if (editing) {
-        await supabase.from('recurring_job_profiles').update(payload).eq('id', editing.id)
-      } else {
-        await supabase.from('recurring_job_profiles').insert({ ...payload, business_id: business.id })
-      }
-      setModalOpen(false)
-      fetchAll()
-    } catch (err) {
-      toast.error(err.message || 'Failed to save')
-    } finally {
-      setSaving(false)
-    }
+  function closeModal() {
+    setAddModalOpen(false)
+    setEditing(null)
   }
 
   async function handleCancelService() {
     if (!editing) return
     await handleStatusChange(editing.id, 'cancelled')
-    setModalOpen(false)
   }
 
   // Permanently delete the recurring profile + every job materialized
@@ -440,7 +291,6 @@ export default function RecurringJobs() {
       // clear the selection so the empty-state shows.
       if (selectedProfile?.id === editing.id) setSelectedProfileId(null)
       setConfirmDeleteOpen(false)
-      setModalOpen(false)
       fetchAll()
     } catch (err) {
       toast.error(err.message || 'Failed to delete')
@@ -497,21 +347,9 @@ export default function RecurringJobs() {
     }
   }
 
-  async function handleExtend(profileId) {
-    if (!editing) return
-    const profile = editing
-    if (profile.duration_type === 'until_date') {
-      const newEnd = prompt('Enter new end date (YYYY-MM-DD):', profile.end_date || '')
-      if (!newEnd) return
-      await supabase.from('recurring_job_profiles').update({ end_date: newEnd, status: 'active' }).eq('id', profileId)
-    } else if (profile.duration_type === 'num_visits') {
-      const extra = prompt('Add how many visits?', '6')
-      if (!extra || isNaN(Number(extra))) return
-      await supabase.from('recurring_job_profiles').update({ total_visits: (profile.total_visits || 0) + Number(extra), status: 'active' }).eq('id', profileId)
-    }
-    fetchAll()
-    setModalOpen(false)
-  }
+  // "Extend" was removed with the legacy edit modal — editing the
+  // Duration (until date / fixed visits) directly in the unified modal
+  // supersedes it.
 
   const heroTitle = enriched.length === 0
     ? 'No recurring services yet'
@@ -843,6 +681,19 @@ export default function RecurringJobs() {
                         Resume
                       </Button>
                     )}
+                    {/* Cancel keeps the row at status=cancelled (history);
+                        Delete hard-removes it. Cancel moved here from the
+                        old edit modal when it was replaced by the unified
+                        AddRecurringModal. */}
+                    {!selectedProfile.__isLegacy && selectedProfile._state !== 'cancelled' && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => { setEditing(selectedProfile); setConfirmCancelOpen(true) }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
                     {/* Delete sits on the far right, opposite Edit, so
                         it's discoverable without opening the edit modal
                         first. ml-auto pushes it past the Pause/Resume
@@ -868,104 +719,18 @@ export default function RecurringJobs() {
         </>
       )}
 
-      {/* New clean Add modal — same as used on Schedule page */}
+      {/* Single modal for both create and edit. editProfile=null → create
+          (multi-schedule); editProfile=<row> → edit (single schedule,
+          extra fields, Save Changes). */}
       <AddRecurringModal
         open={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
+        onClose={closeModal}
         business={business}
         staff={staff}
-        onCreated={() => { fetchAll(); setAddModalOpen(false) }}
+        jobTypes={jobTypes}
+        editProfile={editing}
+        onCreated={() => { fetchAll(); closeModal() }}
       />
-
-      {/* Legacy edit modal — only used for editing existing profiles */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Recurring Service' : 'New Recurring Service'}>
-        <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <Select
-              label="Client"
-              options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
-              value={form.client_id}
-              onChange={e => setForm(prev => ({ ...prev, client_id: e.target.value, pool_id: '' }))}
-              required
-            />
-            <button type="button" onClick={() => setShowNewClient(true)}
-              className="text-xs text-pool-600 dark:text-pool-400 font-semibold mt-1.5 hover:text-pool-700">
-              + New Client
-            </button>
-          </div>
-          {clientPools.length > 0 && (
-            <Select label="Pool" options={[{ value: '', label: 'Select pool...' }, ...clientPools.map(p => ({ value: p.id, label: p.address }))]} value={form.pool_id} onChange={e => setForm(prev => ({ ...prev, pool_id: e.target.value }))} />
-          )}
-          {jobTypes.length > 0 && (
-            <Select label="Job Type" options={[{ value: '', label: 'No template' }, ...jobTypes.map(j => ({ value: j.id, label: j.name }))]} value={form.job_type_template_id} onChange={e => onJobTypeChange(e.target.value)} />
-          )}
-          <Input label="Service Title" value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. Regular Maintenance" required />
-
-          <Input
-            label="First service date"
-            type="date"
-            value={form.first_date}
-            onChange={e => setForm(prev => ({ ...prev, first_date: e.target.value }))}
-          />
-
-          <RecurrencePicker
-            value={{
-              rule: form.recurrence_rule,
-              customDays: form.custom_interval_days,
-            }}
-            onChange={(next) => setForm(prev => ({
-              ...prev,
-              recurrence_rule: next.rule,
-              custom_interval_days: next.customDays,
-            }))}
-            firstDate={form.first_date}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Preferred Time" type="time" value={form.preferred_time} onChange={e => setForm(prev => ({ ...prev, preferred_time: e.target.value }))} />
-            <Input label="Price ($)" type="number" value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} placeholder="150" />
-          </div>
-          {staff.length > 0 && (
-            <Select label="Assign To" options={[{ value: '', label: 'Unassigned' }, ...staff.map(s => ({ value: s.id, label: s.name }))]} value={form.assigned_staff_id} onChange={e => setForm(prev => ({ ...prev, assigned_staff_id: e.target.value }))} />
-          )}
-          <TextArea label="Notes" value={form.notes} onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))} placeholder="Any recurring notes..." rows={2} />
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)} className="flex-1">Cancel</Button>
-            <Button type="submit" className="flex-1" loading={saving}>{editing ? 'Save' : 'Create'}</Button>
-          </div>
-
-          {editing && (
-            <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-2 space-y-2">
-              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Actions</p>
-              <div className="flex gap-2 flex-wrap">
-                {(!editing.status || editing.status === 'active') && (
-                  <Button type="button" variant="secondary" onClick={() => { handleStatusChange(editing.id, 'paused'); setModalOpen(false) }} className="text-xs px-3">Pause</Button>
-                )}
-                {editing.status === 'paused' && (
-                  <Button type="button" variant="secondary" onClick={() => { handleStatusChange(editing.id, 'active'); setModalOpen(false) }} className="text-xs px-3">Resume</Button>
-                )}
-                {(editing.duration_type === 'until_date' || editing.duration_type === 'num_visits') && (
-                  <Button type="button" variant="secondary" onClick={() => handleExtend(editing.id)} className="text-xs px-3">Extend</Button>
-                )}
-                {editing.status !== 'cancelled' && (
-                  <Button type="button" variant="secondary" onClick={() => setConfirmCancelOpen(true)} className="text-xs px-3">Cancel Service</Button>
-                )}
-                {/* Hard-delete: removes the profile row entirely. Use
-                    when the operator wants to clean up rather than
-                    keep a cancelled record for history. */}
-                <Button
-                  type="button"
-                  variant="danger"
-                  leftIcon={Trash2}
-                  onClick={() => setConfirmDeleteOpen(true)}
-                  className="text-xs px-3"
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-          )}
-        </form>
-      </Modal>
 
       <ConfirmModal
         open={confirmCancelOpen}
@@ -985,15 +750,6 @@ export default function RecurringJobs() {
         destructive
         confirmLabel={deletingService ? 'Deleting…' : 'Delete service'}
         onConfirm={handleDeleteService}
-      />
-
-      {/* Shared new-client modal (same one used at /clients and inside
-          AddRecurringModal). Nested above the edit modal via zLayer 70. */}
-      <NewClientModal
-        open={showNewClient}
-        onClose={() => setShowNewClient(false)}
-        onCreated={handleNewClientCreated}
-        zLayer={70}
       />
     </PageWrapper>
   )

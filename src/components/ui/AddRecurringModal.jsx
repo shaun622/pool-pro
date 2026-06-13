@@ -31,11 +31,40 @@ function blankSchedule() {
     totalVisits: '',
     assignedStaffId: '',
     notes: '',
+    // Edit-only fields — surfaced in ScheduleSection when detailFields is
+    // on (edit mode). Create leaves them blank (auto-title, null price/etc).
+    title: '',
+    jobTypeTemplateId: '',
+    preferredTime: '',
+    price: '',
   }
 }
 
-export default function AddRecurringModal({ open, onClose, business, staff, onCreated }) {
+// Map an existing recurring_job_profiles row into a single schedule
+// object so the unified modal can edit it. Inverse of the payload built
+// in handleSubmit's edit branch.
+function scheduleFromProfile(p) {
+  return {
+    recurrenceRule: p.recurrence_rule || 'weekly',
+    customDays: p.custom_interval_days || 7,
+    firstDate: p.next_generation_at
+      ? String(p.next_generation_at).split('T')[0]
+      : new Date().toISOString().split('T')[0],
+    durationType: p.duration_type || 'ongoing',
+    endDate: p.end_date ? String(p.end_date).split('T')[0] : '',
+    totalVisits: p.total_visits ?? '',
+    assignedStaffId: p.assigned_staff_id || '',
+    notes: p.notes || '',
+    title: p.title || '',
+    jobTypeTemplateId: p.job_type_template_id || '',
+    preferredTime: p.preferred_time ? String(p.preferred_time).slice(0, 5) : '',
+    price: p.price ?? '',
+  }
+}
+
+export default function AddRecurringModal({ open, onClose, business, staff, onCreated, editProfile = null, jobTypes = [] }) {
   const toast = useToast()
+  const isEdit = !!editProfile
   // Loaded data
   const [clients, setClients] = useState([])
   const [clientPools, setClientPools] = useState([])
@@ -103,10 +132,21 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     supabase.from('pools').select('id, name, address').eq('client_id', clientId)
       .then(({ data }) => {
         setClientPools(data || [])
-        // Auto-select if only one pool
-        if (data?.length === 1) setPoolId(data[0].id)
+        // Auto-select if only one pool — but never override an explicit
+        // selection (e.g. the pool we just loaded for an edit).
+        if (data?.length === 1 && !poolId) setPoolId(data[0].id)
       })
   }, [clientId])
+
+  // Edit mode: hydrate client + pool + a single schedule from the profile
+  // when the modal opens. Keyed on the profile id so re-opening Edit for a
+  // different row reloads. Create mode leaves the create defaults intact.
+  useEffect(() => {
+    if (!open || !editProfile) return
+    setClientId(editProfile.client_id || '')
+    setPoolId(editProfile.pool_id || '')
+    setSchedules([scheduleFromProfile(editProfile)])
+  }, [open, editProfile?.id])
 
   function reset() {
     setClientId(''); setPoolId('')
@@ -176,11 +216,73 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     } finally { setEditClientSaving(false) }
   }
 
+  // Shared payload shape for a single schedule → recurring_job_profiles row.
+  // Used by both the edit branch (one row) and create (mapped over N).
+  function scheduleToPayload(s) {
+    const fields = profileFieldsFromForm({
+      rule: s.recurrenceRule,
+      customDays: s.customDays,
+      firstDate: s.firstDate,
+    })
+    const freqLabel = s.recurrenceRule === 'custom'
+      ? `Every ${s.customDays} days`
+      : RECURRENCE_OPTIONS.find(o => o.value === s.recurrenceRule)?.label || s.recurrenceRule
+    return {
+      client_id: clientId,
+      pool_id: poolId,
+      title: (s.title && s.title.trim()) ? s.title.trim() : `Pool Service — ${freqLabel}`,
+      ...fields,
+      job_type_template_id: s.jobTypeTemplateId || null,
+      preferred_time: s.preferredTime || null,
+      price: (s.price !== '' && s.price != null) ? Number(s.price) : null,
+      assigned_staff_id: s.assignedStaffId || null,
+      notes: s.notes.trim() || null,
+      next_generation_at: s.firstDate,
+      duration_type: s.durationType,
+      end_date: s.durationType === 'until_date' ? s.endDate : null,
+      total_visits: s.durationType === 'num_visits' ? Number(s.totalVisits) : null,
+    }
+  }
+
   async function handleSubmit() {
     if (!clientId || !poolId || schedules.length === 0) return
     if (!schedules.every(s => s.firstDate)) return
     setSaving(true)
     try {
+      // ── EDIT ────────────────────────────────────────────────
+      if (editProfile) {
+        const s = schedules[0]
+        const payload = scheduleToPayload(s)
+        if (editProfile.__isLegacy) {
+          // Promote a legacy pool-level schedule to a real profile, then
+          // re-sync the pool mirror — same migrate path the old
+          // RecurringJobs edit form used. is_active/status/completed_visits
+          // are set fresh because the pseudo-profile has no real row yet.
+          const { error: insErr } = await supabase
+            .from('recurring_job_profiles')
+            .insert({ ...payload, business_id: business.id, is_active: true, status: 'active', completed_visits: 0 })
+          if (insErr) throw insErr
+          const freq = s.recurrenceRule === 'custom' ? `${s.customDays}` : s.recurrenceRule
+          await supabase.from('pools').update({
+            schedule_frequency: freq,
+            next_due_at: s.firstDate ? new Date(s.firstDate + 'T09:00:00').toISOString() : null,
+          }).eq('id', poolId)
+        } else {
+          // Normal edit: update the existing row in place. Don't touch
+          // is_active/status/completed_visits or the pool mirror.
+          const { error } = await supabase
+            .from('recurring_job_profiles')
+            .update(payload)
+            .eq('id', editProfile.id)
+          if (error) throw error
+        }
+        toast.success('Recurring service updated')
+        onCreated()
+        reset()
+        return
+      }
+
+      // ── CREATE ──────────────────────────────────────────────
       // Build one insert payload per schedule. profileFieldsFromForm
       // centralises the rule → (preferred_day_of_week, monthly_week_of_month,
       // custom_interval_days) mapping so AddRecurringModal, RecurringJobs,
@@ -281,7 +383,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
 
   return (
     <>
-      <Modal open={open} onClose={handleClose} title="New Recurring Service" size="lg">
+      <Modal open={open} onClose={handleClose} title={isEdit ? 'Edit Recurring Service' : 'New Recurring Service'} size="lg">
         <div className="space-y-6">
 
           {/* ── CLIENT ────────────────────────────────────── */}
@@ -438,20 +540,26 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
                   index={idx}
                   schedule={s}
                   onChange={(patch) => patchSchedule(idx, patch)}
-                  onRemove={schedules.length > 1 ? () => removeSchedule(idx) : null}
-                  showHeader={schedules.length > 1}
+                  onRemove={!isEdit && schedules.length > 1 ? () => removeSchedule(idx) : null}
+                  showHeader={!isEdit && schedules.length > 1}
+                  detailFields={isEdit}
+                  jobTypes={jobTypes}
                   allTechs={allTechs}
                   onAddTech={() => { setPendingTechScheduleIdx(idx); setShowNewTech(true) }}
                 />
               ))}
-              <button
-                type="button"
-                onClick={addSchedule}
-                className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-pool-300 dark:border-pool-700 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors min-h-tap"
-              >
-                <Plus className="w-4 h-4" strokeWidth={2.5} /> Add another schedule
-              </button>
-              {sameDayCollision && (
+              {/* Stacking multiple schedules is a create-only flow — editing
+                  always operates on one existing profile. */}
+              {!isEdit && (
+                <button
+                  type="button"
+                  onClick={addSchedule}
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-pool-300 dark:border-pool-700 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors min-h-tap"
+                >
+                  <Plus className="w-4 h-4" strokeWidth={2.5} /> Add another schedule
+                </button>
+              )}
+              {!isEdit && sameDayCollision && (
                 <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-1.5">
                   Two schedules anchor on the same weekday for this pool. Both will save, but the calendar will only show one stop per day.
                 </p>
@@ -463,9 +571,11 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
           <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
             <Button variant="secondary" onClick={handleClose} disabled={saving} className="flex-1">Cancel</Button>
             <Button onClick={handleSubmit} loading={saving} disabled={!canSubmit} className="flex-1">
-              {schedules.length === 1
-                ? 'Create Recurring Service'
-                : `Create ${schedules.length} Recurring Services`}
+              {isEdit
+                ? 'Save Changes'
+                : schedules.length === 1
+                  ? 'Create Recurring Service'
+                  : `Create ${schedules.length} Recurring Services`}
             </Button>
           </div>
         </div>
@@ -498,7 +608,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
 // Date + RecurrencePicker drive the cadence; duration cards toggle the
 // conditional end-date / num-visits inputs; technician + notes live
 // here too so each schedule can be independently assigned.
-function ScheduleSection({ index, schedule, onChange, onRemove, showHeader, allTechs, onAddTech }) {
+function ScheduleSection({ index, schedule, onChange, onRemove, showHeader, detailFields = false, jobTypes = [], allTechs, onAddTech }) {
   const rule = schedule.recurrenceRule
   const customDays = schedule.customDays
   const firstDate = schedule.firstDate
@@ -541,6 +651,25 @@ function ScheduleSection({ index, schedule, onChange, onRemove, showHeader, allT
             </button>
           )}
         </div>
+      )}
+
+      {/* Detail fields — edit mode only. Service Title + Job Type sit
+          above the date so the operator sees what they're editing first. */}
+      {detailFields && jobTypes.length > 0 && (
+        <Select
+          label="Job Type"
+          value={schedule.jobTypeTemplateId}
+          onChange={e => onChange({ jobTypeTemplateId: e.target.value })}
+          options={[{ value: '', label: 'No template' }, ...jobTypes.map(j => ({ value: j.id, label: j.name }))]}
+        />
+      )}
+      {detailFields && (
+        <Input
+          label="Service Title"
+          value={schedule.title}
+          onChange={e => onChange({ title: e.target.value })}
+          placeholder="e.g. Regular Maintenance"
+        />
       )}
 
       <Input
@@ -609,6 +738,25 @@ function ScheduleSection({ index, schedule, onChange, onRemove, showHeader, allT
           </div>
         )}
       </div>
+
+      {/* Preferred time + price — edit mode only. */}
+      {detailFields && (
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Preferred Time"
+            type="time"
+            value={schedule.preferredTime}
+            onChange={e => onChange({ preferredTime: e.target.value })}
+          />
+          <Input
+            label="Price ($)"
+            type="number"
+            value={schedule.price}
+            onChange={e => onChange({ price: e.target.value })}
+            placeholder="150"
+          />
+        </div>
+      )}
 
       {/* Technician */}
       <Select
