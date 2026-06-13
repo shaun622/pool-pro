@@ -225,7 +225,7 @@ export default function ServiceDetail() {
                 {photos.map((photo, i) => (
                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                     <img
-                      src={photo.url}
+                      src={photo.signed_url || supabase.storage.from('service-photos').getPublicUrl(photo.storage_path).data?.publicUrl}
                       alt={photo.tag || 'Service photo'}
                       className="w-full h-full object-cover"
                     />
