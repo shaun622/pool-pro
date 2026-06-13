@@ -139,7 +139,7 @@ export default function PoolDetail() {
 
   return (
     <>
-      <Header title={pool.address || 'Pool Detail'} backTo={-1} />
+      <Header title={pool.name || pool.address || 'Pool Detail'} backTo={-1} />
       <PageWrapper>
         <div className="space-y-4">
           {/* Client Info */}
@@ -164,6 +164,12 @@ export default function PoolDetail() {
           <Card>
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Pool Info</h2>
             <div className="grid grid-cols-2 gap-3">
+              {pool.name && (
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Address</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-1">{pool.address || '--'}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Type</p>
                 <Badge variant={pool.pool_type || 'default'} className="mt-1">

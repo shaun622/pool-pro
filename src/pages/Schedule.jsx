@@ -248,7 +248,7 @@ function Schedule({ business }) {
     const [jobsRes, poolsRes, profilesRes, staffRes, servicesRes] = await Promise.all([
       supabase
         .from('jobs')
-        .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
+        .select('*, clients(name, email, phone), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
         .gte('scheduled_date', ymd(from))
         .lte('scheduled_date', ymd(to))
@@ -260,7 +260,7 @@ function Schedule({ business }) {
         .eq('business_id', business.id),
       supabase
         .from('recurring_job_profiles')
-        .select('*, clients(name, email, phone), pools(address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
+        .select('*, clients(name, email, phone), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
         .eq('is_active', true),
       supabase
@@ -848,6 +848,14 @@ function StackRow({ stop, onClick }) {
           )}>
             {titleText}
           </p>
+          {stop.pool_name && (
+            <p className={cn(
+              'text-[11.5px] font-medium text-gray-600 dark:text-gray-300 truncate mt-0.5',
+              isDone && 'line-through',
+            )}>
+              {stop.pool_name}
+            </p>
+          )}
           {stop.address && (
             <p className={cn(
               'text-[11.5px] text-gray-500 dark:text-gray-400 truncate mt-0.5',
@@ -979,6 +987,12 @@ function EventCard({ stop, onClick }) {
       )}>
         {titleText}
       </p>
+      {stop.pool_name && (
+        <p className={cn(
+          'text-[10.5px] font-medium text-gray-600 dark:text-gray-300 leading-tight truncate',
+          isDone && 'line-through',
+        )}>{stop.pool_name}</p>
+      )}
       {sub && (
         <p className={cn(
           'text-[10.5px] text-gray-500 dark:text-gray-400 leading-tight truncate',
@@ -1187,6 +1201,14 @@ function TodayRow({ stop, onClick }) {
           )}>
             {titleText}
           </p>
+          {stop.pool_name && (
+            <p className={cn(
+              'text-xs font-medium text-gray-600 dark:text-gray-300 line-clamp-1 mt-0.5',
+              isDone && 'line-through',
+            )}>
+              {stop.pool_name}
+            </p>
+          )}
           {stop.address && (
             <p className={cn(
               'text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5',
@@ -1303,6 +1325,11 @@ function MapView({ pools, onSelect }) {
                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#111827', marginBottom: '2px', lineHeight: 1.3 }}>
                       {pool.clients?.name || 'Unknown Client'}
                     </div>
+                    {pool.name && (
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '2px', lineHeight: 1.3 }}>
+                        {pool.name}
+                      </div>
+                    )}
                     <div style={{ fontSize: '12px', color: '#0CA5EB', marginBottom: '8px', lineHeight: 1.3 }}>
                       {pool.address}
                     </div>
@@ -1364,6 +1391,7 @@ function jobToStop(j) {
     client_id: j.client_id,
     pool_id: j.pool_id,
     client_name: j.clients?.name,
+    pool_name: j.pools?.name || null,
     address: j.pools?.address || null,
     status: j.status,
     scheduled_date: j.scheduled_date,
@@ -1394,6 +1422,7 @@ function profileToStop(profile, occurrenceDate) {
     client_id: profile.client_id,
     pool_id: profile.pool_id,
     client_name: profile.clients?.name,
+    pool_name: profile.pools?.name || null,
     address: profile.pools?.address || null,
     status: 'scheduled',
     scheduled_date: ymd(occurrenceDate),
@@ -1430,6 +1459,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false
     client_id: p.client_id,
     title: 'Pool Service',
     client_name: p.clients?.name,
+    pool_name: p.name || null,
     address: p.address,
     status,
     next_due_at: p.next_due_at,

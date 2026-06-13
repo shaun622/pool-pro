@@ -36,7 +36,7 @@ export default function NewPoolModal({ open, onClose, clientId, clientAddress, o
         ...payload,
         client_id: clientId,
         business_id: business.id,
-      }).select('id, address').single()
+      }).select('id, name, address').single()
       if (error) throw error
       onCreated?.(data)
       onClose?.()

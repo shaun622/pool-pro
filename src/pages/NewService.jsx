@@ -453,6 +453,7 @@ export default function NewService() {
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name || 'Client'}</p>
+                  {pool?.name && <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{pool.name}</p>}
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
                 </div>
                 <Badge variant={pool?.type || 'default'} className="shrink-0 capitalize">{pool?.type || 'pool'}</Badge>
@@ -609,6 +610,7 @@ export default function NewService() {
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name || 'Client'}</p>
+                  {pool?.name && <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{pool.name}</p>}
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
                 </div>
                 <Badge variant={pool?.type || 'default'} className="shrink-0 capitalize">{pool?.type || 'pool'}</Badge>
@@ -1111,6 +1113,7 @@ export default function NewService() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name}</p>
+                  {pool?.name && <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{pool.name}</p>}
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
                 </div>
                 <Badge variant={pool?.type || 'default'}>{pool?.type}</Badge>
@@ -1445,6 +1448,7 @@ export default function NewService() {
               <Check className="w-8 h-8 text-green-600 dark:text-green-400" strokeWidth={2} />
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Service Complete</h2>
+            {pool?.name && <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{pool.name}</p>}
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{pool?.address}</p>
             {client?.email && (
               <p className="text-sm text-green-600 dark:text-green-400 mb-4">

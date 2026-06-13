@@ -95,7 +95,7 @@ export default function TechRunSheet() {
     const [jobsRes, poolsRes, profilesRes] = await Promise.all([
       supabase
         .from('jobs')
-        .select('*, clients(name, phone, email), pools(address, latitude, longitude, type, access_notes)')
+        .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .gte('scheduled_date', ymd(from))
@@ -110,7 +110,7 @@ export default function TechRunSheet() {
         .not('next_due_at', 'is', null),
       supabase
         .from('recurring_job_profiles')
-        .select('*, clients(name, phone, email), pools(address, latitude, longitude, type, access_notes)')
+        .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .eq('is_active', true),
@@ -690,6 +690,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
               {stop.client_name && stop.title && stop.title !== 'Pool Service' && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stop.title}</p>
               )}
+              {stop.pool_name && <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mt-0.5 truncate">{stop.pool_name}</p>}
               {stop.address && <p className="text-xs text-pool-600 dark:text-pool-400 mt-0.5 truncate">{stop.address}</p>}
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
@@ -761,7 +762,7 @@ function jobToStop(j) {
   return {
     type: 'job', id: j.id, title: j.title || 'Job',
     client_id: j.client_id, pool_id: j.pool_id,
-    client_name: j.clients?.name, address: j.pools?.address || null,
+    client_name: j.clients?.name, pool_name: j.pools?.name || null, address: j.pools?.address || null,
     pool_type: j.pools?.type || null, access_notes: j.pools?.access_notes || null,
     status: j.status, scheduled_date: j.scheduled_date,
     scheduled_time: j.scheduled_time, sortTime: j.scheduled_time,
@@ -780,6 +781,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
   return {
     type: 'pool', id: p.id, pool_id: p.id, client_id: p.client_id,
     title: 'Pool Service', client_name: p.clients?.name,
+    pool_name: p.name || null,
     address: p.address, pool_type: p.type || null, access_notes: p.access_notes || null,
     status: isOverdue ? 'overdue' : 'due', sortTime,
     time_display: due ? formatTimeRange(sortTime, 45) : null,
@@ -799,7 +801,7 @@ function profileToStop(profile, date) {
     type: 'job', id: `profile-${profile.id}-${ymd(date)}`,
     title: profile.title || 'Recurring Job',
     client_id: profile.client_id, pool_id: profile.pool_id,
-    client_name: profile.clients?.name, address: profile.pools?.address || null,
+    client_name: profile.clients?.name, pool_name: profile.pools?.name || null, address: profile.pools?.address || null,
     pool_type: profile.pools?.type || null, access_notes: profile.pools?.access_notes || null,
     status: 'scheduled', scheduled_date: ymd(date),
     scheduled_time: time, sortTime: time, time_display: time ? formatTimeRange(time, 60) : null,

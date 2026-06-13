@@ -100,7 +100,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   // Fetch pools when client changes
   useEffect(() => {
     if (!clientId) { setClientPools([]); return }
-    supabase.from('pools').select('id, address').eq('client_id', clientId)
+    supabase.from('pools').select('id, name, address').eq('client_id', clientId)
       .then(({ data }) => {
         setClientPools(data || [])
         // Auto-select if only one pool
@@ -409,7 +409,10 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
                             : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-600'
                         )}>
                         <MapPin className={cn('w-4 h-4 shrink-0', poolId === p.id ? 'text-pool-600 dark:text-pool-400' : 'text-gray-400 dark:text-gray-500')} strokeWidth={2} />
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.address}</span>
+                        <span className="min-w-0 flex-1">
+                          {p.name && <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.name}</span>}
+                          <span className={cn('block truncate', p.name ? 'text-xs text-gray-500 dark:text-gray-400' : 'text-sm font-medium text-gray-900 dark:text-gray-100')}>{p.address}</span>
+                        </span>
                       </button>
                     ))}
                   </div>

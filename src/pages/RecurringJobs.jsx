@@ -124,14 +124,14 @@ export default function RecurringJobs() {
     // stops that aren't editable from /recurring today — that's the
     // gap this fetch closes.
     const [profilesRes, clientsRes, staffRes, jobTypesRes, legacyPoolsRes] = await Promise.all([
-      supabase.from('recurring_job_profiles').select('*, clients(name), pools(address), staff_members:assigned_staff_id(name), job_type_templates:job_type_template_id(name, color)')
+      supabase.from('recurring_job_profiles').select('*, clients(name), pools(name, address), staff_members:assigned_staff_id(name), job_type_templates:job_type_template_id(name, color)')
         .eq('business_id', business.id).order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, name, pools(id, address)').eq('business_id', business.id).order('name'),
+      supabase.from('clients').select('id, name, pools(id, name, address)').eq('business_id', business.id).order('name'),
       supabase.from('staff_members').select('id, name').eq('business_id', business.id).eq('is_active', true).order('name'),
       supabase.from('job_type_templates').select('id, name, color, default_tasks, estimated_duration_minutes, default_price')
         .eq('business_id', business.id).eq('is_active', true).order('name'),
       supabase.from('pools')
-        .select('id, address, schedule_frequency, next_due_at, client_id, business_id, assigned_staff_id, clients(name)')
+        .select('id, name, address, schedule_frequency, next_due_at, client_id, business_id, assigned_staff_id, clients(name)')
         .eq('business_id', business.id)
         .not('schedule_frequency', 'is', null)
         .not('next_due_at', 'is', null),
@@ -164,7 +164,7 @@ export default function RecurringJobs() {
       business_id: p.business_id,
       assigned_staff_id: p.assigned_staff_id || null,
       clients: p.clients,
-      pools: { id: p.id, address: p.address },
+      pools: { id: p.id, name: p.name, address: p.address },
       // Map legacy schedule_frequency onto the recurrence_rule field
       // the rest of the code expects.
       recurrence_rule: p.schedule_frequency,
@@ -763,6 +763,11 @@ export default function RecurringJobs() {
                   <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
                     {selectedProfile.clients?.name || 'Unknown client'}
                   </p>
+                  {selectedProfile.pools?.name && (
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-300 truncate">
+                      {selectedProfile.pools.name}
+                    </p>
+                  )}
                   {selectedProfile.pools?.address && (
                     <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
                       {selectedProfile.pools.address}

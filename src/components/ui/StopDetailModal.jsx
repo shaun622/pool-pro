@@ -869,6 +869,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             ) : stop.client_name ? (
               <p className="text-sm text-gray-500 mt-0.5">{stop.client_name}</p>
             ) : null}
+            {stop.pool_name && (
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{stop.pool_name}</p>
+            )}
             {/* Linkage label — when this stop belongs to a recurring
                 schedule, show "Tri-weekly Mon, Tue, Wed" so the
                 operator never edits/deletes a stop without seeing

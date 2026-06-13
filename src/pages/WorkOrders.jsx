@@ -233,7 +233,7 @@ export default function WorkOrders() {
   // Fetch pools when client changes
   useEffect(() => {
     if (!jobForm.client_id) { setClientPools([]); return }
-    supabase.from('pools').select('id, address').eq('client_id', jobForm.client_id)
+    supabase.from('pools').select('id, name, address').eq('client_id', jobForm.client_id)
       .then(({ data }) => setClientPools(data || []))
   }, [jobForm.client_id])
 
@@ -695,7 +695,7 @@ export default function WorkOrders() {
                 onChange={e => setJobForm(prev => ({ ...prev, pool_id: e.target.value }))}
                 options={[
                   { value: '', label: 'No Pool — General Items' },
-                  ...clientPools.map(p => ({ value: p.id, label: p.address })),
+                  ...clientPools.map(p => ({ value: p.id, label: p.name ? `${p.name} — ${p.address}` : p.address })),
                 ]}
               />
               {!showNewPool ? (

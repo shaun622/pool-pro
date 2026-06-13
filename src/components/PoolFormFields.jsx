@@ -16,6 +16,7 @@ import { useBusiness } from '../hooks/useBusiness'
 const SANUR = { lat: -8.6803, lng: 115.2623 }
 
 export const emptyPool = {
+  name: '',
   address: '',
   latitude: null,
   longitude: null,
@@ -45,6 +46,7 @@ export async function buildPoolPayload(poolForm) {
   }
   return {
     ...rest,
+    name: rest.name?.trim() || null,
     volume_litres: volume_litres ? Number(volume_litres) : null,
     equipment: { pump_model, filter_type, heater },
     schedule_frequency: regular_service ? rest.schedule_frequency : null,
@@ -76,6 +78,14 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress })
 
   return (
     <>
+      <Input
+        label="Pool Name"
+        name="name"
+        value={poolForm.name || ''}
+        onChange={handlePoolChange}
+        placeholder="e.g. Main pool, Spa, Rooftop (optional)"
+      />
+
       <label className={cn('flex items-center gap-2 min-h-tap', clientAddress ? 'cursor-pointer' : 'cursor-not-allowed opacity-50')}>
         <input
           type="checkbox"
