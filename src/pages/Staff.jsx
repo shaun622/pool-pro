@@ -101,6 +101,13 @@ export default function Staff() {
   // don't consume a seat against the plan limit.
   const activeCount = admins.filter(m => !m._virtual).length + technicians.length
 
+  // Whether there's anyone to render. Must count the synthetic owner row
+  // (ownerVirtual lands in `admins`), NOT just the raw staff_members rows
+  // in `staff`. Gating the page on `staff.length === 0` made the owner —
+  // and the whole section — vanish the moment the last technician was
+  // deleted, reappearing only once a new staff row existed again.
+  const hasMembers = admins.length > 0 || technicians.length > 0 || inactive.length > 0
+
   function openAdd(roleHint = 'tech') {
     if (!canAddStaff) {
       toast.error(`Your ${business?.plan || 'trial'} plan allows up to ${staffLimit} staff member${staffLimit !== 1 ? 's' : ''}. Upgrade to add more.`)
@@ -327,7 +334,7 @@ export default function Staff() {
         </Badge>
       </div>
 
-      {staff.length === 0 ? (
+      {!hasMembers ? (
         <EmptyState
           title="No team members yet"
           description="Add admins so your business owners and managers can log in, or technicians for field workers using the tech app."
