@@ -1,16 +1,35 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useBusiness } from '../../hooks/useBusiness'
+import { useLanguage, LANGUAGES } from '../../contexts/LanguageContext'
+import { supabase } from '../../lib/supabase'
+import { cn } from '../../lib/utils'
 
 export default function TechShell() {
   const { signOut } = useAuth()
   const { business, staffRecord } = useBusiness()
+  const { lang, setLang, seedFromProfile, t } = useLanguage()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const techName = staffRecord?.name || 'Tech'
   const initials = techName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+
+  // Adopt the tech's saved language the first time they load on a device
+  // (no local choice yet). Their explicit toggle always wins after that.
+  useEffect(() => {
+    if (staffRecord?.preferred_language) seedFromProfile(staffRecord.preferred_language)
+  }, [staffRecord?.preferred_language, seedFromProfile])
+
+  function changeLang(code) {
+    setLang(code)
+    // Best-effort persist so it follows the tech across devices. Failure
+    // is non-fatal — the local choice still applies this session.
+    if (staffRecord?.id) {
+      supabase.from('staff_members').update({ preferred_language: code }).eq('id', staffRecord.id).then(() => {})
+    }
+  }
 
   return (
     <>
@@ -28,9 +47,31 @@ export default function TechShell() {
           </div>
 
           {/* Business name */}
-          <p className="text-xs text-gray-400 dark:text-gray-500 font-medium truncate max-w-[40%] text-center">
+          <p className="text-xs text-gray-400 dark:text-gray-500 font-medium truncate flex-1 text-center px-2">
             {business?.name || ''}
           </p>
+
+          <div className="flex items-center gap-2">
+            {/* EN/ID language switch — always visible so a tech can change
+                it without navigating menus. */}
+            <div className="flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-0.5">
+              {LANGUAGES.map(l => (
+                <button
+                  key={l.code}
+                  type="button"
+                  onClick={() => changeLang(l.code)}
+                  className={cn(
+                    'px-2 py-1 rounded-full text-[11px] font-bold min-h-tap leading-none transition-colors',
+                    lang === l.code
+                      ? 'bg-white dark:bg-gray-700 text-pool-600 dark:text-pool-300 shadow-sm'
+                      : 'text-gray-400 dark:text-gray-500',
+                  )}
+                  aria-pressed={lang === l.code}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
 
           {/* Profile menu */}
           <div className="relative">
@@ -57,7 +98,7 @@ export default function TechShell() {
                     <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    My Profile
+                    {t('nav.profile')}
                   </button>
                   <button
                     onClick={async () => { setMenuOpen(false); await signOut(); navigate('/login') }}
@@ -66,11 +107,12 @@ export default function TechShell() {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    Log Out
+                    {t('nav.logout')}
                   </button>
                 </div>
               </>
             )}
+          </div>
           </div>
         </div>
       </header>

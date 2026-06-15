@@ -4,11 +4,13 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import { useAuth } from '../../hooks/useAuth'
 import { useBusiness } from '../../hooks/useBusiness'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 
 export default function TechProfile() {
   const { user, signOut } = useAuth()
   const { staffRecord, refetch } = useBusiness()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const fileRef = useRef()
 
@@ -21,6 +23,7 @@ export default function TechProfile() {
   const [newPassword, setNewPassword] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
   const [pwMessage, setPwMessage] = useState('')
+  const [pwError, setPwError] = useState(false)
 
   function handlePhotoSelect(e) {
     const file = e.target.files?.[0]
@@ -65,19 +68,23 @@ export default function TechProfile() {
   async function handlePasswordChange(e) {
     e.preventDefault()
     if (!newPassword || newPassword.length < 6) {
-      setPwMessage('Password must be at least 6 characters.')
+      setPwError(true)
+      setPwMessage(t('profile.pwTooShort'))
       return
     }
     setPwSaving(true)
     setPwMessage('')
+    setPwError(false)
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
-      setPwMessage('Password updated successfully.')
+      setPwError(false)
+      setPwMessage(t('profile.pwUpdated'))
       setCurrentPassword('')
       setNewPassword('')
     } catch (err) {
-      setPwMessage(err.message || 'Failed to update password.')
+      setPwError(true)
+      setPwMessage(err.message || t('profile.pwFailed'))
     } finally {
       setPwSaving(false)
     }
@@ -95,10 +102,10 @@ export default function TechProfile() {
       {/* Back button */}
       <button onClick={() => navigate('/tech')} className="flex items-center gap-1 py-3 text-sm text-pool-600 dark:text-pool-400 font-semibold">
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-        Back to Run Sheet
+        {t('profile.backToRunSheet')}
       </button>
 
-      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">My Profile</h1>
+      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">{t('profile.title')}</h1>
 
       {/* Avatar */}
       <div className="flex flex-col items-center gap-3 mb-6">
@@ -119,27 +126,27 @@ export default function TechProfile() {
 
       {/* Profile fields */}
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 p-4 space-y-4 mb-4">
-        <Input label="Name" value={name} onChange={e => setName(e.target.value)} />
-        <Input label="Email" value={user?.email || staffRecord?.email || ''} disabled className="opacity-60" />
-        <Input label="Phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0400 000 000" />
-        <Button onClick={handleSave} loading={saving} className="w-full min-h-tap">Save Changes</Button>
+        <Input label={t('profile.name')} value={name} onChange={e => setName(e.target.value)} />
+        <Input label={t('profile.email')} value={user?.email || staffRecord?.email || ''} disabled className="opacity-60" />
+        <Input label={t('profile.phone')} value={phone} onChange={e => setPhone(e.target.value)} placeholder="0400 000 000" />
+        <Button onClick={handleSave} loading={saving} className="w-full min-h-tap">{t('profile.saveChanges')}</Button>
       </div>
 
       {/* Password */}
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 p-4 mb-4">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Change Password</h2>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('profile.changePassword')}</h2>
         <form onSubmit={handlePasswordChange} className="space-y-3">
-          <Input label="New Password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
+          <Input label={t('profile.newPasswordLabel')} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder={t('profile.passwordHint')} />
           {pwMessage && (
-            <p className={cn('text-xs font-medium', pwMessage.includes('success') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>{pwMessage}</p>
+            <p className={cn('text-xs font-medium', pwError ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')}>{pwMessage}</p>
           )}
-          <Button type="submit" variant="secondary" loading={pwSaving} className="w-full min-h-tap">Update Password</Button>
+          <Button type="submit" variant="secondary" loading={pwSaving} className="w-full min-h-tap">{t('profile.updatePassword')}</Button>
         </form>
       </div>
 
       {/* Logout */}
       <button onClick={handleLogout} className="w-full py-3 rounded-xl bg-white dark:bg-gray-900 border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 active:scale-[0.98] transition-all min-h-tap mb-4">
-        Log Out
+        {t('profile.logout')}
       </button>
 
       <p className="text-center text-xs text-gray-300 dark:text-gray-600">PoolPro v1.0</p>
