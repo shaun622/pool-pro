@@ -7,6 +7,7 @@ import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
 import { useService } from '../hooks/useService'
 import { useBusiness } from '../hooks/useBusiness'
+import { useLanguage, translateTaskName } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import Badge from '../components/ui/Badge'
 import { useToast } from '../contexts/ToastContext'
@@ -67,6 +68,7 @@ export default function NewService() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { business, staffRecord, userRole } = useBusiness()
+  const { t, lang } = useLanguage()
   const {
     loading: serviceLoading,
     createServiceRecord,
@@ -369,7 +371,7 @@ export default function NewService() {
       findNextStop()
     } catch (err) {
       console.error('Error completing service:', err)
-      toast.error('Failed to complete service: ' + (err?.message || JSON.stringify(err)))
+      toast.error(t('service.completeFailed') + (err?.message || JSON.stringify(err)))
     } finally {
       setSubmitting(false)
     }
@@ -405,7 +407,7 @@ export default function NewService() {
   if (loading) {
     return (
       <>
-        <Header title="Loading..." backTo={-1} />
+        <Header title={t('service.loading')} backTo={-1} />
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin h-8 w-8 border-4 border-pool-500 border-t-transparent rounded-full" />
@@ -417,7 +419,7 @@ export default function NewService() {
 
   return (
     <>
-      <Header title={completed ? "Service Complete" : "New Service"} backTo={-1} />
+      <Header title={completed ? t('service.headerComplete') : t('service.headerNew')} backTo={-1} />
       <PageWrapper>
         {/* Progress bar */}
         {!completed && <div className="mb-6">
@@ -431,7 +433,7 @@ export default function NewService() {
                   i === step ? 'text-pool-600' : i < step ? 'text-green-600' : 'text-gray-400 dark:text-gray-500'
                 )}
               >
-                {label}
+                {t(`service.step.${label.toLowerCase()}`)}
               </button>
             ))}
           </div>
@@ -461,7 +463,7 @@ export default function NewService() {
             </Card>
 
             <div>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Arrival photo</h2>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('service.arrivalPhoto')}</h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                 Take a live photo at the pool to confirm you're on site. Timestamp and GPS are baked into the image automatically.
               </p>
@@ -573,7 +575,7 @@ export default function NewService() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <span className="text-sm font-medium text-pool-600 dark:text-pool-400">Processing photo...</span>
+                      <span className="text-sm font-medium text-pool-600 dark:text-pool-400">{t('service.processingPhoto')}</span>
                     </>
                   ) : (
                     <>
@@ -581,7 +583,7 @@ export default function NewService() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                       </svg>
-                      <span className="text-sm font-medium">Tap to take photo</span>
+                      <span className="text-sm font-medium">{t('service.tapTakePhoto')}</span>
                       <span className="text-xs text-gray-400 dark:text-gray-500">GPS & timestamp verified automatically</span>
                     </>
                   )}
@@ -594,10 +596,10 @@ export default function NewService() {
               disabled={!servicePhoto}
               className="w-full min-h-[48px] mt-2"
             >
-              Continue
+              {t('common.continue')}
             </Button>
             {!servicePhoto && (
-              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">Photo required to continue</p>
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">{t('service.photoRequired')}</p>
             )}
           </div>
         )}
@@ -647,7 +649,7 @@ export default function NewService() {
             {/* Staff selector */}
             {staffList.length > 0 && (
               <Select
-                label="Technician"
+                label={t('service.technician')}
                 value={selectedStaffId}
                 onChange={e => setSelectedStaffId(e.target.value)}
                 options={[
@@ -656,7 +658,7 @@ export default function NewService() {
                 ]}
               />
             )}
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chemical Readings</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('service.chemicalReadings')}</h2>
             {ALL_READING_FIELDS.filter(f => visibleReadings.includes(f.key)).map(({ key, rangeKey, saltOnly }) => {
               if (saltOnly && !isSaltPool) return null
               const info = CHEMICAL_LABELS[key]
@@ -746,7 +748,7 @@ export default function NewService() {
               if (available.length === 0) return null
               return (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Add reading</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{t('service.addReading')}</label>
                   <select
                     className="input"
                     value=""
@@ -756,7 +758,7 @@ export default function NewService() {
                       }
                     }}
                   >
-                    <option value="">Select a reading...</option>
+                    <option value="">{t('service.selectReading')}</option>
                     {available.map(f => {
                       const info = CHEMICAL_LABELS[f.key]
                       return (
@@ -778,10 +780,10 @@ export default function NewService() {
                 pipeline (GPS + timestamp baked in) for consistency. */}
             <div className="mt-4">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Photo <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(optional)</span>
+                {t('service.photo')} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">{t('service.optionalParen')}</span>
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                Snap anything worth recording — water condition, equipment, an issue. Skip if nothing to add.
+                {t('service.extraPhotoHint')}
               </p>
               <input
                 ref={extraPhotoInputRef}
@@ -877,7 +879,7 @@ export default function NewService() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <span className="text-xs font-medium text-pool-600 dark:text-pool-400">Processing photo...</span>
+                      <span className="text-xs font-medium text-pool-600 dark:text-pool-400">{t('service.processingPhoto')}</span>
                     </>
                   ) : (
                     <>
@@ -885,7 +887,7 @@ export default function NewService() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                       </svg>
-                      <span className="text-sm font-medium">Tap to add photo</span>
+                      <span className="text-sm font-medium">{t('service.tapAddPhoto')}</span>
                     </>
                   )}
                 </button>
@@ -896,7 +898,7 @@ export default function NewService() {
               onClick={() => setStep(2)}
               className="w-full min-h-[48px] mt-4"
             >
-              Next: Tasks
+              {t('service.nextTasks')}
             </Button>
           </div>
         )}
@@ -905,7 +907,7 @@ export default function NewService() {
         {step === 2 && !completed && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Task Checklist</h2>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('service.taskChecklist')}</h2>
               <span className="text-sm text-gray-500 dark:text-gray-400">{completedCount}/{tasks.length}</span>
             </div>
 
@@ -935,7 +937,7 @@ export default function NewService() {
                       )}
                     </span>
                     <span className="text-sm font-medium">
-                      {task.name}
+                      {translateTaskName(task.name, lang)}
                       {task.required && (
                         <span className="text-red-500 ml-1" aria-label="required">*</span>
                       )}
@@ -960,7 +962,7 @@ export default function NewService() {
               if (available.length === 0) return null
               return (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Add common task</label>
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{t('service.addCommonTask')}</label>
                   <select
                     className="input"
                     value=""
@@ -970,9 +972,9 @@ export default function NewService() {
                       }
                     }}
                   >
-                    <option value="">Select a task...</option>
-                    {available.map(t => (
-                      <option key={t} value={t}>{t}</option>
+                    <option value="">{t('service.selectTask')}</option>
+                    {available.map(name => (
+                      <option key={name} value={name}>{translateTaskName(name, lang)}</option>
                     ))}
                   </select>
                 </div>
@@ -981,12 +983,12 @@ export default function NewService() {
 
             {/* Custom task input */}
             <div>
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">Add custom task</label>
+              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{t('service.addCustomTask')}</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   className="input flex-1"
-                  placeholder="e.g. Replaced O-ring"
+                  placeholder={t('service.customTaskPlaceholder')}
                   value={customTask}
                   onChange={e => setCustomTask(e.target.value)}
                   onKeyDown={e => {
@@ -1014,14 +1016,14 @@ export default function NewService() {
 
             <div className="flex gap-3 mt-4">
               <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
-                Back
+                {t('common.back')}
               </Button>
               <Button
                 onClick={() => setStep(3)}
                 disabled={!allRequiredDone}
                 className="flex-1 min-h-[48px]"
               >
-                Next: Chemicals
+                {t('service.nextAdded')}
               </Button>
             </div>
             {!allRequiredDone && (
@@ -1040,7 +1042,7 @@ export default function NewService() {
             20260508 migration plus whatever the admin adds). */}
         {step === 3 && !completed && (
           <div className="space-y-3">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chemicals Added</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('service.chemicalsAddedTitle')}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">
               Enter the amount of each chemical you used. Leave blank if not used.
             </p>
@@ -1074,7 +1076,7 @@ export default function NewService() {
                         type="text"
                         value={chem.dose_text}
                         onChange={e => updateChemical(i, 'dose_text', e.target.value)}
-                        placeholder="e.g. 100g"
+                        placeholder={t('service.egDose')}
                         className="input !w-full text-right"
                         aria-label={`${chem.product_name} added`}
                       />
@@ -1084,7 +1086,7 @@ export default function NewService() {
                         type="text"
                         value={chem.stock_remaining}
                         onChange={e => updateChemical(i, 'stock_remaining', e.target.value)}
-                        placeholder="e.g. 3kg"
+                        placeholder={t('service.egStock')}
                         className="input !w-full text-right"
                         aria-label={`${chem.product_name} stock remaining`}
                       />
@@ -1096,10 +1098,10 @@ export default function NewService() {
 
             <div className="flex gap-3 mt-4">
               <Button variant="secondary" onClick={() => setStep(2)} className="flex-1 min-h-[48px]">
-                Back
+                {t('common.back')}
               </Button>
               <Button onClick={() => setStep(4)} className="flex-1 min-h-[48px]">
-                Next: Review
+                {t('service.nextReview')}
               </Button>
             </div>
           </div>
@@ -1141,7 +1143,7 @@ export default function NewService() {
             {/* Pool photo */}
             {photoPreview && (
               <Card>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pool & Test Kit Photo</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('service.poolTestKitPhoto')}</h3>
                 <img
                   src={photoPreview}
                   alt="Pool & test kit"
@@ -1152,9 +1154,9 @@ export default function NewService() {
 
             {/* Chemical readings summary */}
             <Card>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemical Readings</h3>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('service.chemicalReadings')}</h3>
               {lastReadings && (
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Compared to last service</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{t('service.comparedToLast')}</p>
               )}
               <div className="space-y-2">
                 {ALL_READING_FIELDS.map(({ key, rangeKey, saltOnly }) => {
@@ -1194,7 +1196,7 @@ export default function NewService() {
                   )
                 })}
                 {Object.values(readings).every(v => v === '') && (
-                  <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">No readings recorded</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">{t('service.noReadings')}</p>
                 )}
               </div>
             </Card>
@@ -1202,7 +1204,7 @@ export default function NewService() {
             {/* Tasks summary */}
             <Card>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Tasks</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('service.tasksTitle')}</h3>
                 <span className={cn(
                   'text-xs font-medium px-2 py-0.5 rounded-full',
                   completedCount === tasks.length ? 'bg-green-100 text-green-700' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
@@ -1237,7 +1239,7 @@ export default function NewService() {
               if (used.length === 0) return null
               return (
                 <Card>
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Chemicals</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('service.chemicalsTitle')}</h3>
                   <div className="space-y-2">
                     {used.map((c, i) => (
                       <div key={i} className="flex items-center justify-between text-sm gap-3">
@@ -1260,7 +1262,7 @@ export default function NewService() {
             {/* Next service */}
             <Card className="bg-gray-50 dark:bg-gray-800">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Next service due</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{t('service.nextServiceDue')}</span>
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
                 </span>
@@ -1276,10 +1278,10 @@ export default function NewService() {
                 gate at step 0. */}
             <div>
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Completion photo <span className="text-red-500" aria-label="required">*</span>
+                {t('service.completionPhoto')} <span className="text-red-500" aria-label="required">*</span>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                Snap a finishing shot — timestamp + GPS baked in automatically.
+                {t('service.completionHint')}
               </p>
               <input
                 ref={completionPhotoInputRef}
@@ -1389,7 +1391,7 @@ export default function NewService() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <span className="text-xs font-medium text-pool-600 dark:text-pool-400">Processing photo...</span>
+                      <span className="text-xs font-medium text-pool-600 dark:text-pool-400">{t('service.processingPhoto')}</span>
                     </>
                   ) : (
                     <>
@@ -1397,7 +1399,7 @@ export default function NewService() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                       </svg>
-                      <span className="text-sm font-medium">Tap to take completion photo</span>
+                      <span className="text-sm font-medium">{t('service.tapTakeCompletion')}</span>
                     </>
                   )}
                 </button>
@@ -1406,23 +1408,23 @@ export default function NewService() {
 
             {/* Notes */}
             <TextArea
-              label="Notes / Recommendations"
+              label={t('service.notesLabel')}
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Any notes for the client or for next visit..."
+              placeholder={t('service.notesPlaceholder')}
               rows={3}
             />
 
             {/* Email notice */}
             <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
               {client?.email
-                ? `A service report will be emailed to ${client.email}`
-                : 'No client email set — report will be saved but not emailed'}
+                ? t('service.emailNotice', { email: client.email })
+                : t('service.noEmailNotice')}
             </p>
 
             <div className="flex gap-3">
               <Button variant="secondary" onClick={() => setStep(3)} className="flex-1 min-h-[48px]">
-                Back
+                {t('common.back')}
               </Button>
               <Button
                 onClick={handleComplete}
@@ -1430,12 +1432,12 @@ export default function NewService() {
                 disabled={!completionPhoto}
                 className="flex-1 min-h-[52px] text-base font-semibold bg-green-600 hover:bg-green-700 active:bg-green-800"
               >
-                Complete Service
+                {t('service.completeService')}
               </Button>
             </div>
             {!completionPhoto && (
               <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">
-                Take a completion photo to finish the service
+                {t('service.takeCompletionToFinish')}
               </p>
             )}
           </div>
@@ -1447,17 +1449,17 @@ export default function NewService() {
             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
               <Check className="w-8 h-8 text-green-600 dark:text-green-400" strokeWidth={2} />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Service Complete</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">{t('service.serviceComplete')}</h2>
             {pool?.name && <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{pool.name}</p>}
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{pool?.address}</p>
             {client?.email && (
               <p className="text-sm text-green-600 dark:text-green-400 mb-4">
-                Report sent to {client.email}
+                {t('service.reportSentTo', { email: client.email })}
               </p>
             )}
             <Card className="w-full bg-gray-50 dark:bg-gray-800 mb-6">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Next service</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{t('service.nextService')}</span>
                 <span className="text-sm font-semibold text-pool-600 dark:text-pool-400">
                   {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
                 </span>
@@ -1469,7 +1471,7 @@ export default function NewService() {
                   className="flex-1 min-h-[48px] bg-green-600 hover:bg-green-700"
                   onClick={() => navigate(`/pools/${nextStop.id}/service?staff=${staffRecord?.id}`)}
                 >
-                  Next Stop →
+                  {t('service.nextStop')}
                 </Button>
               ) : (
                 <>
@@ -1478,13 +1480,13 @@ export default function NewService() {
                     className="flex-1 min-h-[48px]"
                     onClick={() => navigate(`/pools/${poolId}`)}
                   >
-                    View Pool
+                    {t('service.viewPool')}
                   </Button>
                   <Button
                     className="flex-1 min-h-[48px]"
                     onClick={() => navigate(isTech ? '/tech' : '/schedule')}
                   >
-                    {isTech ? 'Run Sheet' : 'Next Pool'}
+                    {isTech ? t('service.runSheet') : t('service.nextPool')}
                   </Button>
                 </>
               )}
@@ -1494,11 +1496,11 @@ export default function NewService() {
                 onClick={() => navigate('/tech')}
                 className="text-sm text-pool-600 dark:text-pool-400 font-semibold mt-2"
               >
-                Back to Run Sheet
+                {t('profile.backToRunSheet')}
               </button>
             )}
             {isTech && !nextStop && (
-              <p className="text-sm text-green-600 dark:text-green-400 font-medium mt-2">All stops completed for today!</p>
+              <p className="text-sm text-green-600 dark:text-green-400 font-medium mt-2">{t('service.allStopsDone')}</p>
             )}
           </div>
         )}
