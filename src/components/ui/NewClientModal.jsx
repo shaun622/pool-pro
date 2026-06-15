@@ -8,7 +8,9 @@ import { supabase } from '../../lib/supabase'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useToast } from '../../contexts/ToastContext'
 
-const EMPTY = { name: '', email: '', phone: '', address: '', notes: '' }
+// lat/lng are transient — they drive the inline map preview only. The
+// clients table has no coordinate columns, so they're not persisted.
+const EMPTY = { name: '', email: '', phone: '', address: '', notes: '', lat: null, lng: null }
 
 /**
  * Quick "Add new client" modal — used as a nested modal from other create flows.
@@ -183,9 +185,14 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
         <AddressAutocomplete
           label="Address"
           value={form.address}
-          onChange={v => setForm(p => ({ ...p, address: v }))}
-          onSelect={({ address }) => setForm(p => ({ ...p, address }))}
+          // Free typing clears the pin so a stale location isn't shown;
+          // picking a suggestion sets the coords and reveals the map.
+          onChange={v => setForm(p => ({ ...p, address: v, lat: null, lng: null }))}
+          onSelect={({ address, lat, lng }) => setForm(p => ({ ...p, address, lat, lng }))}
           placeholder="Start typing a street address..."
+          mapPreview
+          lat={form.lat}
+          lng={form.lng}
         />
         <TextArea
           label="Notes"

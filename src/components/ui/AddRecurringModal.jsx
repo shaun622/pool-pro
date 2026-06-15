@@ -8,7 +8,7 @@ import NewClientModal from './NewClientModal'
 import NewPoolModal from './NewPoolModal'
 import NewTechnicianModal from './NewTechnicianModal'
 import { supabase } from '../../lib/supabase'
-import { cn } from '../../lib/utils'
+import { cn, formatDateWithDay } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
 import RecurrencePicker from './RecurrencePicker'
 import {
@@ -672,12 +672,17 @@ function ScheduleSection({ index, schedule, onChange, onRemove, showHeader, deta
         />
       )}
 
-      <Input
-        label="First service date"
-        type="date"
-        value={firstDate}
-        onChange={e => onChange({ firstDate: e.target.value })}
-      />
+      <div>
+        <Input
+          label="First service date"
+          type="date"
+          value={firstDate}
+          onChange={e => onChange({ firstDate: e.target.value })}
+        />
+        {firstDate && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDateWithDay(firstDate)}</p>
+        )}
+      </div>
 
       <RecurrencePicker
         value={{ rule, customDays }}

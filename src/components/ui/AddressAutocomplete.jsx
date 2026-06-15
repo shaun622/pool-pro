@@ -1,8 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
+import L from 'leaflet'
 import { cn } from '../../lib/utils'
-import { geocodeAddress } from '../../lib/mapbox'
+import { geocodeAddress, MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
 
 const GOOGLE_KEY = import.meta.env.VITE_GOOGLE_PLACES_KEY
+
+// Small teardrop pin for the inline location preview.
+const previewPin = L.divIcon({
+  className: 'address-preview-pin',
+  html: `<div style="
+    background:#0CA5EB;color:white;width:28px;height:28px;border-radius:50% 50% 50% 0;
+    transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
+    border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  "><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" style="transform:rotate(45deg);"><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg></div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+})
+
+// Recenter the preview map whenever the selected coords change (e.g. the
+// operator picks a different suggestion).
+function RecenterMap({ lat, lng }) {
+  const map = useMap()
+  useEffect(() => {
+    if (lat != null && lng != null) map.setView([lat, lng], 15)
+  }, [lat, lng, map])
+  return null
+}
 
 /**
  * Address input with Google Places (New) autocomplete.
@@ -16,6 +40,9 @@ const GOOGLE_KEY = import.meta.env.VITE_GOOGLE_PLACES_KEY
  *   placeholder
  *   required
  *   className
+ *   mapPreview  — when true, render a small location map below the input
+ *                 once lat/lng are known
+ *   lat, lng    — current selected coordinates (parent-owned) for the preview
  */
 export default function AddressAutocomplete({
   label,
@@ -25,6 +52,9 @@ export default function AddressAutocomplete({
   placeholder = 'Start typing an address...',
   required,
   className,
+  mapPreview = false,
+  lat = null,
+  lng = null,
   ...rest
 }) {
   const [suggestions, setSuggestions] = useState([])
@@ -193,6 +223,28 @@ export default function AddressAutocomplete({
 
       {loading && (
         <p className="text-xs text-gray-400 dark:text-gray-500">Searching…</p>
+      )}
+
+      {/* Inline location preview — shows once an address has been geocoded
+          to coordinates (picking a suggestion sets lat/lng on the parent). */}
+      {mapPreview && lat != null && lng != null && (
+        <div className="h-40 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 mt-2">
+          <MapContainer
+            center={[lat, lng]}
+            zoom={15}
+            scrollWheelZoom={false}
+            style={{ height: '100%', width: '100%' }}
+            zoomControl={false}
+            attributionControl={false}
+          >
+            <TileLayer
+              url={MAPBOX_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'}
+              attribution={MAPBOX_ATTRIBUTION}
+            />
+            <Marker position={[lat, lng]} icon={previewPin} />
+            <RecenterMap lat={lat} lng={lng} />
+          </MapContainer>
+        </div>
       )}
     </div>
   )

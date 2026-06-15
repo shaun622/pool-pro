@@ -5,7 +5,7 @@ import Input, { Select, TextArea } from './ui/Input'
 import AddressAutocomplete from './ui/AddressAutocomplete'
 import Modal from './ui/Modal'
 import Button from './ui/Button'
-import { POOL_TYPES, POOL_SHAPES, SCHEDULE_FREQUENCIES, FREQUENCY_LABELS, cn } from '../lib/utils'
+import { POOL_TYPES, POOL_SHAPES, SCHEDULE_FREQUENCIES, FREQUENCY_LABELS, cn, formatDateWithDay } from '../lib/utils'
 import { geocodeAddress, reverseGeocode, MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
 import { supabase } from '../lib/supabase'
 import { useBusiness } from '../hooks/useBusiness'
@@ -138,6 +138,9 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress, s
               setPoolForm(prev => ({ ...prev, address, latitude: lat, longitude: lng }))
             }
             placeholder="Start typing an address (or type freely if not found)..."
+            mapPreview
+            lat={poolForm.latitude}
+            lng={poolForm.longitude}
           />
           <ManualPinPicker
             address={poolForm.address}
@@ -202,13 +205,18 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress, s
                   onChange={handlePoolChange}
                   options={freqOptions}
                 />
-                <Input
-                  label="First Service Date"
-                  name="first_service_date"
-                  type="date"
-                  value={poolForm.first_service_date}
-                  onChange={handlePoolChange}
-                />
+                <div>
+                  <Input
+                    label="First Service Date"
+                    name="first_service_date"
+                    type="date"
+                    value={poolForm.first_service_date}
+                    onChange={handlePoolChange}
+                  />
+                  {poolForm.first_service_date && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDateWithDay(poolForm.first_service_date)}</p>
+                  )}
+                </div>
               </div>
               <TextArea
                 label="Notes"
