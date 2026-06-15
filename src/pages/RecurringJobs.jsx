@@ -14,7 +14,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
-import { formatDate, formatCurrency, cn } from '../lib/utils'
+import { formatDateWithDay, formatCurrency, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 import { describeSchedule } from '../lib/recurringScheduling'
 
@@ -470,7 +470,7 @@ export default function RecurringJobs() {
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.clients?.name || 'Unknown'}</p>
                     <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
                       {describeSchedule(p)}
-                      {p.next_generation_at && ` · next ${formatDate(p.next_generation_at)}`}
+                      {p.next_generation_at && ` · next ${formatDateWithDay(p.next_generation_at)}`}
                     </p>
                   </div>
                   <Badge variant={STATE_BADGE[p._state]} className="shrink-0">{STATE_LABEL[p._state]}</Badge>
@@ -528,7 +528,7 @@ export default function RecurringJobs() {
                           {describeSchedule(p)}
                         </span>
                         <span className="text-sm tabular-nums text-gray-700 dark:text-gray-300 truncate">
-                          {p.next_generation_at ? formatDate(p.next_generation_at) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                          {p.next_generation_at ? formatDateWithDay(p.next_generation_at) : <span className="text-gray-300 dark:text-gray-600">—</span>}
                         </span>
                         <span className={cn('text-left text-sm font-medium', STATE_TEXT[p._state])}>
                           {STATE_LABEL[p._state]}
@@ -623,7 +623,7 @@ export default function RecurringJobs() {
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Next due</p>
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1 tabular-nums">
-                        {selectedProfile.next_generation_at ? formatDate(selectedProfile.next_generation_at) : '—'}
+                        {selectedProfile.next_generation_at ? formatDateWithDay(selectedProfile.next_generation_at) : '—'}
                       </p>
                     </div>
                     <div>

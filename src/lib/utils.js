@@ -8,6 +8,15 @@ export function formatDate(date) {
   return format(d, 'dd/MM/yyyy')
 }
 
+// Australian date with the weekday up front — e.g. "Fri 12/06/2026".
+// The weekday disambiguates dd/MM from the American MM/dd reading at a
+// glance (12/06 is clearly a Friday in June, not December the 6th).
+export function formatDateWithDay(date) {
+  if (!date) return ''
+  const d = typeof date === 'string' ? parseISO(date) : date
+  return format(d, 'EEE dd/MM/yyyy')
+}
+
 export function formatDateTime(date) {
   if (!date) return ''
   const d = typeof date === 'string' ? parseISO(date) : date
