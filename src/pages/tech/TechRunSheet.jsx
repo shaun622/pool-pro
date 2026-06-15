@@ -5,6 +5,7 @@ import L from 'leaflet'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import { useBusiness } from '../../hooks/useBusiness'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 import { cn, formatDate } from '../../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
@@ -74,6 +75,7 @@ function FitBounds({ stops }) {
 // ─── Main component ────────────────────────────
 export default function TechRunSheet() {
   const { business, staffRecord } = useBusiness()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const location = useLocation()
   const [view, setView] = useState('today')
@@ -341,7 +343,7 @@ export default function TechRunSheet() {
       {totalCount > 0 && (
         <div className="mt-4 mb-3">
           <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{completedCount} of {totalCount} stops completed</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{t('runsheet.stopsCompleted', { done: completedCount, total: totalCount })}</p>
             <p className="text-xs font-bold text-pool-600 dark:text-pool-400">{totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0}%</p>
           </div>
           <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -353,20 +355,20 @@ export default function TechRunSheet() {
       {/* Tab switcher */}
       <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
         {[
-          { key: 'today', label: 'Today' },
-          { key: 'week', label: 'Week' },
-          { key: 'upcoming', label: 'Upcoming' },
-          { key: 'map', label: 'Map' },
-        ].map(t => (
+          { key: 'today', label: t('runsheet.today') },
+          { key: 'week', label: t('runsheet.week') },
+          { key: 'upcoming', label: t('runsheet.upcoming') },
+          { key: 'map', label: t('runsheet.map') },
+        ].map(tab => (
           <button
-            key={t.key}
-            onClick={() => setView(t.key)}
+            key={tab.key}
+            onClick={() => setView(tab.key)}
             className={cn(
               'flex-1 py-2.5 rounded-lg text-sm font-semibold text-center min-h-tap transition-all',
-              view === t.key ? 'bg-white dark:bg-gray-900 text-pool-700 shadow-card' : 'text-gray-500 dark:text-gray-400'
+              view === tab.key ? 'bg-white dark:bg-gray-900 text-pool-700 shadow-card' : 'text-gray-500 dark:text-gray-400'
             )}
           >
-            {t.label}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -390,6 +392,7 @@ export default function TechRunSheet() {
 
 // ─── Today view ──────────────────────────────
 function TodayView({ stops, navigate, onRefresh }) {
+  const { t } = useLanguage()
   const overdue = stops.filter(s => s.isOverdue)
   const active = stops.filter(s => !s.isOverdue && s.status !== 'completed')
   const completed = stops.filter(s => s.status === 'completed')
@@ -401,7 +404,7 @@ function TodayView({ stops, navigate, onRefresh }) {
         <div className="flex items-center gap-2 mb-2">
           <div className={`w-2 h-2 rounded-full ${overdue.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
           <h3 className={`text-xs font-bold uppercase tracking-wide ${overdue.length > 0 ? 'text-red-600' : 'text-gray-400 dark:text-gray-500'}`}>
-            Overdue {overdue.length > 0 ? `(${overdue.length})` : ''}
+            {t('runsheet.overdue')} {overdue.length > 0 ? `(${overdue.length})` : ''}
           </h3>
         </div>
         {overdue.length > 0 ? (
@@ -413,7 +416,7 @@ function TodayView({ stops, navigate, onRefresh }) {
         ) : (
           <div className="bg-green-50 dark:bg-green-950/30 rounded-xl border border-green-100 px-4 py-3 flex items-center gap-2.5">
             <Check className="w-4 h-4 text-green-500 shrink-0" strokeWidth={2} />
-            <p className="text-sm text-green-700">No overdue pools</p>
+            <p className="text-sm text-green-700">{t('runsheet.noOverdue')}</p>
           </div>
         )}
       </section>
@@ -423,7 +426,7 @@ function TodayView({ stops, navigate, onRefresh }) {
         <div className="flex items-center gap-2 mb-2">
           <div className={`w-2 h-2 rounded-full ${active.length > 0 ? 'bg-pool-500' : 'bg-gray-300'}`} />
           <h3 className={`text-xs font-bold uppercase tracking-wide ${active.length > 0 ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
-            Today's Route {active.length > 0 ? `(${active.length})` : ''}
+            {t('runsheet.todaysRoute')} {active.length > 0 ? `(${active.length})` : ''}
           </h3>
         </div>
         {active.length > 0 ? (
@@ -435,7 +438,7 @@ function TodayView({ stops, navigate, onRefresh }) {
         ) : (
           <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center gap-2.5">
             <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" strokeWidth={1.5} />
-            <p className="text-sm text-gray-500 dark:text-gray-400">No stops scheduled for today</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('runsheet.noStopsToday')}</p>
           </div>
         )}
       </section>
@@ -445,7 +448,7 @@ function TodayView({ stops, navigate, onRefresh }) {
         <section>
           <h3 className="text-xs font-bold uppercase tracking-wide text-green-600 dark:text-green-400 mb-2 flex items-center gap-1.5">
             <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-            Completed ({completed.length})
+            {t('runsheet.completed')} ({completed.length})
           </h3>
           <div className="space-y-2 opacity-70">
             {completed.map(stop => (
@@ -460,15 +463,16 @@ function TodayView({ stops, navigate, onRefresh }) {
 
 // ─── Week view ───────────────────────────────
 function WeekView({ groups, navigate }) {
+  const { t } = useLanguage()
   return (
     <div className="space-y-4">
       {groups.map((g, gi) => (
         <section key={gi}>
           <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-            {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
+            {sameYMD(g.date, new Date()) ? t('runsheet.today') : formatDateLong(g.date)}
           </h3>
           {g.stops.length === 0 ? (
-            <p className="text-xs italic text-gray-400 dark:text-gray-500 pl-0.5">No stops</p>
+            <p className="text-xs italic text-gray-400 dark:text-gray-500 pl-0.5">{t('runsheet.noStops')}</p>
           ) : (
             <div className="space-y-2">
               {g.stops.map((stop, idx) => (
@@ -484,12 +488,13 @@ function WeekView({ groups, navigate }) {
 
 // ─── Upcoming view ───────────────────────────
 function UpcomingView({ groups, navigate }) {
+  const { t } = useLanguage()
   if (!groups.length) {
     return (
       <EmptyState
         icon={<Calendar className="w-10 h-10" strokeWidth={1.5} />}
-        title="Nothing coming up"
-        description="No stops assigned for the next 4 weeks"
+        title={t('runsheet.nothingComingUp')}
+        description={t('runsheet.noStopsUpcoming')}
       />
     )
   }
@@ -499,7 +504,7 @@ function UpcomingView({ groups, navigate }) {
       {groups.map((g, gi) => (
         <section key={gi}>
           <h3 className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
-            {sameYMD(g.date, new Date()) ? 'Today' : formatDateLong(g.date)}
+            {sameYMD(g.date, new Date()) ? t('runsheet.today') : formatDateLong(g.date)}
           </h3>
           <div className="space-y-2">
             {g.stops.map((stop, idx) => (
@@ -514,14 +519,15 @@ function UpcomingView({ groups, navigate }) {
 
 // ─── Map view ────────────────────────────────
 function MapView({ pools, navigate }) {
+  const { t } = useLanguage()
   const withCoords = pools.filter(p => p.latitude != null && p.longitude != null)
 
   if (!MAPBOX_TILE_URL) {
-    return <EmptyState title="Map not configured" description="Add VITE_MAPBOX_TOKEN to your environment" />
+    return <EmptyState title={t('runsheet.mapNotConfigured')} description={t('runsheet.mapNotConfiguredDesc')} />
   }
 
   if (!withCoords.length) {
-    return <EmptyState title="No pool locations" description="Your assigned pools need a geocoded address to appear on the map" />
+    return <EmptyState title={t('runsheet.noPoolLocations')} description={t('runsheet.noPoolLocationsDesc')} />
   }
 
   function pinColor(pool) {
@@ -534,17 +540,17 @@ function MapView({ pools, navigate }) {
   }
 
   function statusLabel(pool) {
-    if (!pool.next_due_at) return { text: 'No schedule', color: 'text-gray-400 dark:text-gray-500' }
+    if (!pool.next_due_at) return { text: t('runsheet.noSchedule'), color: 'text-gray-400 dark:text-gray-500' }
     const due = new Date(pool.next_due_at)
     const today = new Date(); today.setHours(0,0,0,0)
     if (due < today) {
       const dueDate = new Date(due); dueDate.setHours(0, 0, 0, 0)
       const days = Math.round((today - dueDate) / (1000 * 60 * 60 * 24))
-      if (days <= 0) return { text: 'Due today', color: 'text-green-600 dark:text-green-400' }
-      return { text: `${days}d overdue`, color: 'text-red-600 dark:text-red-400' }
+      if (days <= 0) return { text: t('runsheet.dueToday'), color: 'text-green-600 dark:text-green-400' }
+      return { text: t('runsheet.daysOverdue', { days }), color: 'text-red-600 dark:text-red-400' }
     }
-    if (due.toDateString() === today.toDateString()) return { text: 'Due today', color: 'text-green-600 dark:text-green-400' }
-    return { text: `Next: ${due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}`, color: 'text-pool-600 dark:text-pool-400' }
+    if (due.toDateString() === today.toDateString()) return { text: t('runsheet.dueToday'), color: 'text-green-600 dark:text-green-400' }
+    return { text: t('runsheet.nextDate', { date: due.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) }), color: 'text-pool-600 dark:text-pool-400' }
   }
 
   // Find next due pool for navigate button
@@ -561,9 +567,9 @@ function MapView({ pools, navigate }) {
     <div className="space-y-3">
       {/* Legend */}
       <div className="flex items-center justify-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Overdue</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Due Today</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pool-500" />Upcoming</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />{t('runsheet.overdue')}</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />{t('runsheet.legendDueToday')}</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pool-500" />{t('runsheet.upcoming')}</span>
       </div>
 
       <div className="h-[420px] rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 shadow-card">
@@ -617,7 +623,7 @@ function MapView({ pools, navigate }) {
                           fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                         }}
                       >
-                        Start Service
+                        {t('runsheet.startService')}
                       </button>
                       <a
                         href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pool.address || '')}`}
@@ -631,7 +637,7 @@ function MapView({ pools, navigate }) {
                         }}
                       >
                         <MapPin className="w-5 h-5" strokeWidth={2} />
-                        Nav
+                        {t('runsheet.nav')}
                       </a>
                     </div>
                   </div>
@@ -643,10 +649,10 @@ function MapView({ pools, navigate }) {
       </div>
 
       <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-        {withCoords.length} pool{withCoords.length !== 1 ? 's' : ''} on map
+        {t('runsheet.poolsOnMap', { count: withCoords.length })}
         {pools.length > withCoords.length && (
           <span className="text-amber-500 ml-1">
-            · {pools.length - withCoords.length} missing location (update address with suburb)
+            {t('runsheet.missingLocation', { count: pools.length - withCoords.length })}
           </span>
         )}
       </p>
@@ -656,6 +662,7 @@ function MapView({ pools, navigate }) {
 
 // ─── Tech stop card ──────────────────────────
 function TechStopCard({ stop, number, navigate, compact = false, completed = false }) {
+  const { t } = useLanguage()
   const color = stop.isOverdue ? '#ef4444' : completed ? '#10b981' : '#0CA5EB'
 
   return (
@@ -686,7 +693,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{stop.client_name || stop.title || 'Pool Service'}</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{stop.client_name || stop.title || t('service.poolService')}</p>
               {stop.client_name && stop.title && stop.title !== 'Pool Service' && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stop.title}</p>
               )}
@@ -695,7 +702,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
               {stop.isOverdue && (
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${stop.daysOverdue === 0 ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'}`}>{stop.daysOverdue === 0 ? 'Due today' : `${stop.daysOverdue}d overdue`}</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${stop.daysOverdue === 0 ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'}`}>{stop.daysOverdue === 0 ? t('runsheet.dueToday') : t('runsheet.daysOverdue', { days: stop.daysOverdue })}</span>
               )}
               {stop.pool_type && !stop.isOverdue && (
                 <Badge variant="default" className="text-[10px] capitalize">{stop.pool_type}</Badge>
@@ -721,7 +728,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
           )}
 
           {stop.access_notes && !compact && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 truncate">Notes: {stop.access_notes}</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 truncate">{t('runsheet.notesPrefix')}{stop.access_notes}</p>
           )}
         </div>
       </div>
@@ -735,7 +742,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
-              Start Service
+              {t('runsheet.startService')}
             </button>
           )}
           {stop.address && (
@@ -746,7 +753,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
               className="px-4 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold active:scale-[0.98] transition-all min-h-tap"
             >
               <MapPin className="w-4 h-4" strokeWidth={2} />
-              Navigate
+              {t('runsheet.navigate')}
             </a>
           )}
         </div>
