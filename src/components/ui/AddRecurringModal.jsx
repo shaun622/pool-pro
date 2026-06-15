@@ -3,7 +3,7 @@ import { Search, X, Pencil, User, Droplet, Calendar as CalendarIcon, Mail, Phone
 import Modal from './Modal'
 import Button from './Button'
 import Input, { Select, TextArea } from './Input'
-import AddressAutocomplete from './AddressAutocomplete'
+import LocationField from './LocationField'
 import NewClientModal from './NewClientModal'
 import NewPoolModal from './NewPoolModal'
 import NewTechnicianModal from './NewTechnicianModal'
@@ -114,7 +114,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   const [showNewPool, setShowNewPool] = useState(false)
   const [showNewTech, setShowNewTech] = useState(false)
   const [editingClient, setEditingClient] = useState(false)
-  const [editClientForm, setEditClientForm] = useState({ name: '', email: '', phone: '', address: '' })
+  const [editClientForm, setEditClientForm] = useState({ name: '', email: '', phone: '', address: '', lat: null, lng: null })
   const [editClientSaving, setEditClientSaving] = useState(false)
 
   const [saving, setSaving] = useState(false)
@@ -122,7 +122,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   // Fetch clients on open
   useEffect(() => {
     if (!open || !business?.id) return
-    supabase.from('clients').select('id, name, address, email, phone').eq('business_id', business.id).order('name')
+    supabase.from('clients').select('id, name, address, email, phone, latitude, longitude').eq('business_id', business.id).order('name')
       .then(({ data }) => setClients(data || []))
   }, [open, business?.id])
 
@@ -154,7 +154,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
     setSchedules([blankSchedule()])
     setPendingTechScheduleIdx(null)
     setShowNewClient(false); setShowNewPool(false); setShowNewTech(false)
-    setEditingClient(false); setEditClientForm({ name: '', email: '', phone: '', address: '' })
+    setEditingClient(false); setEditClientForm({ name: '', email: '', phone: '', address: '', lat: null, lng: null })
     setLocalStaff([])
   }
 
@@ -206,6 +206,9 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
         email: editClientForm.email.trim() || null,
         phone: editClientForm.phone.trim() || null,
         address: editClientForm.address.trim() || null,
+        latitude: editClientForm.lat ?? null,
+        longitude: editClientForm.lng ?? null,
+        geocoded_at: editClientForm.lat != null ? new Date().toISOString() : null,
       }
       const { error } = await supabase.from('clients').update(updates).eq('id', clientId)
       if (error) throw error
@@ -434,12 +437,13 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
                 <Input label="Name" value={editClientForm.name} onChange={e => setEditClientForm(p => ({ ...p, name: e.target.value }))} required />
                 <Input label="Email" type="email" value={editClientForm.email} onChange={e => setEditClientForm(p => ({ ...p, email: e.target.value }))} />
                 <Input label="Phone" type="tel" value={editClientForm.phone} onChange={e => setEditClientForm(p => ({ ...p, phone: e.target.value }))} />
-                <AddressAutocomplete
+                <LocationField
                   label="Address"
-                  value={editClientForm.address}
-                  onChange={v => setEditClientForm(p => ({ ...p, address: v }))}
-                  onSelect={({ address }) => setEditClientForm(p => ({ ...p, address }))}
                   placeholder="Start typing a street address..."
+                  address={editClientForm.address}
+                  lat={editClientForm.lat}
+                  lng={editClientForm.lng}
+                  onChange={({ address, lat, lng }) => setEditClientForm(p => ({ ...p, address, lat, lng }))}
                 />
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => setEditingClient(false)} className="flex-1">Cancel</Button>
@@ -479,6 +483,8 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
                         email: selectedClient.email || '',
                         phone: selectedClient.phone || '',
                         address: selectedClient.address || '',
+                        lat: selectedClient.latitude ?? null,
+                        lng: selectedClient.longitude ?? null,
                       })
                       setEditingClient(true)
                     }} className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-gray-500 hover:text-pool-600 dark:hover:text-pool-400 hover:bg-white dark:hover:bg-gray-700 transition-colors" aria-label="Edit client">

@@ -13,7 +13,7 @@ import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { useStaff } from '../hooks/useStaff'
 import StaffCard from '../components/ui/StaffCard'
-import AddressAutocomplete from '../components/ui/AddressAutocomplete'
+import LocationField from '../components/ui/LocationField'
 import { supabase } from '../lib/supabase'
 import { geocodeAddress } from '../lib/mapbox'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
@@ -46,7 +46,7 @@ export default function ClientDetail() {
 
   // Edit client modal
   const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', service_rate: '', assigned_staff_id: '' })
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', service_rate: '', assigned_staff_id: '', lat: null, lng: null })
   const [editSaving, setEditSaving] = useState(false)
 
   // Delete confirmation
@@ -110,6 +110,8 @@ export default function ClientDetail() {
           notes: data.notes || '',
           service_rate: data.service_rate || '',
           assigned_staff_id: data.assigned_staff_id || '',
+          lat: data.latitude ?? null,
+          lng: data.longitude ?? null,
         })
         setLoading(false)
       })
@@ -154,6 +156,9 @@ export default function ClientDetail() {
           ? null
           : Number(editForm.service_rate),
         assigned_staff_id: editForm.assigned_staff_id || null,
+        latitude: editForm.lat ?? null,
+        longitude: editForm.lng ?? null,
+        geocoded_at: editForm.lat != null ? new Date().toISOString() : null,
       }
       const updated = await updateClient(id, updates)
       setClient(updated)
@@ -637,12 +642,13 @@ export default function ClientDetail() {
             onChange={handleEditChange}
             placeholder="0400 000 000"
           />
-          <AddressAutocomplete
+          <LocationField
             label="Address"
-            value={editForm.address}
-            onChange={(v) => setEditForm(prev => ({ ...prev, address: v }))}
-            onSelect={({ address }) => setEditForm(prev => ({ ...prev, address }))}
             placeholder="Street address"
+            address={editForm.address}
+            lat={editForm.lat}
+            lng={editForm.lng}
+            onChange={({ address, lat, lng }) => setEditForm(prev => ({ ...prev, address, lat, lng }))}
           />
 
           <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
@@ -903,18 +909,16 @@ export default function ClientDetail() {
                   if (e.key === 'Enter') e.preventDefault()
                 }}
               >
-                <AddressAutocomplete
+                <LocationField
                   label="New pool address"
-                  value={jobNewPoolAddress}
-                  onChange={(v) => {
-                    setJobNewPoolAddress(v)
-                    setJobNewPoolCoords({ lat: null, lng: null })
-                  }}
-                  onSelect={({ address, lat, lng }) => {
+                  placeholder="Start typing a street address..."
+                  address={jobNewPoolAddress}
+                  lat={jobNewPoolCoords.lat}
+                  lng={jobNewPoolCoords.lng}
+                  onChange={({ address, lat, lng }) => {
                     setJobNewPoolAddress(address)
                     setJobNewPoolCoords({ lat, lng })
                   }}
-                  placeholder="Start typing a street address..."
                 />
                 <div className="flex gap-2">
                   <button

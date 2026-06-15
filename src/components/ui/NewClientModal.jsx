@@ -3,13 +3,13 @@ import { UserPlus, AlertTriangle } from 'lucide-react'
 import Modal from './Modal'
 import Button from './Button'
 import Input, { TextArea } from './Input'
-import AddressAutocomplete from './AddressAutocomplete'
+import LocationField from './LocationField'
 import { supabase } from '../../lib/supabase'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useToast } from '../../contexts/ToastContext'
 
-// lat/lng are transient — they drive the inline map preview only. The
-// clients table has no coordinate columns, so they're not persisted.
+// lat/lng drive the map preview/pin and are persisted to
+// clients.latitude/longitude (migration 20260613030000).
 const EMPTY = { name: '', email: '', phone: '', address: '', notes: '', lat: null, lng: null }
 
 /**
@@ -125,7 +125,10 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
         phone: form.phone.trim() || null,
         address: form.address.trim() || null,
         notes: (form.notes || '').trim() || null,
-      }).select('id, name, email, phone, address, notes').single()
+        latitude: form.lat ?? null,
+        longitude: form.lng ?? null,
+        geocoded_at: form.lat != null ? new Date().toISOString() : null,
+      }).select('id, name, email, phone, address, notes, latitude, longitude').single()
       if (error) throw error
       onCreated?.(data)
       onClose?.()
@@ -182,17 +185,13 @@ export default function NewClientModal({ open, onClose, onCreated, zLayer = 60, 
 
         <Input label="Email" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" />
         <Input label="Phone" type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="04XX XXX XXX" />
-        <AddressAutocomplete
+        <LocationField
           label="Address"
-          value={form.address}
-          // Free typing clears the pin so a stale location isn't shown;
-          // picking a suggestion sets the coords and reveals the map.
-          onChange={v => setForm(p => ({ ...p, address: v, lat: null, lng: null }))}
-          onSelect={({ address, lat, lng }) => setForm(p => ({ ...p, address, lat, lng }))}
           placeholder="Start typing a street address..."
-          mapPreview
+          address={form.address}
           lat={form.lat}
           lng={form.lng}
+          onChange={({ address, lat, lng }) => setForm(p => ({ ...p, address, lat, lng }))}
         />
         <TextArea
           label="Notes"

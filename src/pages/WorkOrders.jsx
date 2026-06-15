@@ -11,7 +11,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import StatCard from '../components/ui/StatCard'
 import Input, { Select, TextArea } from '../components/ui/Input'
-import AddressAutocomplete from '../components/ui/AddressAutocomplete'
+import LocationField from '../components/ui/LocationField'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
@@ -95,7 +95,7 @@ export default function WorkOrders() {
 
   // Inline client creation
   const [showNewClient, setShowNewClient] = useState(false)
-  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' })
+  const [newClientForm, setNewClientForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', lat: null, lng: null })
   const [newClientSaving, setNewClientSaving] = useState(false)
 
   const handleCreateClientInline = async () => {
@@ -145,6 +145,9 @@ export default function WorkOrders() {
         phone: newClientForm.phone.trim() || null,
         address: newClientForm.address.trim() || null,
         notes: newClientForm.notes.trim() || null,
+        latitude: newClientForm.lat ?? null,
+        longitude: newClientForm.lng ?? null,
+        geocoded_at: newClientForm.lat != null ? new Date().toISOString() : null,
       }).select('id, name, address').single()
       if (error) throw error
       setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
@@ -664,12 +667,13 @@ export default function WorkOrders() {
                 onChange={e => setNewClientForm(prev => ({ ...prev, phone: e.target.value }))}
                 placeholder="0400 000 000"
               />
-              <AddressAutocomplete
+              <LocationField
                 label="Address"
-                value={newClientForm.address}
-                onChange={(v) => setNewClientForm(prev => ({ ...prev, address: v }))}
-                onSelect={({ address }) => setNewClientForm(prev => ({ ...prev, address }))}
                 placeholder="Start typing a street address..."
+                address={newClientForm.address}
+                lat={newClientForm.lat}
+                lng={newClientForm.lng}
+                onChange={({ address, lat, lng }) => setNewClientForm(prev => ({ ...prev, address, lat, lng }))}
               />
               <TextArea
                 label="Notes"
