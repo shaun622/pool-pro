@@ -1,5 +1,7 @@
 import AddressAutocomplete from './AddressAutocomplete'
 import ManualPinPicker from './ManualPinPicker'
+import { useBusiness } from '../../hooks/useBusiness'
+import { getDefaultCountryCode } from '../../lib/countries'
 
 /**
  * The one address+location control used everywhere a client or pool
@@ -25,6 +27,11 @@ export default function LocationField({
   onChange,
   required,
 }) {
+  // Home country for address search comes from Business Settings, falling
+  // back to the device locale so it's sensible before one is set.
+  const { business } = useBusiness()
+  const countryCode = business?.country_code || getDefaultCountryCode()
+
   return (
     <div className="space-y-2">
       <AddressAutocomplete
@@ -38,11 +45,13 @@ export default function LocationField({
         mapPreview
         lat={lat}
         lng={lng}
+        countryCode={countryCode}
       />
       <ManualPinPicker
         address={address}
         lat={lat}
         lng={lng}
+        countryCode={countryCode}
         // Pin-picker may upgrade an empty address via reverse geocode;
         // when it doesn't pass one, keep the current address.
         onPick={({ lat: la, lng: ln, address: a }) =>

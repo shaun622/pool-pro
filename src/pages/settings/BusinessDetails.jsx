@@ -7,6 +7,7 @@ import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { cn } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
+import { COUNTRIES, getDefaultCountryCode } from '../../lib/countries'
 
 const AUSTRALIAN_TIMEZONES = [
   { value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },
@@ -42,6 +43,8 @@ export default function BusinessDetails() {
 
   const [form, setForm] = useState({
     name: '', abn: '', phone: '', email: '', logo_url: '', brand_colour: '#0EA5E9', timezone: 'Australia/Sydney',
+    // Home country (ISO alpha-2) — drives address autocomplete defaults.
+    country_code: 'AU',
     // gst_enabled is the master switch: false means we're not GST-
     // registered, so new docs save with rate=0 and the GST line is
     // hidden in totals / PDFs. Toggling this off keeps the entered
@@ -67,6 +70,8 @@ export default function BusinessDetails() {
         logo_url: business.logo_url || '',
         brand_colour: business.brand_colour || '#0EA5E9',
         timezone: business.timezone || 'Australia/Sydney',
+        // Seed from the device locale when unset so it's sensible on first visit.
+        country_code: business.country_code || getDefaultCountryCode(),
         // Treat absence as "registered" (current behaviour) for legacy
         // rows that predate the gst_enabled column.
         gst_enabled: business.gst_enabled !== false,
@@ -235,7 +240,16 @@ export default function BusinessDetails() {
             onChange={(e) => updateField('timezone', e.target.value)}
             options={AUSTRALIAN_TIMEZONES}
           />
+          <Select
+            label="Country"
+            value={form.country_code}
+            onChange={(e) => updateField('country_code', e.target.value)}
+            options={COUNTRIES.map(c => ({ value: c.code, label: c.name }))}
+          />
         </div>
+        <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-2">
+          Address search defaults to this country. You can switch country on any individual address field.
+        </p>
       </section>
 
       {/* ── TAX & INVOICING ── */}

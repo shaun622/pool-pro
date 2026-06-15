@@ -10,13 +10,19 @@ export const MAPBOX_AVAILABLE = Boolean(MAPBOX_TOKEN)
 
 /**
  * Forward geocode an address to { lat, lng } using Nominatim (OpenStreetMap).
- * Free, no API key required. Worldwide results.
+ * Free, no API key required.
+ *
+ * countryCode (ISO 3166-1 alpha-2, optional) restricts results to that
+ * country so a typed/searched address resolves locally rather than to a
+ * same-named street on the other side of the world. Pass null/empty to
+ * search worldwide.
  */
-export async function geocodeAddress(address) {
+export async function geocodeAddress(address, countryCode) {
   if (!address) return null
   try {
     const encoded = encodeURIComponent(address)
-    const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1`
+    const cc = countryCode ? `&countrycodes=${countryCode.toLowerCase()}` : ''
+    const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1${cc}`
     const res = await fetch(url, {
       headers: {
         // Nominatim requires a user agent

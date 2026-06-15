@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { cn } from '../../lib/utils'
 import { geocodeAddress, MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
+import { COUNTRIES, countryName } from '../../lib/countries'
 
 const GOOGLE_KEY = import.meta.env.VITE_GOOGLE_PLACES_KEY
 
@@ -55,14 +56,24 @@ export default function AddressAutocomplete({
   mapPreview = false,
   lat = null,
   lng = null,
+  countryCode = null,
   ...rest
 }) {
   const [suggestions, setSuggestions] = useState([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sessionToken, setSessionToken] = useState(() => cryptoRandom())
+  // Active search country (ISO alpha-2) or null = worldwide. Defaults to
+  // the business's home country; the operator can override per-field via
+  // the "Change" control for the occasional overseas address.
+  const [searchCountry, setSearchCountry] = useState(countryCode)
+  const [showCountryPicker, setShowCountryPicker] = useState(false)
   const debounceRef = useRef(null)
   const containerRef = useRef(null)
+
+  // Keep the active country in sync if the home country prop changes
+  // (e.g. business loads after first render).
+  useEffect(() => { setSearchCountry(countryCode) }, [countryCode])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -83,7 +94,8 @@ export default function AddressAutocomplete({
     setLoading(true)
     try {
       if (GOOGLE_KEY) {
-        // Google Places (New) Autocomplete API
+        // Google Places (New) Autocomplete API. includedRegionCodes
+        // restricts results to the active country (lowercase CLDR codes).
         const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
           method: 'POST',
           headers: {
@@ -93,6 +105,7 @@ export default function AddressAutocomplete({
           body: JSON.stringify({
             input: query,
             sessionToken,
+            ...(searchCountry ? { includedRegionCodes: [searchCountry.toLowerCase()] } : {}),
           }),
         })
         if (res.ok) {
@@ -114,8 +127,9 @@ export default function AddressAutocomplete({
       }
       // Fallback: Nominatim
       const encoded = encodeURIComponent(query)
+      const cc = searchCountry ? `&countrycodes=${searchCountry.toLowerCase()}` : ''
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=1`
+        `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=1${cc}`
       )
       if (res.ok) {
         const data = await res.json()
@@ -135,7 +149,7 @@ export default function AddressAutocomplete({
     } finally {
       setLoading(false)
     }
-  }, [sessionToken])
+  }, [sessionToken, searchCountry])
 
   function handleInput(e) {
     const v = e.target.value
@@ -169,9 +183,9 @@ export default function AddressAutocomplete({
       }
     }
 
-    // Last resort: Nominatim geocode
+    // Last resort: Nominatim geocode (scoped to the active country).
     if ((lat == null || lng == null) && fullAddress) {
-      const geo = await geocodeAddress(fullAddress)
+      const geo = await geocodeAddress(fullAddress, searchCountry)
       if (geo) {
         lat = geo.lat
         lng = geo.lng
@@ -198,6 +212,31 @@ export default function AddressAutocomplete({
         autoComplete="off"
         {...rest}
       />
+
+      {/* Country scope + per-field override. Only shown when the field is
+          country-aware (a home country was supplied). */}
+      {countryCode && (
+        <div className="text-[11px] text-gray-400 dark:text-gray-500 flex items-center gap-1.5 flex-wrap">
+          {showCountryPicker ? (
+            <>
+              <select
+                value={searchCountry || ''}
+                onChange={(e) => { setSearchCountry(e.target.value || null); setShowCountryPicker(false) }}
+                className="text-[11px] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-gray-700 dark:text-gray-300"
+              >
+                <option value="">Any country (worldwide)</option>
+                {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </select>
+              <button type="button" onClick={() => setShowCountryPicker(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Cancel</button>
+            </>
+          ) : (
+            <>
+              <span>{searchCountry ? `Showing ${countryName(searchCountry)} addresses` : 'Searching worldwide'}</span>
+              <button type="button" onClick={() => setShowCountryPicker(true)} className="font-semibold text-pool-600 dark:text-pool-400 hover:underline">Change</button>
+            </>
+          )}
+        </div>
+      )}
 
       {open && suggestions.length > 0 && (
         <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-gray-900 rounded-xl shadow-elevated border border-gray-100 dark:border-gray-800 overflow-hidden max-h-72 overflow-y-auto">
