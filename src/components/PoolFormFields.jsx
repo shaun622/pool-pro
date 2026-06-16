@@ -1,8 +1,12 @@
-import Input, { Select, TextArea } from './ui/Input'
+﻿import Input, { Select, TextArea } from './ui/Input'
 import LocationField from './ui/LocationField'
-import { POOL_TYPES, POOL_SHAPES, SCHEDULE_FREQUENCIES, FREQUENCY_LABELS, cn, formatDateWithDay } from '../lib/utils'
+import { POOL_TYPES, POOL_SHAPES, cn } from '../lib/utils'
 import { geocodeAddress } from '../lib/mapbox'
 
+// A pool is now PURE ATTRIBUTES — no scheduling. Scheduling lives only in
+// recurring services (recurring_job_profiles), created via /recurring. The old
+// pool-level schedule_frequency / first_service_date / next_due_at bootstrap
+// was removed (it produced fragile "legacy" schedules with no profile).
 export const emptyPool = {
   name: '',
   address: '',
@@ -12,19 +16,18 @@ export const emptyPool = {
   type: 'chlorine',
   volume_litres: '',
   shape: 'rectangular',
-  regular_service: true,
-  schedule_frequency: 'weekly',
   access_notes: '',
   pump_model: '',
   filter_type: '',
   heater: '',
-  first_service_date: new Date().toISOString().split('T')[0],
 }
 
 // Convert a poolForm state object into the payload we actually insert into the DB.
 // Handles geocoding fallback so callers don't have to.
 export async function buildPoolPayload(poolForm) {
-  const { pump_model, filter_type, heater, volume_litres, sameAsClient, first_service_date, regular_service, latitude, longitude, ...rest } = poolForm
+  // schedule_frequency / next_due_at are intentionally NOT set — a pool carries
+  // no schedule. Scheduling is created separately as a recurring service.
+  const { pump_model, filter_type, heater, volume_litres, sameAsClient, schedule_frequency, next_due_at, latitude, longitude, ...rest } = poolForm
   let lat = latitude
   let lng = longitude
   if ((lat == null || lng == null) && rest.address) {
@@ -37,30 +40,14 @@ export async function buildPoolPayload(poolForm) {
     name: rest.name?.trim() || null,
     volume_litres: volume_litres ? Number(volume_litres) : null,
     equipment: { pump_model, filter_type, heater },
-    schedule_frequency: regular_service ? rest.schedule_frequency : null,
-    // next_due_at is deliberately NOT set here. It is the scheduling cache owned
-    // by recomputePoolNextDue.js; the create sites write it AFTER insert via
-    // setPoolNextDue(id, initialPoolDueDate(poolForm)). Writing it in this
-    // payload (then spreading into .insert) was an un-routed write that the
-    // single-writer guard could not see — hence the split.
-    access_notes: regular_service ? rest.access_notes : null,
+    access_notes: rest.access_notes || null,
     latitude: lat,
     longitude: lng,
     geocoded_at: lat != null ? new Date().toISOString() : null,
   }
 }
 
-// The legacy-pool first due date, derived from the create form. A pool created
-// here has no recurring_job_profile, so its next_due_at is operator-set (=
-// first service date) — exactly the "legacy bootstrap" setPoolNextDue handles.
-// Returns a 'YYYY-MM-DD' string, or null when servicing is off. Call sites pass
-// this to setPoolNextDue(newPoolId, ...) right after the insert.
-export function initialPoolDueDate(poolForm) {
-  if (!poolForm?.regular_service) return null
-  return poolForm.first_service_date || new Date().toISOString().split('T')[0]
-}
-
-// Edit-safe payload â€” attribute fields only. Deliberately OMITS
+// Edit-safe payload Ã¢â‚¬â€ attribute fields only. Deliberately OMITS
 // next_due_at and schedule_frequency: the recurring flow + the
 // ClientDetail "Schedule" modal own a pool's schedule, and buildPoolPayload
 // (create) unconditionally rewrites next_due_at from first_service_date,
@@ -90,7 +77,6 @@ export async function buildPoolUpdatePayload(poolForm) {
 
 const typeOptions = POOL_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))
 const shapeOptions = POOL_SHAPES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))
-const freqOptions = SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))
 
 export default function PoolFormFields({ poolForm, setPoolForm, clientAddress, showSchedule = true }) {
   const handlePoolChange = (e) => {
@@ -157,73 +143,15 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress, s
         placeholder="e.g. 50000"
       />
 
-      {/* Scheduling block â€” create flow only. In edit mode the schedule is
-          owned by the recurring flow + the ClientDetail "Schedule" modal,
-          so we hide it (and buildPoolUpdatePayload never touches next_due_at). */}
-      {showSchedule && (
-        <>
-          <label className="flex items-center justify-between min-h-tap cursor-pointer">
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Regular Servicing</span>
-            </div>
-            <div className={cn('relative w-11 h-6 rounded-full transition-colors',
-              poolForm.regular_service ? 'bg-pool-500' : 'bg-gray-200 dark:bg-gray-700')}>
-              <div className={cn('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                poolForm.regular_service ? 'translate-x-[22px]' : 'translate-x-0.5')} />
-              <input type="checkbox" className="sr-only"
-                checked={poolForm.regular_service}
-                onChange={e => setPoolForm(prev => ({ ...prev, regular_service: e.target.checked }))} />
-            </div>
-          </label>
-
-          {poolForm.regular_service && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="grid grid-cols-2 gap-3">
-                <Select
-                  label="Frequency"
-                  name="schedule_frequency"
-                  value={poolForm.schedule_frequency}
-                  onChange={handlePoolChange}
-                  options={freqOptions}
-                />
-                <div>
-                  <Input
-                    label="First Service Date"
-                    name="first_service_date"
-                    type="date"
-                    value={poolForm.first_service_date}
-                    onChange={handlePoolChange}
-                  />
-                  {poolForm.first_service_date && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDateWithDay(poolForm.first_service_date)}</p>
-                  )}
-                </div>
-              </div>
-              <TextArea
-                label="Notes"
-                name="access_notes"
-                value={poolForm.access_notes}
-                onChange={handlePoolChange}
-                placeholder="Gate code, dog, key location..."
-              />
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Edit mode keeps Access Notes available without the schedule block. */}
-      {!showSchedule && (
-        <TextArea
-          label="Access Notes"
-          name="access_notes"
-          value={poolForm.access_notes}
-          onChange={handlePoolChange}
-          placeholder="Gate code, dog, key location..."
-        />
-      )}
+      {/* Scheduling block Ã¢â‚¬â€ create flow only. In edit mode the schedule is
+          configured as a recurring service (/recurring), not on the pool. */}
+      <TextArea
+        label="Access Notes"
+        name="access_notes"
+        value={poolForm.access_notes}
+        onChange={handlePoolChange}
+        placeholder="Gate code, dog, key location..."
+      />
 
       <div>
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Equipment</h3>

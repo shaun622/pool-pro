@@ -15,9 +15,8 @@ import { useStaff } from '../hooks/useStaff'
 import StaffCard from '../components/ui/StaffCard'
 import LocationField from '../components/ui/LocationField'
 import { supabase } from '../lib/supabase'
-import { setPoolNextDue } from '../lib/recomputePoolNextDue'
 import { geocodeAddress } from '../lib/mapbox'
-import PoolFormFields, { emptyPool, buildPoolPayload, initialPoolDueDate } from '../components/PoolFormFields'
+import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import EditPoolModal from '../components/ui/EditPoolModal'
 import { useToast } from '../contexts/ToastContext'
 import { Briefcase, Calendar, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
@@ -69,15 +68,6 @@ export default function ClientDetail() {
   const [poolToEdit, setPoolToEdit] = useState(null)
   const [poolDeleting, setPoolDeleting] = useState(false)
 
-  // Schedule modal
-  const [scheduleOpen, setScheduleOpen] = useState(false)
-  const [schedulePoolId, setSchedulePoolId] = useState(null)
-  const [scheduleDate, setScheduleDate] = useState('')
-  const [scheduleFreq, setScheduleFreq] = useState('weekly')
-  const [scheduleRecurring, setScheduleRecurring] = useState(true)
-  const [schedulePrice, setSchedulePrice] = useState('')
-  const [scheduleTime, setScheduleTime] = useState('09:00')
-  const [scheduleSaving, setScheduleSaving] = useState(false)
 
   // Create job modal
   const [jobModalOpen, setJobModalOpen] = useState(false)
@@ -191,9 +181,7 @@ export default function ClientDetail() {
     setPoolSaving(true)
     try {
       const payload = await buildPoolPayload(poolForm)
-      const created = await createPool({ ...payload, client_id: id })
-      // next_due_at goes through the single chokepoint setter (legacy bootstrap).
-      if (created?.id) await setPoolNextDue(created.id, initialPoolDueDate(poolForm))
+      await createPool({ ...payload, client_id: id })
       setPoolModalOpen(false)
       setPoolForm(emptyPool)
     } catch (err) {
@@ -217,59 +205,6 @@ export default function ClientDetail() {
     }
   }
 
-  // Schedule handler
-  const openSchedule = (poolId) => {
-    setSchedulePoolId(poolId)
-    const pool = pools.find(p => p.id === poolId)
-    setScheduleDate(pool?.next_due_at ? new Date(pool.next_due_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
-    setScheduleFreq(pool?.schedule_frequency || 'weekly')
-    setScheduleRecurring(!!pool?.schedule_frequency)
-    setSchedulePrice(
-      pool?.service_price != null
-        ? String(pool.service_price)
-        : (client?.service_rate != null && client?.service_rate !== '' ? String(client.service_rate) : '')
-    )
-    setScheduleTime('09:00')
-    setScheduleOpen(true)
-  }
-
-  const handleQuickDate = (option) => {
-    const today = new Date()
-    let d
-    switch (option) {
-      case 'today': d = today; break
-      case 'tomorrow': d = new Date(today); d.setDate(d.getDate() + 1); break
-      case 'next_monday': {
-        d = new Date(today)
-        const day = d.getDay()
-        d.setDate(d.getDate() + ((8 - day) % 7 || 7))
-        break
-      }
-      case 'next_week': d = new Date(today); d.setDate(d.getDate() + 7); break
-      case 'in_2_weeks': d = new Date(today); d.setDate(d.getDate() + 14); break
-      case 'next_month': d = new Date(today); d.setMonth(d.getMonth() + 1); break
-      default: return
-    }
-    setScheduleDate(d.toISOString().split('T')[0])
-  }
-
-  const handleScheduleSave = async () => {
-    if (!scheduleDate || !schedulePoolId) return
-    setScheduleSaving(true)
-    try {
-      await updatePool(schedulePoolId, {
-        schedule_frequency: scheduleRecurring ? scheduleFreq : null,
-        service_price: schedulePrice ? Number(schedulePrice) : null,
-      })
-      // next_due_at goes through the single chokepoint setter.
-      await setPoolNextDue(schedulePoolId, new Date(scheduleDate).toISOString())
-    } catch (err) {
-      console.error('Error scheduling:', err)
-    } finally {
-      setScheduleSaving(false)
-      setScheduleOpen(false)
-    }
-  }
 
   // Inline pool creation from Create Job modal
   const handleCreatePoolInline = async () => {
@@ -559,16 +494,6 @@ export default function ClientDetail() {
                   {/* Action buttons */}
                   <div className="flex gap-2 mt-3">
                     <Button
-                      className="flex-1 text-sm min-h-[44px]"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openSchedule(pool.id)
-                      }}
-                    >
-                      <Calendar className="w-4 h-4 mr-1.5 inline" strokeWidth={2} />
-                      Schedule
-                    </Button>
-                    <Button
                       variant="secondary"
                       className="flex-1 text-sm min-h-[44px]"
                       onClick={(e) => {
@@ -772,109 +697,6 @@ export default function ClientDetail() {
         onSaved={() => { setPoolToEdit(null); refetchPools() }}
       />
 
-      {/* Schedule Modal */}
-      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule Service">
-        <div className="space-y-4">
-          {/* Quick pick options */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">Quick Pick</p>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { key: 'today', label: 'Today' },
-                { key: 'tomorrow', label: 'Tomorrow' },
-                { key: 'next_monday', label: 'Next Monday' },
-                { key: 'next_week', label: 'In 1 Week' },
-                { key: 'in_2_weeks', label: 'In 2 Weeks' },
-                { key: 'next_month', label: 'In 1 Month' },
-              ].map(opt => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => handleQuickDate(opt.key)}
-                  className="px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300 hover:bg-pool-50 hover:border-pool-300 hover:text-pool-700 transition-colors min-h-[44px]"
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Date picker */}
-          <Input
-            label="Or pick a date"
-            type="date"
-            value={scheduleDate}
-            onChange={e => setScheduleDate(e.target.value)}
-          />
-
-          {/* Recurring toggle */}
-          <label className="flex items-center justify-between min-h-tap cursor-pointer">
-            <div className="flex items-center gap-2">
-              <RotateCw className="w-4 h-4 text-gray-400 dark:text-gray-500" strokeWidth={2} />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Recurring service</span>
-            </div>
-            <div className={cn('relative w-11 h-6 rounded-full transition-colors',
-              scheduleRecurring ? 'bg-pool-500' : 'bg-gray-200')}>
-              <div className={cn('absolute top-0.5 w-5 h-5 bg-white dark:bg-gray-900 rounded-full shadow transition-transform',
-                scheduleRecurring ? 'translate-x-[22px]' : 'translate-x-0.5')} />
-              <input type="checkbox" className="sr-only"
-                checked={scheduleRecurring}
-                onChange={e => setScheduleRecurring(e.target.checked)} />
-            </div>
-          </label>
-
-          {/* Frequency (only when recurring) */}
-          {scheduleRecurring && (
-            <Select
-              label="Repeats"
-              value={scheduleFreq}
-              onChange={e => setScheduleFreq(e.target.value)}
-              options={SCHEDULE_FREQUENCIES.map(f => ({ value: f, label: FREQUENCY_LABELS[f] || f }))}
-            />
-          )}
-
-          {/* Service price */}
-          <Input
-            label={scheduleRecurring ? 'Price per service ($)' : 'Service price ($)'}
-            type="number"
-            value={schedulePrice}
-            onChange={e => setSchedulePrice(e.target.value)}
-            placeholder="Optional"
-          />
-
-          {/* Summary */}
-          {scheduleDate && (
-            <div className="bg-pool-50 dark:bg-pool-950/40 border border-pool-200 rounded-lg p-3">
-              <p className="text-sm text-pool-700">
-                <span className="font-semibold">Next service:</span>{' '}
-                {new Date(scheduleDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
-              <p className="text-xs text-pool-500 mt-1">
-                {scheduleRecurring
-                  ? `Repeating ${(FREQUENCY_LABELS[scheduleFreq] || scheduleFreq).toLowerCase()}`
-                  : 'One-off service (no repeat)'}
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              className="flex-1 min-h-tap"
-              onClick={() => setScheduleOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 min-h-tap"
-              onClick={handleScheduleSave}
-              loading={scheduleSaving}
-            >
-              Save Schedule
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Create Work Order Modal */}
       <Modal open={jobModalOpen} onClose={() => setJobModalOpen(false)} title="New Work Order">

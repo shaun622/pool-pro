@@ -65,29 +65,31 @@ export function useService() {
     if (error) throw error
   }, [])
 
-  const completeService = useCallback(async (serviceRecordId, poolId, notes) => {
+  const completeService = useCallback(async (serviceRecordId, poolId, notes, scheduledDate) => {
     setLoading(true)
     try {
       const now = new Date()
+      // Record against the serviced OCCURRENCE's day (not necessarily today) so
+      // the schedule + chokepoint attribute it to the right stop. See occurrenceServicedAt.
+      const occYmd = (scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) ? scheduledDate : ymdLocal(now)
+      const servicedAt = occurrenceServicedAt(occYmd, now)
       // 1. Mark the record completed.
       const { error } = await supabase
         .from('service_records')
-        .update({ status: 'completed', notes, serviced_at: now.toISOString() })
+        .update({ status: 'completed', notes, serviced_at: servicedAt })
         .eq('id', serviceRecordId)
       if (error) throw error
 
-      // 2. last_serviced_at — history; the chokepoint's legacy (no-profile)
-      // branch reads it. (next_due_at is owned solely by the chokepoint.)
-      await supabase.from('pools').update({ last_serviced_at: now.toISOString() }).eq('id', poolId)
+      // 2. last_serviced_at — display-only history of the most recent service.
+      await supabase.from('pools').update({ last_serviced_at: servicedAt }).eq('id', poolId)
 
-      // 3. Clear any auto-generated job for today off the schedule.
+      // 3. Clear any auto-generated job for that occurrence off the schedule.
       try {
-        const ymd = ymdLocal(now)
         await supabase
           .from('jobs')
           .update({ status: 'completed' })
           .eq('pool_id', poolId)
-          .eq('scheduled_date', ymd)
+          .eq('scheduled_date', occYmd)
           .in('status', ['scheduled', 'in_progress'])
       } catch (e) {
         console.warn('Mark-jobs-completed failed (non-critical):', e)
@@ -141,31 +143,34 @@ export function useService() {
   // continues — WITHOUT marking it serviced. No last_serviced_at write, no
   // completed_visits bump (no visit happened). Photos are saved by the
   // caller (tag='unable_access') before this runs, mirroring handleComplete.
-  const markUnableToService = useCallback(async (serviceRecordId, poolId, { reason, note } = {}) => {
+  const markUnableToService = useCallback(async (serviceRecordId, poolId, { reason, note, scheduledDate } = {}) => {
     setLoading(true)
     try {
       const now = new Date()
+      // Record against the OCCURRENCE's day (the stop that couldn't be serviced),
+      // not today — otherwise marking a future stop unable draws a phantom stop on
+      // today and fails to clear the real occurrence. See occurrenceServicedAt.
+      const occYmd = (scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) ? scheduledDate : ymdLocal(now)
       const { error } = await supabase
         .from('service_records')
         .update({
           status: 'unable_to_service',
           unable_reason: reason || null,
           notes: note || null,
-          serviced_at: now.toISOString(),
+          serviced_at: occurrenceServicedAt(occYmd, now),
         })
         .eq('id', serviceRecordId)
       if (error) throw error
 
-      // Drop today's real job (if any) off the active route. Active lists
+      // Drop that occurrence's real job (if any) off the active route. Active lists
       // key on 'scheduled'/'in_progress', so this clears it without it ever
       // counting as completed.
       try {
-        const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
         await supabase
           .from('jobs')
           .update({ status: 'unable_to_service' })
           .eq('pool_id', poolId)
-          .eq('scheduled_date', ymd)
+          .eq('scheduled_date', occYmd)
           .in('status', ['scheduled', 'in_progress'])
       } catch (e) {
         console.warn('Unable-to-service job update failed (non-critical):', e)
@@ -296,6 +301,21 @@ function convertToWebP(file, maxSize = 1200, quality = 0.82) {
 // where a local-midnight Date's toISOString() lands on the previous day).
 function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// A service record represents a specific scheduled OCCURRENCE. Its serviced_at
+// must fall on that occurrence's calendar day, otherwise: (a) the Schedule
+// renders the record on the wrong day (the "phantom stop on today" bug when an
+// admin marks a future occurrence), and (b) the chokepoint's half-open
+// [occ,nextOcc) fulfillment match clears the wrong occurrence (or none).
+// Given the occurrence ymd ('YYYY-MM-DD'), return an ISO timestamp on that day
+// at the current clock time. Falls back to now() for genuine same-day service.
+function occurrenceServicedAt(scheduledDate, now) {
+  if (!scheduledDate || !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) return now.toISOString()
+  const [y, m, d] = scheduledDate.split('-').map(Number)
+  const sa = new Date(now)
+  sa.setFullYear(y, m - 1, d)
+  return sa.toISOString()
 }
 
 // (nextFixedOccurrence + calculateNextDueDate removed — next_due_at is now owned

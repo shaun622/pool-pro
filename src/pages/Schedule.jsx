@@ -388,53 +388,11 @@ function Schedule({ business }) {
       coverPool(dayStart, r.pool_id)
     }
 
-    // 2. Pools with next_due_at in range — project at frequency.
-    // Skip pools that have an active recurring profile: the profile
-    // is the source of truth for those, and the pool's next_due_at
-    // is just a denormalised mirror. Without this skip, the same
-    // recurring service renders TWICE for the same pool on the same
-    // day — once as a pool projection (path 2, yellow) and once as
-    // a profile projection (path 3, blue) — and the dedup picks
-    // whichever path runs first, so individual days look styled
-    // differently from their siblings (the "why is this Wednesday
-    // orange?" report).
-    const poolsWithActiveProfile = new Set()
-    for (const profile of allProfiles) {
-      if (isProfileActive(profile) && profile.pool_id) {
-        poolsWithActiveProfile.add(profile.pool_id)
-      }
-    }
-    for (const p of allPools) {
-      if (!p.next_due_at) continue
-      if (poolsWithActiveProfile.has(p.id)) continue
-      const intervalDays = frequencyToDays(p.schedule_frequency)
-      const firstDue = new Date(p.next_due_at)
-      if (isNaN(firstDue.getTime())) continue
-      const occurrences = []
-      if (!intervalDays) {
-        if (firstDue >= weekStart && firstDue <= weekEnd) occurrences.push(firstDue)
-      } else {
-        let cursor = new Date(firstDue)
-        while (cursor > weekEnd) cursor.setDate(cursor.getDate() - intervalDays)
-        while (cursor < weekStart) cursor.setDate(cursor.getDate() + intervalDays)
-        while (cursor <= weekEnd) {
-          occurrences.push(new Date(cursor))
-          cursor.setDate(cursor.getDate() + intervalDays)
-        }
-      }
-      for (const occ of occurrences) {
-        if (isPoolCovered(occ, p.id)) continue
-        // Suppress projection if the pool was already serviced on this
-        // day. Otherwise a completed pool whose next_due_at advance
-        // somehow didn't propagate would keep showing as due.
-        if (serviceDays.has(`${p.id}:${ymd(occ)}`)) {
-          coverPool(occ, p.id)
-          continue
-        }
-        ensure(occ).stops.push(poolToStop({ ...p, next_due_at: occ.toISOString() })) /* single-writer-ok: in-memory projection, not a DB write */
-        coverPool(occ, p.id)
-      }
-    }
+    // 2. (Removed.) Legacy pool-level projection — pools.next_due_at +
+    // schedule_frequency projected independently of any profile — is gone.
+    // Pools no longer carry their own schedule; every schedule is a recurring
+    // profile (projected by path 3), and an overdue profiled pool surfaces
+    // from the next_due_at cache via path 4.
 
     // 3. Recurring job profile projections
     const takenByProfile = new Map()

@@ -808,6 +808,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       await markUnableToService(record.id, stop.pool_id, {
         reason: unableReason,
         note: unableNote.trim() || null,
+        // Tie the record to the occurrence the admin clicked (which may be a
+        // future day), not "now" — otherwise it renders as a phantom stop today.
+        scheduledDate: stop.scheduled_date || (stop.next_due_at ? String(stop.next_due_at).split('T')[0] : null),
       })
       toast.success('Marked unable to service')
       setUnablePick(false)

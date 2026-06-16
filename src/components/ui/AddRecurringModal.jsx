@@ -268,35 +268,21 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
       if (editProfile) {
         const s = schedules[0]
         const payload = scheduleToPayload(s)
-        if (editProfile.__isLegacy) {
-          // Promote a legacy pool-level schedule to a real profile, then
-          // re-sync the pool mirror — same migrate path the old
-          // RecurringJobs edit form used. is_active/status/completed_visits
-          // are set fresh because the pseudo-profile has no real row yet.
-          const { error: insErr } = await supabase
-            .from('recurring_job_profiles')
-            .insert({ ...payload, business_id: business.id, is_active: true, status: 'active', completed_visits: 0, series_anchor_date: s.firstDate })
-          if (insErr) throw insErr
-          const freq = s.recurrenceRule === 'custom' ? `${s.customDays}` : s.recurrenceRule
-          await supabase.from('pools').update({ schedule_frequency: freq }).eq('id', poolId)
-          await recomputePoolNextDue(poolId)
-        } else {
-          // Normal edit: update the existing row in place. Don't touch
-          // is_active/status/completed_visits. Re-anchor the immutable
-          // series_anchor_date ONLY when the operator actually changed the
-          // first service date — editing price/notes/tech must leave the
-          // pattern's phase untouched (otherwise history stops lining up).
-          const updatePayload = { ...payload }
-          if (s.firstDate && s.firstDate !== s._anchor) {
-            updatePayload.series_anchor_date = s.firstDate
-          }
-          const { error } = await supabase
-            .from('recurring_job_profiles')
-            .update(updatePayload)
-            .eq('id', editProfile.id)
-          if (error) throw error
-          await recomputePoolNextDue(poolId)
+        // Update the existing profile in place. Don't touch
+        // is_active/status/completed_visits. Re-anchor the immutable
+        // series_anchor_date ONLY when the operator actually changed the
+        // first service date — editing price/notes/tech must leave the
+        // pattern's phase untouched (otherwise history stops lining up).
+        const updatePayload = { ...payload }
+        if (s.firstDate && s.firstDate !== s._anchor) {
+          updatePayload.series_anchor_date = s.firstDate
         }
+        const { error } = await supabase
+          .from('recurring_job_profiles')
+          .update(updatePayload)
+          .eq('id', editProfile.id)
+        if (error) throw error
+        await recomputePoolNextDue(poolId)
         toast.success('Recurring service updated')
         onCreated()
         reset()

@@ -9,7 +9,7 @@
 // calls recomputePoolNextDue(poolId); nothing else writes these columns. A
 // build-time guard (scripts/check-single-writer.mjs) enforces that.
 import { supabase } from './supabase'
-import { occurrencesInRange, computeNextOccurrence, frequencyToDays } from './recurringScheduling'
+import { occurrencesInRange, computeNextOccurrence } from './recurringScheduling'
 
 function startOfDay(d) {
   const x = new Date(d)
@@ -83,21 +83,11 @@ export async function recomputePoolNextDue(poolId, { now = new Date() } = {}) {
   const pool = poolRes.data
   const active = profilesRes.data || []
 
-  // No active profile → legacy (no-pattern) pool.
+  // No active profile → the pool has no schedule. Pool-level scheduling was
+  // removed; next_due_at is now purely a profile-derived cache, so clear it.
   if (!active.length) {
-    let next = null
-    if (pool?.schedule_frequency) {
-      const days = frequencyToDays(pool.schedule_frequency)
-      if (days && pool.last_serviced_at) {
-        next = new Date(pool.last_serviced_at)
-        next.setDate(next.getDate() + days)
-      } else {
-        // Never serviced / unknown frequency → leave an operator-set date alone.
-        return null
-      }
-    }
-    await supabase.from('pools').update({ next_due_at: next ? next.toISOString() : null }).eq('id', poolId)
-    return next ? next.toISOString() : null
+    await supabase.from('pools').update({ next_due_at: null }).eq('id', poolId)
+    return null
   }
 
   // Fulfilling history (bounded window — flat as history grows).
@@ -143,22 +133,5 @@ export async function recomputePoolNextDue(poolId, { now = new Date() } = {}) {
   return nextDue ? nextDue.toISOString() : null
 }
 
-// Sanctioned EXPLICIT setter — the only place outside recompute that may write
-// pools.next_due_at, kept INSIDE this module so the single-writer guard still
-// holds. Use it for the two cases that aren't pattern-derived: (1) creating a
-// LEGACY pool (no profile) with an operator-chosen first service date, and
-// (2) a manual per-pool reschedule. For PROFILE-based creation/edits, call
-// recomputePoolNextDue instead (the pattern owns the date). `firstDate` is a
-// 'YYYY-MM-DD' string, a Date, an ISO string, or null (to clear).
-export async function setPoolNextDue(poolId, firstDate) {
-  if (!poolId) return null
-  let iso = null
-  if (firstDate) {
-    const d = typeof firstDate === 'string'
-      ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(firstDate) ? firstDate + 'T09:00:00' : firstDate)
-      : new Date(firstDate)
-    iso = isNaN(d.getTime()) ? null : d.toISOString()
-  }
-  await supabase.from('pools').update({ next_due_at: iso }).eq('id', poolId)
-  return iso
-}
+// (setPoolNextDue was removed alongside pool-level scheduling. next_due_at is
+// now written ONLY by recomputePoolNextDue, derived from recurring profiles.)

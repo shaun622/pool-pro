@@ -192,25 +192,9 @@ export default function TechRunSheet() {
       if (j.pool_id) poolIdsCovered.add(j.pool_id)
     }
 
-    // Due pools for today. Skip pools that have an active recurring
-    // profile — the profile is the source of truth and projects below.
-    // Otherwise the same service renders twice (pool projection +
-    // profile projection) and dedupe picks whichever ran first.
-    const poolsWithActiveProfile = new Set()
-    for (const profile of profiles) {
-      if (isProfileActive(profile) && profile.pool_id) {
-        poolsWithActiveProfile.add(profile.pool_id)
-      }
-    }
-    for (const p of pools) {
-      if (!p.next_due_at) continue
-      if (poolsWithActiveProfile.has(p.id)) continue
-      const d = new Date(p.next_due_at)
-      if (!sameYMD(d, now)) continue
-      if (poolIdsCovered.has(p.id)) continue
-      items.push(poolToStop(p))
-      poolIdsCovered.add(p.id)
-    }
+    // (Legacy pool-level "due today" projection removed — pools no longer carry
+    // their own schedule. Today's profiled pools project via the loop below;
+    // overdue/upcoming read the next_due_at cache further down.)
 
     // Recurring profiles for today. Same dedupe shape as Schedule.jsx:
     // takenByProfile + replacedByProfile both filter the projection so

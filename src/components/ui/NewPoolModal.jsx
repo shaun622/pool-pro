@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { Droplet } from 'lucide-react'
 import Modal from './Modal'
 import Button from './Button'
-import PoolFormFields, { emptyPool, buildPoolPayload, initialPoolDueDate } from '../PoolFormFields'
-import { setPoolNextDue } from '../../lib/recomputePoolNextDue'
+import PoolFormFields, { emptyPool, buildPoolPayload } from '../PoolFormFields'
 import { supabase } from '../../lib/supabase'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useToast } from '../../contexts/ToastContext'
@@ -39,8 +38,6 @@ export default function NewPoolModal({ open, onClose, clientId, clientAddress, o
         business_id: business.id,
       }).select('id, name, address').single()
       if (error) throw error
-      // next_due_at goes through the single chokepoint setter (legacy bootstrap).
-      await setPoolNextDue(data.id, initialPoolDueDate(poolForm))
       onCreated?.(data)
       onClose?.()
     } catch (err) {

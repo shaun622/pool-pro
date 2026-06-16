@@ -12,8 +12,7 @@ import Button from '../components/ui/Button'
 import StatCard from '../components/ui/StatCard'
 import Input, { Select, TextArea } from '../components/ui/Input'
 import LocationField from '../components/ui/LocationField'
-import PoolFormFields, { emptyPool, buildPoolPayload, initialPoolDueDate } from '../components/PoolFormFields'
-import { setPoolNextDue } from '../lib/recomputePoolNextDue'
+import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import Modal from '../components/ui/Modal'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
@@ -285,8 +284,6 @@ export default function WorkOrders() {
         business_id: business.id,
       }).select('id, address').single()
       if (error) throw error
-      // next_due_at goes through the single chokepoint setter (legacy bootstrap).
-      await setPoolNextDue(data.id, initialPoolDueDate(newPoolForm))
       setClientPools(prev => [...prev, data])
       setJobForm(prev => ({ ...prev, pool_id: data.id }))
       setNewPoolForm(emptyPool)
