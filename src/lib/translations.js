@@ -22,6 +22,7 @@ export const translations = {
     'common.close': 'Close',
     'common.optional': 'Optional',
     'common.required': 'Required',
+    'common.add': 'Add',
 
     // ── nav / shell ──
     'nav.profile': 'My Profile',
@@ -79,6 +80,7 @@ export const translations = {
     'service.addReading': 'Add reading',
     'service.selectReading': 'Select a reading...',
     'service.photo': 'Photo',
+    'service.photos': 'Photos',
     'service.optionalParen': '(optional)',
     'service.extraPhotoHint': 'Snap anything worth recording — water condition, equipment, an issue. Skip if nothing to add.',
     'service.tapAddPhoto': 'Tap to add photo',
@@ -164,6 +166,7 @@ export const translations = {
     'common.close': 'Tutup',
     'common.optional': 'Opsional',
     'common.required': 'Wajib',
+    'common.add': 'Tambah',
 
     // ── nav / shell ──
     'nav.profile': 'Profil Saya',
@@ -221,6 +224,7 @@ export const translations = {
     'service.addReading': 'Tambah pengukuran',
     'service.selectReading': 'Pilih pengukuran...',
     'service.photo': 'Foto',
+    'service.photos': 'Foto',
     'service.optionalParen': '(opsional)',
     'service.extraPhotoHint': 'Ambil foto apa saja yang perlu dicatat — kondisi air, peralatan, masalah. Lewati jika tidak ada.',
     'service.tapAddPhoto': 'Ketuk untuk tambah foto',

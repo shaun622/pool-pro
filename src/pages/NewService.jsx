@@ -99,12 +99,11 @@ export default function NewService() {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [photoMeta, setPhotoMeta] = useState(null) // { lat, lng, timestamp, address }
   const [capturingPhoto, setCapturingPhoto] = useState(false)
-  // Optional second photo on the chemicals step — for "things" shots
-  // (water condition, equipment found dodgy, on-site issues, etc.).
-  // Not gated on, saved with tag='extra' alongside the test-kit photo.
-  const [extraPhoto, setExtraPhoto] = useState(null)
-  const [extraPhotoPreview, setExtraPhotoPreview] = useState(null)
-  const [extraPhotoMeta, setExtraPhotoMeta] = useState(null)
+  // Optional photos on the TASKS step — up to 5 "things" shots (water
+  // condition, equipment found dodgy, on-site issues, etc.). Not gated
+  // on; each saved with tag='extra'. Each entry: { blob, preview, meta }.
+  const MAX_EXTRA_PHOTOS = 5
+  const [extraPhotos, setExtraPhotos] = useState([])
   const [capturingExtraPhoto, setCapturingExtraPhoto] = useState(false)
   // Optional completion photo on the review step — proof of departure
   // / "leaving the pool in a good state" shot. Same watermark
@@ -337,15 +336,13 @@ export default function NewService() {
       if (servicePhoto) {
         // Mandatory test-kit / arrival photo (always present at this point — gated at step 0).
         await saveServicePhoto(record.id, servicePhoto, photoMeta || {}, 'test-kit')
-        // Optional second photo from the chemicals step. Saved with a
-        // different tag so the report can render it under "On-site
-        // photos" / etc. rather than mixed with the test-kit shot.
-        if (extraPhoto) {
+        // Optional extra photos from the tasks step (up to 5). Saved with
+        // tag='extra' so the report can render them under "On-site photos"
+        // rather than mixed with the test-kit shot. Each is non-fatal.
+        for (const p of extraPhotos) {
           try {
-            await saveServicePhoto(record.id, extraPhoto, extraPhotoMeta || {}, 'extra')
+            await saveServicePhoto(record.id, p.blob, p.meta || {}, 'extra')
           } catch (err) {
-            // Non-fatal — main test-kit photo already saved, service
-            // record exists, completion flow continues. Logging only.
             console.error('Extra photo save failed:', err)
           }
         }
@@ -403,6 +400,12 @@ export default function NewService() {
   // block progression.
   const allRequiredDone = tasks.filter(t => t.required).every(t => t.completed)
   const isSaltPool = pool?.pool_type === 'salt'
+
+  // Name baked into every watermarked photo — the service technician
+  // (selected on the Chemicals step), falling back to the logged-in tech
+  // / owner. Mirrors the name written to the service record on submit.
+  const technicianName = staffList.find(s => s.id === selectedStaffId)?.name
+    || staffRecord?.name || business?.owner_name || ''
 
   if (loading) {
     return (
@@ -513,6 +516,7 @@ export default function NewService() {
                       address: gpsAddress || pool?.address || '',
                       clientName: client?.name || '',
                       businessName: business?.name || '',
+                      technicianName,
                     }
                     setPhotoMeta(meta)
                     const watermarked = await watermarkPhoto(file, meta)
@@ -772,128 +776,6 @@ export default function NewService() {
               )
             })()}
 
-            {/* Optional photo — for "things" the tech wants to flag:
-                water condition, dodgy equipment, an issue worth a
-                photo. Distinct from the mandatory arrival/test-kit
-                shot in step 0; saved with tag='extra' so the report
-                renderer can lay it out separately. Same watermark
-                pipeline (GPS + timestamp baked in) for consistency. */}
-            <div className="mt-4">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                {t('service.photo')} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">{t('service.optionalParen')}</span>
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                {t('service.extraPhotoHint')}
-              </p>
-              <input
-                ref={extraPhotoInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  setCapturingExtraPhoto(true)
-                  try {
-                    let lat = gpsRef.current?.latitude || null
-                    let lng = gpsRef.current?.longitude || null
-                    if (!lat) {
-                      try {
-                        const pos = await new Promise((resolve, reject) =>
-                          navigator.geolocation.getCurrentPosition(resolve, reject, {
-                            enableHighAccuracy: true, timeout: 8000, maximumAge: 30000
-                          })
-                        )
-                        lat = pos.coords.latitude
-                        lng = pos.coords.longitude
-                        gpsRef.current = pos.coords
-                      } catch (geoErr) {
-                        console.warn('GPS unavailable:', geoErr.message)
-                      }
-                    }
-                    const now = new Date()
-                    const meta = {
-                      lat, lng, timestamp: now.toISOString(),
-                      address: pool?.address || '',
-                      clientName: client?.name || '',
-                      businessName: business?.name || '',
-                    }
-                    setExtraPhotoMeta(meta)
-                    const watermarked = await watermarkPhoto(file, meta)
-                    setExtraPhoto(watermarked.blob)
-                    setExtraPhotoPreview(watermarked.dataUrl)
-                  } catch (err) {
-                    console.error('Extra photo capture error:', err)
-                    setExtraPhoto(file)
-                    const reader = new FileReader()
-                    reader.onload = (ev) => setExtraPhotoPreview(ev.target.result)
-                    reader.readAsDataURL(file)
-                  } finally {
-                    setCapturingExtraPhoto(false)
-                  }
-                }}
-              />
-              {extraPhotoPreview ? (
-                <div className="relative">
-                  <img
-                    src={extraPhotoPreview}
-                    alt="Extra photo"
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover"
-                  />
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      onClick={() => {
-                        setExtraPhoto(null)
-                        setExtraPhotoPreview(null)
-                        setExtraPhotoMeta(null)
-                        if (extraPhotoInputRef.current) extraPhotoInputRef.current.value = ''
-                      }}
-                      className="flex-1 text-center text-sm font-medium text-red-500 hover:text-red-600 py-2 border border-gray-200 dark:border-gray-700 rounded-lg"
-                    >
-                      Remove
-                    </button>
-                    <button
-                      onClick={() => {
-                        setExtraPhoto(null)
-                        setExtraPhotoPreview(null)
-                        setExtraPhotoMeta(null)
-                        if (extraPhotoInputRef.current) extraPhotoInputRef.current.value = ''
-                        extraPhotoInputRef.current?.click()
-                      }}
-                      className="flex-1 text-center text-sm font-medium text-pool-600 dark:text-pool-400 hover:text-pool-700 py-2 border border-gray-200 dark:border-gray-700 rounded-lg"
-                    >
-                      Replace
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => extraPhotoInputRef.current?.click()}
-                  disabled={capturingExtraPhoto}
-                  className="w-full flex flex-col items-center justify-center gap-1.5 py-6 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
-                >
-                  {capturingExtraPhoto ? (
-                    <>
-                      <svg className="w-7 h-7 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      <span className="text-xs font-medium text-pool-600 dark:text-pool-400">{t('service.processingPhoto')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                      </svg>
-                      <span className="text-sm font-medium">{t('service.tapAddPhoto')}</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
             <Button
               onClick={() => setStep(2)}
               className="w-full min-h-[48px] mt-4"
@@ -1009,8 +891,107 @@ export default function NewService() {
                   }}
                   className="px-4"
                 >
-                  Add
+                  {t('common.add')}
                 </Button>
+              </div>
+            </div>
+
+            {/* Optional photos (up to 5) — "things" the tech wants to flag:
+                water condition, dodgy equipment, on-site issues. Saved with
+                tag='extra'; watermarked (GPS + timestamp + technician) like
+                the arrival / completion shots. Moved here from the Chemicals
+                step. */}
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t('service.photos')} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">{t('service.optionalParen')} · {extraPhotos.length}/{MAX_EXTRA_PHOTOS}</span>
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{t('service.extraPhotoHint')}</p>
+              <input
+                ref={extraPhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  if (extraPhotos.length >= MAX_EXTRA_PHOTOS) return
+                  setCapturingExtraPhoto(true)
+                  try {
+                    let lat = gpsRef.current?.latitude || null
+                    let lng = gpsRef.current?.longitude || null
+                    if (!lat) {
+                      try {
+                        const pos = await new Promise((resolve, reject) =>
+                          navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true, timeout: 8000, maximumAge: 30000
+                          })
+                        )
+                        lat = pos.coords.latitude
+                        lng = pos.coords.longitude
+                        gpsRef.current = pos.coords
+                      } catch (geoErr) {
+                        console.warn('GPS unavailable:', geoErr.message)
+                      }
+                    }
+                    const now = new Date()
+                    const meta = {
+                      lat, lng, timestamp: now.toISOString(),
+                      address: pool?.address || '',
+                      clientName: client?.name || '',
+                      businessName: business?.name || '',
+                      technicianName,
+                    }
+                    const watermarked = await watermarkPhoto(file, meta)
+                    setExtraPhotos(prev => [...prev, { blob: watermarked.blob, preview: watermarked.dataUrl, meta }])
+                  } catch (err) {
+                    console.error('Extra photo capture error:', err)
+                    const reader = new FileReader()
+                    reader.onload = (ev) => setExtraPhotos(prev => [...prev, { blob: file, preview: ev.target.result, meta: null }])
+                    reader.readAsDataURL(file)
+                  } finally {
+                    setCapturingExtraPhoto(false)
+                    if (extraPhotoInputRef.current) extraPhotoInputRef.current.value = ''
+                  }
+                }}
+              />
+              <div className="grid grid-cols-3 gap-2">
+                {extraPhotos.map((p, i) => (
+                  <div key={i} className="relative aspect-square">
+                    <img src={p.preview} alt="" className="w-full h-full object-cover rounded-xl border border-gray-200 dark:border-gray-700" />
+                    <button
+                      type="button"
+                      onClick={() => setExtraPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
+                      aria-label="Remove photo"
+                    >
+                      <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </button>
+                  </div>
+                ))}
+                {extraPhotos.length < MAX_EXTRA_PHOTOS && (
+                  <button
+                    type="button"
+                    onClick={() => extraPhotoInputRef.current?.click()}
+                    disabled={capturingExtraPhoto}
+                    className="aspect-square flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
+                  >
+                    {capturingExtraPhoto ? (
+                      <svg className="w-6 h-6 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : (
+                      <>
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                        </svg>
+                        <span className="text-[11px] font-medium">{t('service.tapAddPhoto')}</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1316,6 +1297,7 @@ export default function NewService() {
                       address: pool?.address || '',
                       clientName: client?.name || '',
                       businessName: business?.name || '',
+                      technicianName,
                     }
                     setCompletionPhotoMeta(meta)
                     const watermarked = await watermarkPhoto(file, meta)
@@ -1569,14 +1551,21 @@ function watermarkPhoto(file, meta) {
         ctx.fillText(`${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)}`, pad, height - barH + 73 * scale)
       }
 
-      // Business name — right side
+      // Right side — technician name stacked above the business name.
+      ctx.textAlign = 'right'
+      let rightY = height - pad
       if (meta.businessName) {
         ctx.font = `bold ${Math.round(11 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
         ctx.fillStyle = 'rgba(255,255,255,0.7)'
-        ctx.textAlign = 'right'
-        ctx.fillText(meta.businessName, width - pad, height - pad)
-        ctx.textAlign = 'left'
+        ctx.fillText(meta.businessName, width - pad, rightY)
+        rightY -= 14 * scale
       }
+      if (meta.technicianName) {
+        ctx.font = `${Math.round(10 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'
+        ctx.fillText(meta.technicianName, width - pad, rightY)
+      }
+      ctx.textAlign = 'left'
 
       canvas.toBlob(
         (blob) => {
