@@ -11,7 +11,7 @@ import { useLanguage, translateTaskName } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import Badge from '../components/ui/Badge'
 import { useToast } from '../contexts/ToastContext'
-import { Check, Mail, Phone, Plus, X } from 'lucide-react'
+import { Check, ClipboardList, Mail, Phone, Plus, X } from 'lucide-react'
 import {
   getChemicalStatus,
   statusDot,
@@ -900,6 +900,28 @@ export default function NewService() {
               </div>
             </div>
 
+            {/* Notes & Issues — free-text the tech jots on site. Bound to
+                the same `notes` saved to the service record (shown
+                read-only on Review). */}
+            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+              <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 bg-amber-50/60 dark:bg-amber-950/20">
+                <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <ClipboardList className="w-4 h-4" strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('service.notesIssuesTitle')}</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">{t('service.notesIssuesHint')}</p>
+                </div>
+              </div>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder={t('service.notesIssuesPlaceholder')}
+                rows={4}
+                className="w-full px-4 py-3 text-sm bg-transparent resize-none focus:outline-none text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+            </div>
+
             {/* Optional photos (up to 5) — "things" the tech wants to flag:
                 water condition, dodgy equipment, on-site issues. Saved with
                 tag='extra'; watermarked (GPS + timestamp + technician) like
@@ -1404,14 +1426,14 @@ export default function NewService() {
               )}
             </div>
 
-            {/* Notes */}
-            <TextArea
-              label={t('service.notesLabel')}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder={t('service.notesPlaceholder')}
-              rows={3}
-            />
+            {/* Notes & Issues — read-only echo of what was entered on the
+                Tasks step, so the tech can confirm before completing. */}
+            {notes.trim() && (
+              <Card>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{t('service.notesIssuesTitle')}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{notes}</p>
+              </Card>
+            )}
 
             {/* Email notice */}
             <p className="text-xs text-gray-400 dark:text-gray-500 text-center">

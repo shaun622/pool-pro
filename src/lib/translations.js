@@ -127,6 +127,9 @@ export const translations = {
     'service.addCustomChemical': 'Add custom chemical',
     'service.chemicalNamePlaceholder': 'Chemical name',
     'service.completeRequiredTasks': 'Complete all required tasks to continue',
+    'service.notesIssuesTitle': 'Notes & Issues',
+    'service.notesIssuesHint': 'Flag anything for the office or next visit',
+    'service.notesIssuesPlaceholder': 'Issues found, recommendations, things for next visit…',
 
     // ── run sheet ──
     'runsheet.today': 'Today',
@@ -278,6 +281,9 @@ export const translations = {
     'service.addCustomChemical': 'Tambah bahan kimia khusus',
     'service.chemicalNamePlaceholder': 'Nama bahan kimia',
     'service.completeRequiredTasks': 'Selesaikan semua tugas wajib untuk lanjut',
+    'service.notesIssuesTitle': 'Catatan & Masalah',
+    'service.notesIssuesHint': 'Catat hal untuk kantor atau kunjungan berikutnya',
+    'service.notesIssuesPlaceholder': 'Masalah ditemukan, rekomendasi, hal untuk kunjungan berikutnya…',
 
     // ── run sheet ──
     'runsheet.today': 'Hari Ini',
