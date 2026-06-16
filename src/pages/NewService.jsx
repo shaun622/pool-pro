@@ -31,7 +31,11 @@ import {
 // old "pool & test kit" photo that lived inside the chemicals step
 // (the one photo we capture is now this arrival photo, taken with the
 // test kit visible — same shot, earlier in the flow, and required).
-const STEPS = ['Arrival', 'Chemicals', 'Tasks', 'Added', 'Review']
+// Flow order: Arrival → Current Readings → Chemicals Added → Tasks →
+// Review. STEPS holds translation keys (not display text); the stepper
+// renders t(`service.step.${key}`). The step===N render blocks below
+// map: 0 arrival, 1 readings, 2 added, 3 tasks, 4 review.
+const STEPS = ['arrival', 'readings', 'added', 'tasks', 'review']
 
 const DEFAULT_READINGS = ['ph', 'total_chlorine']
 
@@ -436,7 +440,7 @@ export default function NewService() {
                   i === step ? 'text-pool-600' : i < step ? 'text-green-600' : 'text-gray-400 dark:text-gray-500'
                 )}
               >
-                {t(`service.step.${label.toLowerCase()}`)}
+                {t(`service.step.${label}`)}
               </button>
             ))}
           </div>
@@ -538,7 +542,7 @@ export default function NewService() {
                   <img
                     src={photoPreview}
                     alt="Arrival photo — verified"
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-contain max-h-48 bg-gray-50 dark:bg-gray-800"
                   />
                   {photoMeta && (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -780,13 +784,13 @@ export default function NewService() {
               onClick={() => setStep(2)}
               className="w-full min-h-[48px] mt-4"
             >
-              {t('service.nextTasks')}
+              {t('service.nextAdded')}
             </Button>
           </div>
         )}
 
-        {/* Step 2: Task Checklist */}
-        {step === 2 && !completed && (
+        {/* Step 3: Task Checklist (now after Chemicals Added) */}
+        {step === 3 && !completed && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('service.taskChecklist')}</h2>
@@ -955,17 +959,17 @@ export default function NewService() {
                   }
                 }}
               />
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {extraPhotos.map((p, i) => (
                   <div key={i} className="relative aspect-square">
-                    <img src={p.preview} alt="" className="w-full h-full object-cover rounded-xl border border-gray-200 dark:border-gray-700" />
+                    <img src={p.preview} alt="" className="w-full h-full object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800" />
                     <button
                       type="button"
                       onClick={() => setExtraPhotos(prev => prev.filter((_, idx) => idx !== i))}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center"
                       aria-label="Remove photo"
                     >
-                      <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                      <X className="w-3 h-3" strokeWidth={2.5} />
                     </button>
                   </div>
                 ))}
@@ -974,21 +978,15 @@ export default function NewService() {
                     type="button"
                     onClick={() => extraPhotoInputRef.current?.click()}
                     disabled={capturingExtraPhoto}
-                    className="aspect-square flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
+                    className="aspect-square flex flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:border-pool-400 hover:text-pool-500 transition-colors"
                   >
                     {capturingExtraPhoto ? (
-                      <svg className="w-6 h-6 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 animate-spin text-pool-500" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
                     ) : (
-                      <>
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                        </svg>
-                        <span className="text-[11px] font-medium">{t('service.tapAddPhoto')}</span>
-                      </>
+                      <Plus className="w-6 h-6" strokeWidth={2} />
                     )}
                   </button>
                 )}
@@ -996,63 +994,71 @@ export default function NewService() {
             </div>
 
             <div className="flex gap-3 mt-4">
-              <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
+              <Button variant="secondary" onClick={() => setStep(2)} className="flex-1 min-h-[48px]">
                 {t('common.back')}
               </Button>
               <Button
-                onClick={() => setStep(3)}
+                onClick={() => setStep(4)}
                 disabled={!allRequiredDone}
                 className="flex-1 min-h-[48px]"
               >
-                {t('service.nextAdded')}
+                {t('service.nextReview')}
               </Button>
             </div>
             {!allRequiredDone && (
               <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">
-                Complete all <span className="text-red-500">*</span> tasks to continue
+                {t('service.completeRequiredTasks')}
               </p>
             )}
           </div>
         )}
 
-        {/* Step 3: Chemicals Added — flat list of every library
-            chemical with an inline quantity input. Tech types in the
-            amount they used; blanks are filtered out on save. No
-            search, no add button — the library is admin-managed via
-            Settings → Chemicals (canonical seven seeded by the
-            20260508 migration plus whatever the admin adds). */}
-        {step === 3 && !completed && (
+        {/* Step 2: Chemicals Added — flat list of every library chemical
+            with inline freeform dose / remaining inputs, PLUS a custom
+            line so the tech can record anything off-list. The library is
+            admin-managed via Settings → Chemicals; custom rows are
+            free-text and don't bump library use_count. */}
+        {step === 2 && !completed && (
           <div className="space-y-3">
             <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('service.chemicalsAddedTitle')}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">
-              Enter the amount of each chemical you used. Leave blank if not used.
+              {t('service.chemAddedHint')}
             </p>
 
-            {chemicalsAdded.length === 0 ? (
-              <Card>
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
-                  No chemicals in the library. Ask an admin to add some via{' '}
-                  <span className="font-medium text-gray-700 dark:text-gray-200">Settings → Chemicals</span>.
-                </p>
-              </Card>
-            ) : (
+            {chemicalsAdded.length > 0 && (
               <div className="space-y-2">
-                {/* Header row — labels above the inputs so the tech
-                    knows which column is which. Hidden on narrow
-                    screens to keep the row compact. */}
                 <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_8rem_8rem] gap-3 px-4 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                  <span>Chemical</span>
-                  <span className="text-center">Added</span>
-                  <span className="text-center">Remaining</span>
+                  <span>{t('service.chemColName')}</span>
+                  <span className="text-center">{t('service.chemColAdded')}</span>
+                  <span className="text-center">{t('service.chemColRemaining')}</span>
                 </div>
                 <div className="rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800 overflow-hidden bg-white dark:bg-gray-900">
                   {chemicalsAdded.map((chem, i) => (
-                    <div key={chem.product_name || i} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_8rem_8rem] gap-3 items-center">
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {chem.product_name}
-                      </span>
-                      {/* Dose — what the tech added. Freeform so they
-                          can write "100g", "1kg", "half scoop", etc. */}
+                    <div key={chem._id || chem.product_name || i} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_8rem_8rem] gap-3 items-center">
+                      {chem.custom ? (
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <input
+                            type="text"
+                            value={chem.product_name}
+                            onChange={e => updateChemical(i, 'product_name', e.target.value)}
+                            placeholder={t('service.chemicalNamePlaceholder')}
+                            className="input !w-full text-sm"
+                            aria-label="Custom chemical name"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setChemicalsAdded(prev => prev.filter((_, idx) => idx !== i))}
+                            aria-label="Remove chemical"
+                            className="shrink-0 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-4 h-4" strokeWidth={2} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {chem.product_name}
+                        </span>
+                      )}
                       <input
                         type="text"
                         value={chem.dose_text}
@@ -1061,8 +1067,6 @@ export default function NewService() {
                         className="input !w-full text-right"
                         aria-label={`${chem.product_name} added`}
                       />
-                      {/* Stock remaining at the client — also
-                          freeform. Empty if the tech didn't note it. */}
                       <input
                         type="text"
                         value={chem.stock_remaining}
@@ -1077,12 +1081,20 @@ export default function NewService() {
               </div>
             )}
 
+            <button
+              type="button"
+              onClick={() => setChemicalsAdded(prev => [...prev, { product_name: '', dose_text: '', stock_remaining: '', custom: true, _id: crypto.randomUUID() }])}
+              className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-pool-300 dark:border-pool-700 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors min-h-tap"
+            >
+              <Plus className="w-4 h-4" strokeWidth={2.5} /> {t('service.addCustomChemical')}
+            </button>
+
             <div className="flex gap-3 mt-4">
-              <Button variant="secondary" onClick={() => setStep(2)} className="flex-1 min-h-[48px]">
+              <Button variant="secondary" onClick={() => setStep(1)} className="flex-1 min-h-[48px]">
                 {t('common.back')}
               </Button>
-              <Button onClick={() => setStep(4)} className="flex-1 min-h-[48px]">
-                {t('service.nextReview')}
+              <Button onClick={() => setStep(3)} className="flex-1 min-h-[48px]">
+                {t('service.nextTasks')}
               </Button>
             </div>
           </div>
@@ -1121,15 +1133,19 @@ export default function NewService() {
               </div>
             </Card>
 
-            {/* Pool photo */}
-            {photoPreview && (
+            {/* Photos — arrival + on-site shots as thumbnails so the
+                whole photo (not a cropped slice) is visible at a glance. */}
+            {(photoPreview || extraPhotos.length > 0) && (
               <Card>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('service.poolTestKitPhoto')}</h3>
-                <img
-                  src={photoPreview}
-                  alt="Pool & test kit"
-                  className="w-full rounded-lg object-cover max-h-56"
-                />
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('service.photos')}</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {photoPreview && (
+                    <img src={photoPreview} alt="" className="aspect-square w-full object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800" />
+                  )}
+                  {extraPhotos.map((p, i) => (
+                    <img key={i} src={p.preview} alt="" className="aspect-square w-full object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800" />
+                  ))}
+                </div>
               </Card>
             )}
 
@@ -1319,7 +1335,7 @@ export default function NewService() {
                   <img
                     src={completionPhotoPreview}
                     alt="Completion photo"
-                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-cover"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 object-contain max-h-48 bg-gray-50 dark:bg-gray-800"
                   />
                   {completionPhotoMeta && (
                     <div className="mt-2 flex flex-wrap gap-2">
