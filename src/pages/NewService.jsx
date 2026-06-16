@@ -127,7 +127,10 @@ export default function NewService() {
   // "Unable to Service" sub-flow (entered from the arrival screen). The tech
   // picks a reason, optionally adds a note + up to 5 watermarked photos
   // (tag='unable_access'), and submits — no service happens.
-  const [unableMode, setUnableMode] = useState(false)
+  // Entered from the run-sheet card's "Unable to Service" button via
+  // ?unable=1 (the button lives on the card, not this screen, to avoid the
+  // tech having to Start Service first).
+  const [unableMode, setUnableMode] = useState(searchParams.get('unable') === '1')
   const [unableReason, setUnableReason] = useState('')
   const [unableNote, setUnableNote] = useState('')
   const [unablePhotos, setUnablePhotos] = useState([]) // { blob, preview, meta }
@@ -870,15 +873,6 @@ export default function NewService() {
             {!servicePhoto && (
               <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">{t('service.photoRequired')}</p>
             )}
-
-            {/* Escape hatch: can't get in (locked gate, no access, …). Doesn't
-                require the arrival photo — the tech may not even reach the pool. */}
-            <button
-              onClick={() => setUnableMode(true)}
-              className="w-full min-h-[48px] mt-2 rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-semibold text-sm hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-            >
-              {t('service.unableButton')}
-            </button>
           </div>
         )}
 

@@ -784,26 +784,36 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
 
       {/* Action buttons */}
       {!completed && !unable && !compact && (
-        <div className="flex gap-2 mt-3">
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-2">
+            {stop.pool_id && (
+              <button
+                onClick={() => navigate(`/pools/${stop.pool_id}/service`)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
+                {t('runsheet.startService')}
+              </button>
+            )}
+            {stop.address && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold active:scale-[0.98] transition-all min-h-tap"
+              >
+                <MapPin className="w-4 h-4" strokeWidth={2} />
+                {t('runsheet.navigate')}
+              </a>
+            )}
+          </div>
           {stop.pool_id && (
             <button
-              onClick={() => navigate(`/pools/${stop.pool_id}/service`)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap"
+              onClick={() => navigate(`/pools/${stop.pool_id}/service?unable=1`)}
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-semibold active:scale-[0.98] transition-all min-h-tap hover:bg-red-50 dark:hover:bg-red-950/30"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
-              {t('runsheet.startService')}
+              {t('service.unableButton')}
             </button>
-          )}
-          {stop.address && (
-            <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(stop.address)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-semibold active:scale-[0.98] transition-all min-h-tap"
-            >
-              <MapPin className="w-4 h-4" strokeWidth={2} />
-              {t('runsheet.navigate')}
-            </a>
           )}
         </div>
       )}
