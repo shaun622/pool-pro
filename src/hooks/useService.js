@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useBusiness } from './useBusiness'
-import { computeNextOccurrence } from '../lib/recurringScheduling'
+import { recomputePoolNextDue } from '../lib/recomputePoolNextDue'
 
 export function useService() {
   const { business } = useBusiness()
@@ -69,54 +69,18 @@ export function useService() {
     setLoading(true)
     try {
       const now = new Date()
+      // 1. Mark the record completed.
       const { error } = await supabase
         .from('service_records')
         .update({ status: 'completed', notes, serviced_at: now.toISOString() })
         .eq('id', serviceRecordId)
       if (error) throw error
 
-      // The recurring profile (if any) is the source of truth for cadence.
-      // Compute the next occurrence ONCE and write the SAME date to both the
-      // profile's next_generation_at AND the pool's next_due_at mirror, so
-      // they can never drift. This is what fixes the stale "next due" on the
-      // Recurring page and completed stops vanishing from the schedule (the
-      // profile used to keep re-projecting the old date because its anchor
-      // was never advanced).
-      let profile = null
-      try {
-        const { data: profiles } = await supabase
-          .from('recurring_job_profiles')
-          .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month, next_generation_at, last_generated_at, duration_type, total_visits, completed_visits, status')
-          .eq('pool_id', poolId)
-          .eq('is_active', true)
-          .in('status', ['active'])
-          .limit(1)
-        profile = profiles?.[0] || null
-      } catch (e) {
-        console.warn('Profile fetch failed (non-critical):', e)
-      }
+      // 2. last_serviced_at — history; the chokepoint's legacy (no-profile)
+      // branch reads it. (next_due_at is owned solely by the chokepoint.)
+      await supabase.from('pools').update({ last_serviced_at: now.toISOString() }).eq('id', poolId)
 
-      // Next due: advance the profile's FIXED schedule (its set weekday +
-      // cadence), NOT service-date + interval — so "every Tuesday" stays
-      // Tuesday even if the tech serviced on another day. Fall back to the
-      // pool's denormalised frequency for legacy pools with no profile.
-      let nextDue = profile ? nextFixedOccurrence(profile, now) : null
-      if (!nextDue) {
-        const { data: pool } = await supabase
-          .from('pools')
-          .select('schedule_frequency')
-          .eq('id', poolId)
-          .single()
-        nextDue = calculateNextDueDate(now, pool?.schedule_frequency || 'weekly')
-      }
-
-      await supabase
-        .from('pools')
-        .update({ last_serviced_at: now.toISOString(), next_due_at: nextDue.toISOString() })
-        .eq('id', poolId)
-
-      // Mark any scheduled/in-progress job for this pool today as completed,
-      // so an auto-generated real jobs row doesn't linger on the schedule.
+      // 3. Clear any auto-generated job for today off the schedule.
       try {
         const ymd = ymdLocal(now)
         await supabase
@@ -129,27 +93,36 @@ export function useService() {
         console.warn('Mark-jobs-completed failed (non-critical):', e)
       }
 
-      // Advance the profile: move its anchor (next_generation_at) to the SAME
-      // next date as the pool, bump completed_visits, and auto-complete if the
-      // visit target is hit.
-      if (profile) {
-        try {
-          const newCount = (profile.completed_visits || 0) + 1
-          const updates = {
-            completed_visits: newCount,
-            next_generation_at: ymdLocal(nextDue),
-            last_generated_at: now.toISOString(),
-          }
-          if (profile.duration_type === 'num_visits' && profile.total_visits && newCount >= profile.total_visits) {
-            updates.status = 'completed'
-          }
-          await supabase.from('recurring_job_profiles').update(updates).eq('id', profile.id)
-        } catch (e) {
-          console.warn('Recurring profile advance failed (non-critical):', e)
+      // 4. Bump completed_visits on the active profile (history side-effect for
+      // the num_visits duration limit). AWAITED before the recompute so the
+      // chokepoint's fresh read sees the post-bump count (no off-by-one).
+      try {
+        const { data: profiles } = await supabase
+          .from('recurring_job_profiles')
+          .select('id, completed_visits')
+          .eq('pool_id', poolId)
+          .eq('is_active', true)
+          .in('status', ['active'])
+          .limit(1)
+        if (profiles?.length) {
+          await supabase
+            .from('recurring_job_profiles')
+            .update({ completed_visits: (profiles[0].completed_visits || 0) + 1 })
+            .eq('id', profiles[0].id)
         }
+      } catch (e) {
+        console.warn('completed_visits bump failed (non-critical):', e)
       }
 
-      // Fire-and-forget email notifications (don't block completion)
+      // 5. THE single chokepoint recomputes next_due_at from the fixed pattern +
+      // the (now updated) history, ending/mirroring profiles as needed.
+      try {
+        await recomputePoolNextDue(poolId, { now })
+      } catch (e) {
+        console.warn('recomputePoolNextDue failed (non-critical):', e)
+      }
+
+      // 6. Fire-and-forget email notifications (don't block completion)
       supabase.functions.invoke('complete-service', {
         body: { service_record_id: serviceRecordId }
       }).then(({ data, error }) => {
@@ -182,42 +155,6 @@ export function useService() {
         })
         .eq('id', serviceRecordId)
       if (error) throw error
-
-      // Skip to the next normal service: advance BOTH the pool mirror and the
-      // recurring profile's anchor (next_generation_at) so they stay in sync
-      // and the Recurring page shows the right next date. Deliberately NO
-      // last_serviced_at and NO completed_visits bump — nothing was serviced.
-      try {
-        const { data: profiles } = await supabase
-          .from('recurring_job_profiles')
-          .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month, next_generation_at, last_generated_at')
-          .eq('pool_id', poolId)
-          .eq('is_active', true)
-          .in('status', ['active'])
-          .limit(1)
-        const profile = profiles?.[0] || null
-        let nextDue = profile ? nextFixedOccurrence(profile, now) : null
-        if (!nextDue) {
-          const { data: pool } = await supabase
-            .from('pools')
-            .select('schedule_frequency')
-            .eq('id', poolId)
-            .single()
-          nextDue = calculateNextDueDate(now, pool?.schedule_frequency || 'weekly')
-        }
-        await supabase
-          .from('pools')
-          .update({ next_due_at: nextDue.toISOString() })
-          .eq('id', poolId)
-        if (profile) {
-          await supabase
-            .from('recurring_job_profiles')
-            .update({ next_generation_at: ymdLocal(nextDue), last_generated_at: now.toISOString() })
-            .eq('id', profile.id)
-        }
-      } catch (e) {
-        console.warn('Unable-to-service schedule advance failed (non-critical):', e)
-      }
 
       // Drop today's real job (if any) off the active route. Active lists
       // key on 'scheduled'/'in_progress', so this clears it without it ever
@@ -253,6 +190,15 @@ export function useService() {
         })
       } catch (e) {
         console.warn('Unable-to-service activity insert failed (non-critical):', e)
+      }
+
+      // Recompute next_due via the chokepoint — the unable record fulfils the
+      // occurrence, so the pattern advances exactly one (fixed weekday kept).
+      // No last_serviced_at, no completed_visits bump (nothing was serviced).
+      try {
+        await recomputePoolNextDue(poolId, { now })
+      } catch (e) {
+        console.warn('recomputePoolNextDue failed (non-critical):', e)
       }
 
       // Fire-and-forget admin email: reason + photos + full customer contact.
@@ -352,34 +298,5 @@ function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// Next scheduled occurrence on the profile's FIXED pattern, strictly after
-// `after`. Advances from the profile's scheduled anchor (next_generation_at) —
-// NOT the actual service date — so the weekday + cadence rhythm stay fixed
-// ("every Tuesday" stays Tuesday even if serviced on a Thursday). Rolls forward
-// if the service was done late so the returned date is always in the future.
-function nextFixedOccurrence(profile, after) {
-  const afterMid = new Date(after.getFullYear(), after.getMonth(), after.getDate())
-  const anchor = profile?.next_generation_at || profile?.last_generated_at
-  let cursor = anchor
-    ? computeNextOccurrence(anchor, profile)
-    : computeNextOccurrence(afterMid, profile)
-  let guard = 0
-  while (cursor && cursor <= afterMid && guard < 200) {
-    cursor = computeNextOccurrence(cursor, profile)
-    guard++
-  }
-  return cursor
-}
-
-function calculateNextDueDate(from, frequency) {
-  const date = new Date(from)
-  switch (frequency) {
-    case 'weekly': date.setDate(date.getDate() + 7); break
-    case 'fortnightly': date.setDate(date.getDate() + 14); break
-    case 'monthly': date.setMonth(date.getMonth() + 1); break
-    case '6_weekly': date.setDate(date.getDate() + 42); break
-    case 'quarterly': date.setDate(date.getDate() + 90); break
-    default: date.setDate(date.getDate() + 7)
-  }
-  return date
-}
+// (nextFixedOccurrence + calculateNextDueDate removed — next_due_at is now owned
+// solely by recomputePoolNextDue, computed from the fixed pattern + history.)

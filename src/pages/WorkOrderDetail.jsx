@@ -11,6 +11,7 @@ import Input, { Select, TextArea } from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { supabase } from '../lib/supabase'
+import { recomputePoolNextDue } from '../lib/recomputePoolNextDue'
 import { formatDate, formatCurrency, cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
 import { useToast } from '../contexts/ToastContext'
@@ -215,10 +216,9 @@ export default function JobDetail() {
       // OLD date as a phantom stop while the real job sits at the new
       // date (the dedupe in Schedule.jsx only suppresses the pool
       // projection on the same day as the job, not on the day it was).
-      if (dateChanged && job.pool_id && editForm.scheduled_date) {
-        await supabase.from('pools').update({
-          next_due_at: new Date(editForm.scheduled_date + 'T09:00:00').toISOString(),
-        }).eq('id', job.pool_id)
+      if (dateChanged && job.pool_id) {
+        // next_due_at is owned by the chokepoint (recomputed from the pattern).
+        await recomputePoolNextDue(job.pool_id)
       }
 
       setJob(prev => ({ ...prev, ...updates }))

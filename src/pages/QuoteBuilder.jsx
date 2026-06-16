@@ -13,6 +13,8 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { supabase } from '../lib/supabase'
+import { recomputePoolNextDue } from '../lib/recomputePoolNextDue'
+import { profileFieldsFromForm } from '../lib/recurringScheduling'
 import { formatCurrency, calculateGST, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 
@@ -200,7 +202,6 @@ export default function QuoteBuilder() {
         client_id: clientId,
         business_id: business.id,
         address: newPoolAddress.trim(),
-        next_due_at: new Date().toISOString(),
       }).select('id, address').single()
       if (error) throw error
       setClientPools(prev => [...prev, data])
@@ -377,21 +378,38 @@ export default function QuoteBuilder() {
       }).select().single()
       if (error) throw error
 
-      // Create recurring profiles for recurring line items
-      for (const item of recurringItems) {
-        const intervals = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }
+      // Create recurring profiles for recurring line items. Build ALL payloads,
+      // insert once, then recompute ONCE — recomputing inside the loop both
+      // wastes round-trips and writes intermediate next_due_at values that the
+      // next iteration immediately supersedes. profileFieldsFromForm gives the
+      // same (preferred_day_of_week / monthly_week_of_month / custom_interval_days)
+      // derivation every other create path uses, so the projector anchors these
+      // profiles on the correct weekday. is_active/status/completed_visits are
+      // set explicitly so the chokepoint's `is_active && status='active'` filter
+      // actually picks them up.
+      const intervals = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }
+      const profilePayloads = recurringItems.map(item => {
         const days = intervals[item.recurring] || 30
         const nextGen = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-        await supabase.from('recurring_job_profiles').insert({
+        const anchorYmd = `${nextGen.getFullYear()}-${String(nextGen.getMonth() + 1).padStart(2, '0')}-${String(nextGen.getDate()).padStart(2, '0')}`
+        return {
           business_id: business.id,
           client_id: clientId,
           pool_id: poolId || null,
           title: item.description,
-          recurrence_rule: item.recurring,
           price: item.unit_price ? Number(item.unit_price) * (item.quantity || 1) : null,
-          next_generation_at: nextGen.toISOString(),
-          last_generated_at: new Date().toISOString(),
-        })
+          series_anchor_date: anchorYmd,
+          ...profileFieldsFromForm({ rule: item.recurring, customDays: days, firstDate: anchorYmd }),
+          is_active: true,
+          status: 'active',
+          completed_visits: 0,
+        }
+      })
+      if (profilePayloads.length) {
+        const { error: profErr } = await supabase.from('recurring_job_profiles').insert(profilePayloads)
+        if (profErr) throw profErr
+        // The chokepoint owns next_due_at (derived from the new pattern).
+        if (poolId) await recomputePoolNextDue(poolId)
       }
 
       navigate('/work-orders?tab=quotes')

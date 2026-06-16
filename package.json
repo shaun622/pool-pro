@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/check-single-writer.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "start": "serve dist -s -l ${PORT:-3000}"

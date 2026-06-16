@@ -10,6 +10,7 @@ import NewTechnicianModal from './NewTechnicianModal'
 import { supabase } from '../../lib/supabase'
 import { cn, formatDateWithDay } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
+import { recomputePoolNextDue } from '../../lib/recomputePoolNextDue'
 import RecurrencePicker from './RecurrencePicker'
 import {
   RECURRENCE_OPTIONS,
@@ -44,12 +45,20 @@ function blankSchedule() {
 // object so the unified modal can edit it. Inverse of the payload built
 // in handleSubmit's edit branch.
 function scheduleFromProfile(p) {
+  // The "First service date" field shows the IMMUTABLE series_anchor_date — the
+  // true start of the pattern, not the (drifting) next-due mirror. Pre-migration
+  // rows have no series_anchor_date yet, so fall back to next_generation_at (the
+  // migration backfills series_anchor_date from it, so the grid is identical).
+  // _anchor preserves the original so the edit path can tell whether the
+  // operator actually re-anchored vs. just edited price/notes/tech.
+  const anchor = p.series_anchor_date
+    ? String(p.series_anchor_date).split('T')[0]
+    : (p.next_generation_at ? String(p.next_generation_at).split('T')[0] : '')
   return {
     recurrenceRule: p.recurrence_rule || 'weekly',
     customDays: p.custom_interval_days || 7,
-    firstDate: p.next_generation_at
-      ? String(p.next_generation_at).split('T')[0]
-      : new Date().toISOString().split('T')[0],
+    firstDate: anchor || new Date().toISOString().split('T')[0],
+    _anchor: anchor,
     durationType: p.duration_type || 'ongoing',
     endDate: p.end_date ? String(p.end_date).split('T')[0] : '',
     totalVisits: p.total_visits ?? '',
@@ -240,7 +249,10 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
       price: (s.price !== '' && s.price != null) ? Number(s.price) : null,
       assigned_staff_id: s.assignedStaffId || null,
       notes: s.notes.trim() || null,
-      next_generation_at: s.firstDate,
+      // series_anchor_date is intentionally NOT set here. It is immutable once a
+      // profile exists, so the edit branch only writes it when the operator
+      // explicitly changes the first date. Fresh inserts (create / legacy
+      // promote) add it explicitly below.
       duration_type: s.durationType,
       end_date: s.durationType === 'until_date' ? s.endDate : null,
       total_visits: s.durationType === 'num_visits' ? Number(s.totalVisits) : null,
@@ -263,21 +275,27 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
           // are set fresh because the pseudo-profile has no real row yet.
           const { error: insErr } = await supabase
             .from('recurring_job_profiles')
-            .insert({ ...payload, business_id: business.id, is_active: true, status: 'active', completed_visits: 0 })
+            .insert({ ...payload, business_id: business.id, is_active: true, status: 'active', completed_visits: 0, series_anchor_date: s.firstDate })
           if (insErr) throw insErr
           const freq = s.recurrenceRule === 'custom' ? `${s.customDays}` : s.recurrenceRule
-          await supabase.from('pools').update({
-            schedule_frequency: freq,
-            next_due_at: s.firstDate ? new Date(s.firstDate + 'T09:00:00').toISOString() : null,
-          }).eq('id', poolId)
+          await supabase.from('pools').update({ schedule_frequency: freq }).eq('id', poolId)
+          await recomputePoolNextDue(poolId)
         } else {
           // Normal edit: update the existing row in place. Don't touch
-          // is_active/status/completed_visits or the pool mirror.
+          // is_active/status/completed_visits. Re-anchor the immutable
+          // series_anchor_date ONLY when the operator actually changed the
+          // first service date — editing price/notes/tech must leave the
+          // pattern's phase untouched (otherwise history stops lining up).
+          const updatePayload = { ...payload }
+          if (s.firstDate && s.firstDate !== s._anchor) {
+            updatePayload.series_anchor_date = s.firstDate
+          }
           const { error } = await supabase
             .from('recurring_job_profiles')
-            .update(payload)
+            .update(updatePayload)
             .eq('id', editProfile.id)
           if (error) throw error
+          await recomputePoolNextDue(poolId)
         }
         toast.success('Recurring service updated')
         onCreated()
@@ -309,7 +327,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
           assigned_staff_id: s.assignedStaffId || null,
           notes: s.notes.trim() || null,
           is_active: true,
-          next_generation_at: s.firstDate,
+          series_anchor_date: s.firstDate,
           duration_type: s.durationType,
           end_date: s.durationType === 'until_date' ? s.endDate : null,
           total_visits: s.durationType === 'num_visits' ? Number(s.totalVisits) : null,
@@ -335,10 +353,12 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
       const primary = schedules[0]
       const poolUpdate = {
         schedule_frequency: primary.recurrenceRule === 'custom' ? `${primary.customDays}` : primary.recurrenceRule,
-        next_due_at: primary.firstDate,
       }
       if (primary.assignedStaffId) poolUpdate.assigned_staff_id = primary.assignedStaffId
       await supabase.from('pools').update(poolUpdate).eq('id', poolId)
+      // The chokepoint derives next_due_at from the brand-new pattern (= firstDate,
+      // since nothing's fulfilled yet) — the single writer, no manual mirror.
+      await recomputePoolNextDue(poolId)
 
       if (payloads.length > 1) {
         toast.success(`Created ${payloads.length} recurring services`)

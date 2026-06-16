@@ -77,6 +77,24 @@ export function cadenceIntervalDays(profile) {
   }
 }
 
+// Map a pool's denormalised schedule_frequency (string or number) to days.
+// Used by the legacy (no-profile) branch of recomputePoolNextDue; mirrors the
+// Schedule projector's own frequency→days mapping.
+export function frequencyToDays(freq) {
+  if (!freq) return null
+  if (typeof freq === 'number') return freq
+  const f = String(freq).toLowerCase().trim()
+  if (f === 'weekly' || f === 'every_week' || f === '1w') return 7
+  if (f === 'fortnightly' || f === 'biweekly' || f === 'every_2_weeks' || f === '2w') return 14
+  if (f === 'every_3_weeks' || f === '3w') return 21
+  if (f === 'every_4_weeks' || f === '4w') return 28
+  if (f === 'monthly' || f === 'every_month' || f === '1m') return 30
+  if (f === '6_weekly' || f === 'every_6_weeks' || f === '6w') return 42
+  if (f === 'quarterly' || f === '3m') return 90
+  const n = parseInt(f, 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 // Inverse of nthWeekdayOfMonth — given a date, return which Nth
 // occurrence of its own weekday it is in its month. 1..4 = exact;
 // 5 = "the last one" (chosen when the date is the final occurrence
@@ -279,8 +297,17 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   // then walk forward/backward by interval days.
   const interval = cadenceIntervalDays(profile)
   if (!interval) return []
-  const anchorStr = profile.next_generation_at || profile.last_generated_at
-  const anchor = anchorStr ? new Date(anchorStr) : new Date()
+  // Pattern-only: anchor on the IMMUTABLE series origin, never the moving
+  // next_generation_at (which used to drift). Fall back through created_at and
+  // the legacy pointers so any caller still resolves. Parse date-only strings
+  // as LOCAL midnight so a YYYY-MM-DD anchor never shifts a day in any tz.
+  // Prefer the immutable series_anchor_date; before the migration backfills it,
+  // fall back to next_generation_at (still ON-pattern, = old behaviour) rather
+  // than created_at (an arbitrary weekday). created_at stays the floor below.
+  const anchorStr = profile.series_anchor_date || profile.next_generation_at || profile.last_generated_at
+  const anchor = anchorStr
+    ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(anchorStr) ? anchorStr + 'T00:00:00' : anchorStr)
+    : new Date()
   if (isNaN(anchor.getTime())) return []
   let cursor = new Date(anchor); cursor.setHours(0, 0, 0, 0)
   while (cursor > end)   cursor.setDate(cursor.getDate() - interval)

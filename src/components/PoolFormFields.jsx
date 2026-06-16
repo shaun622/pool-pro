@@ -38,12 +38,26 @@ export async function buildPoolPayload(poolForm) {
     volume_litres: volume_litres ? Number(volume_litres) : null,
     equipment: { pump_model, filter_type, heater },
     schedule_frequency: regular_service ? rest.schedule_frequency : null,
-    next_due_at: regular_service ? (first_service_date || new Date().toISOString()) : null,
+    // next_due_at is deliberately NOT set here. It is the scheduling cache owned
+    // by recomputePoolNextDue.js; the create sites write it AFTER insert via
+    // setPoolNextDue(id, initialPoolDueDate(poolForm)). Writing it in this
+    // payload (then spreading into .insert) was an un-routed write that the
+    // single-writer guard could not see — hence the split.
     access_notes: regular_service ? rest.access_notes : null,
     latitude: lat,
     longitude: lng,
     geocoded_at: lat != null ? new Date().toISOString() : null,
   }
+}
+
+// The legacy-pool first due date, derived from the create form. A pool created
+// here has no recurring_job_profile, so its next_due_at is operator-set (=
+// first service date) — exactly the "legacy bootstrap" setPoolNextDue handles.
+// Returns a 'YYYY-MM-DD' string, or null when servicing is off. Call sites pass
+// this to setPoolNextDue(newPoolId, ...) right after the insert.
+export function initialPoolDueDate(poolForm) {
+  if (!poolForm?.regular_service) return null
+  return poolForm.first_service_date || new Date().toISOString().split('T')[0]
 }
 
 // Edit-safe payload â€” attribute fields only. Deliberately OMITS

@@ -14,6 +14,7 @@ import ConfirmModal from '../components/ui/ConfirmModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
+import { recomputePoolNextDue } from '../lib/recomputePoolNextDue'
 import { formatDateWithDay, formatCurrency, cn } from '../lib/utils'
 import { useToast } from '../contexts/ToastContext'
 import { describeSchedule } from '../lib/recurringScheduling'
@@ -147,7 +148,7 @@ export default function RecurringJobs() {
       // Map legacy schedule_frequency onto the recurrence_rule field
       // the rest of the code expects.
       recurrence_rule: p.schedule_frequency,
-      next_generation_at: p.next_due_at?.split('T')[0] || null,
+      next_generation_at: p.next_due_at?.split('T')[0] || null, /* single-writer-ok: in-memory pseudo-profile for render, not a DB write */
       last_generated_at: null,
       is_active: true,
       status: 'active',
@@ -260,9 +261,10 @@ export default function RecurringJobs() {
       if (editing.__isLegacy) {
         const { error: poolErr } = await supabase
           .from('pools')
-          .update({ next_due_at: null, schedule_frequency: null })
+          .update({ schedule_frequency: null })
           .eq('id', editing.__poolId)
         if (poolErr) throw poolErr
+        await recomputePoolNextDue(editing.__poolId)
       } else {
         const { error: jobsErr } = await supabase
           .from('jobs')
@@ -280,10 +282,8 @@ export default function RecurringJobs() {
         // We only clear fields the recurring lifecycle owns; address /
         // other pool fields stay untouched.
         if (editing.pool_id) {
-          await supabase
-            .from('pools')
-            .update({ next_due_at: null, schedule_frequency: null })
-            .eq('id', editing.pool_id)
+          await supabase.from('pools').update({ schedule_frequency: null }).eq('id', editing.pool_id)
+          await recomputePoolNextDue(editing.pool_id)
         }
       }
       toast.success('Recurring service deleted')
@@ -313,32 +313,23 @@ export default function RecurringJobs() {
       // depending on whatever's loaded into local state.
       const { data: profile } = await supabase
         .from('recurring_job_profiles')
-        .select('pool_id, recurrence_rule, custom_interval_days, next_generation_at')
+        .select('pool_id, recurrence_rule, custom_interval_days')
         .eq('id', profileId)
         .single()
 
       if (profile?.pool_id) {
+        // Keep the schedule_frequency mirror in sync (UI/legacy reads);
+        // next_due_at is owned by the chokepoint, which recomputes from the
+        // pattern (resume → real next occurrence; pause/cancel → null).
         if (newStatus === 'paused' || newStatus === 'cancelled') {
-          await supabase
-            .from('pools')
-            .update({ next_due_at: null, schedule_frequency: null })
-            .eq('id', profile.pool_id)
+          await supabase.from('pools').update({ schedule_frequency: null }).eq('id', profile.pool_id)
         } else if (newStatus === 'active') {
-          // Re-anchor the mirror to the profile so the schedule starts
-          // projecting again. next_generation_at is the next planned
-          // occurrence; if it's missing we fall back to today and let
-          // the operator adjust via the edit flow.
           const freq = profile.recurrence_rule === 'custom' && profile.custom_interval_days
             ? String(profile.custom_interval_days)
             : profile.recurrence_rule
-          const nextDue = profile.next_generation_at
-            ? new Date(profile.next_generation_at + 'T09:00:00').toISOString()
-            : new Date().toISOString()
-          await supabase
-            .from('pools')
-            .update({ next_due_at: nextDue, schedule_frequency: freq })
-            .eq('id', profile.pool_id)
+          await supabase.from('pools').update({ schedule_frequency: freq }).eq('id', profile.pool_id)
         }
+        await recomputePoolNextDue(profile.pool_id)
       }
 
       fetchAll()

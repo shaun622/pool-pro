@@ -379,7 +379,7 @@ function Schedule({ business }) {
       // Unable records render orange (and stay prominent); completed render dim.
       const isUnable = r.status === 'unable_to_service'
       const stop = poolToStop(
-        { ...pool, next_due_at: r.serviced_at },
+        { ...pool, next_due_at: r.serviced_at }, /* single-writer-ok: in-memory projection to poolToStop, not a DB write */
         isUnable
           ? { isUnable: true, serviceRecordId: r.id }
           : { isCompleted: true, serviceRecordId: r.id }
@@ -431,7 +431,7 @@ function Schedule({ business }) {
           coverPool(occ, p.id)
           continue
         }
-        ensure(occ).stops.push(poolToStop({ ...p, next_due_at: occ.toISOString() }))
+        ensure(occ).stops.push(poolToStop({ ...p, next_due_at: occ.toISOString() })) /* single-writer-ok: in-memory projection, not a DB write */
         coverPool(occ, p.id)
       }
     }
@@ -510,7 +510,10 @@ function Schedule({ business }) {
         const poolIdsInToday = new Set(todayGroup.stops.filter(s => s.pool_id).map(s => s.pool_id))
         for (const p of allPools) {
           if (!p.next_due_at) continue
-          if (poolsWithActiveProfile.has(p.id)) continue
+          // No active-profile exclusion here (unlike path 2): next_due_at is now
+          // the faithful oldest-UNFULFILLED occurrence, so a profiled pool that's
+          // overdue surfaces exactly one overdue stop (previously it vanished —
+          // path 3 only projects the visible week). poolIdsInToday dedupes.
           const d = new Date(p.next_due_at)
           if (d >= startOfToday) continue
           if (poolIdsInToday.has(p.id)) continue
@@ -1301,7 +1304,7 @@ function MapView({ pools, onSelect }) {
       type: 'pool', id: p.id, pool_id: p.id, client_id: p.client_id,
       title: 'Pool Service', client_name: p.clients?.name,
       address: p.address, status: isOverdue ? 'overdue' : due ? 'due' : 'scheduled',
-      next_due_at: p.next_due_at, schedule_frequency: p.schedule_frequency,
+      next_due_at: p.next_due_at, schedule_frequency: p.schedule_frequency, /* single-writer-ok: in-memory stop object */
       access_notes: p.access_notes, frequency: p.schedule_frequency,
       phone: p.clients?.phone, email: p.clients?.email,
       lat: Number(p.latitude), lng: Number(p.longitude),
@@ -1479,7 +1482,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false
     pool_name: p.name || null,
     address: p.address,
     status,
-    next_due_at: p.next_due_at,
+    next_due_at: p.next_due_at, /* single-writer-ok: in-memory stop object */
     schedule_frequency: p.schedule_frequency,
     access_notes: p.access_notes,
     frequency: p.schedule_frequency,

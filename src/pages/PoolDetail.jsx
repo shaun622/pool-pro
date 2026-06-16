@@ -14,6 +14,7 @@ import { Pencil } from 'lucide-react'
 import { useService } from '../hooks/useService'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
+import { setPoolNextDue } from '../lib/recomputePoolNextDue'
 import {
   formatDate,
   getChemicalStatus,
@@ -441,12 +442,9 @@ export default function PoolDetail() {
                 if (!scheduleDate) return
                 setScheduling(true)
                 try {
-                  const { error } = await supabase
-                    .from('pools')
-                    .update({ next_due_at: new Date(scheduleDate).toISOString() })
-                    .eq('id', id)
-                  if (error) throw error
-                  setPool(prev => ({ ...prev, next_due_at: new Date(scheduleDate).toISOString() }))
+                  const iso = new Date(scheduleDate).toISOString()
+                  await setPoolNextDue(id, iso)
+                  setPool(prev => ({ ...prev, next_due_at: iso })) /* single-writer-ok: local setState mirror of the setPoolNextDue write above */
                   setScheduleOpen(false)
                 } catch (err) {
                   console.error('Error scheduling service:', err)

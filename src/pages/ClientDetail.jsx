@@ -15,8 +15,9 @@ import { useStaff } from '../hooks/useStaff'
 import StaffCard from '../components/ui/StaffCard'
 import LocationField from '../components/ui/LocationField'
 import { supabase } from '../lib/supabase'
+import { setPoolNextDue } from '../lib/recomputePoolNextDue'
 import { geocodeAddress } from '../lib/mapbox'
-import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
+import PoolFormFields, { emptyPool, buildPoolPayload, initialPoolDueDate } from '../components/PoolFormFields'
 import EditPoolModal from '../components/ui/EditPoolModal'
 import { useToast } from '../contexts/ToastContext'
 import { Briefcase, Calendar, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
@@ -190,7 +191,9 @@ export default function ClientDetail() {
     setPoolSaving(true)
     try {
       const payload = await buildPoolPayload(poolForm)
-      await createPool({ ...payload, client_id: id })
+      const created = await createPool({ ...payload, client_id: id })
+      // next_due_at goes through the single chokepoint setter (legacy bootstrap).
+      if (created?.id) await setPoolNextDue(created.id, initialPoolDueDate(poolForm))
       setPoolModalOpen(false)
       setPoolForm(emptyPool)
     } catch (err) {
@@ -255,10 +258,11 @@ export default function ClientDetail() {
     setScheduleSaving(true)
     try {
       await updatePool(schedulePoolId, {
-        next_due_at: new Date(scheduleDate).toISOString(),
         schedule_frequency: scheduleRecurring ? scheduleFreq : null,
         service_price: schedulePrice ? Number(schedulePrice) : null,
       })
+      // next_due_at goes through the single chokepoint setter.
+      await setPoolNextDue(schedulePoolId, new Date(scheduleDate).toISOString())
     } catch (err) {
       console.error('Error scheduling:', err)
     } finally {
@@ -283,7 +287,6 @@ export default function ClientDetail() {
         address: jobNewPoolAddress.trim(),
         latitude: lat,
         longitude: lng,
-        next_due_at: new Date().toISOString(),
       })
       if (created?.id) {
         setJobForm(prev => ({ ...prev, pool_id: created.id }))

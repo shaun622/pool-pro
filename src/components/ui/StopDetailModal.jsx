@@ -19,6 +19,7 @@ import {
   describeSchedule,
   DAYS_OF_WEEK,
 } from '../../lib/recurringScheduling'
+import { recomputePoolNextDue } from '../../lib/recomputePoolNextDue'
 
 // Numbered pin factory
 function numberedIcon(n, color = '#0CA5EB') {
@@ -140,7 +141,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         // present; the pool's schedule_frequency is a denormalised
         // mirror that may lag.
         setForm({
-          next_due_at: stop.next_due_at ? stop.next_due_at.split('T')[0] : '',
+          next_due_at: stop.next_due_at ? stop.next_due_at.split('T')[0] : '', /* single-writer-ok: form state */
           next_due_time: stop.next_due_at ? new Date(stop.next_due_at).toTimeString().slice(0, 5) : '',
           schedule_frequency: stop.schedule_frequency || 'weekly',
           custom_interval_days: 7,
@@ -247,35 +248,10 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           if (insErr) throw insErr
           jobId = inserted.id
 
-          // Update pool next_due_at so the old pool stop disappears
-          if (poolId && form.scheduled_date) {
-            await supabase.from('pools').update({
-              next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
-            }).eq('id', poolId)
-          }
-          // Advance the recurring profile's next_generation_at past
-          // this occurrence. The projector also reads
-          // jobs.replaces_recurring_date (set on the insert above) to
-          // suppress the original-date projection, so we don't need to
-          // touch skipped_dates from the move path — that's reserved
-          // for explicit "skip this one" deletes where no job exists
-          // to carry the link.
-          if (profileId && form.scheduled_date) {
-            const profile = await supabase
-              .from('recurring_job_profiles')
-              .select('recurrence_rule, custom_interval_days, preferred_day_of_week, preferred_days_of_week, monthly_week_of_month')
-              .eq('id', profileId)
-              .single()
-            if (profile.data) {
-              const next = computeNextOccurrence(form.scheduled_date, profile.data)
-              if (next) {
-                await supabase.from('recurring_job_profiles').update({
-                  next_generation_at: next.toISOString().split('T')[0],
-                  last_generated_at: new Date().toISOString(),
-                }).eq('id', profileId)
-              }
-            }
-          }
+          // The job carries replaces_recurring_date (set above) so the
+          // projector suppresses the original occurrence; the chokepoint
+          // recomputes the pool's next_due_at from the fixed pattern + history.
+          if (poolId) await recomputePoolNextDue(poolId)
         } else {
           const updates = {
             title: form.title,
@@ -297,9 +273,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           // Schedule.jsx only suppresses the pool projection for the day
           // the job is on, not the day it WAS on.
           if (poolId && (form.scheduled_date || '') !== (stop.scheduled_date || '') && form.scheduled_date) {
-            await supabase.from('pools').update({
-              next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
-            }).eq('id', poolId)
+            await recomputePoolNextDue(poolId)
           }
         }
 
@@ -361,11 +335,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         // schedule itself is owned by the Recurring page. Nothing to
         // write to the profile from here.
       } else {
-        let nextDue = null
-        if (form.next_due_at) {
-          const t = form.next_due_time || '09:00'
-          nextDue = new Date(`${form.next_due_at}T${t}:00`).toISOString()
-        }
+        // next_due_at is owned by the chokepoint (recomputed below), not set here.
         // Update pool address if changed
         const newPoolAddr = (form.pool_address || '').trim()
         const oldPoolAddr = (stop.address || '').trim()
@@ -381,7 +351,6 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         }
 
         const updates = {
-          next_due_at: nextDue,
           schedule_frequency: form.schedule_frequency || null,
           access_notes: form.access_notes || null,
           assigned_staff_id: form.assigned_staff_id || null,
@@ -394,6 +363,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         }
         const { error } = await supabase.from('pools').update(updates).eq('id', stop.id)
         if (error) throw error
+        await recomputePoolNextDue(stop.id)
 
         // Schedule view edits are per-occurrence only. The pool's
         // recurring schedule (rule, days, monthly Nth) is owned by
@@ -448,16 +418,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         if ((form.access_notes || '') !== (stop.access_notes || '')) {
           await supabase.from('pools').update({ access_notes: form.access_notes || null }).eq('id', stop.id)
         }
-        // Save schedule date/time
-        let nextDue = null
-        if (form.next_due_at) {
-          const t = form.next_due_time || '09:00'
-          nextDue = new Date(`${form.next_due_at}T${t}:00`).toISOString()
-        }
-        const origDue = stop.next_due_at || null
-        if (nextDue !== origDue) {
-          await supabase.from('pools').update({ next_due_at: nextDue }).eq('id', stop.id)
-        }
+        // Schedule date is owned by the chokepoint now.
+        await recomputePoolNextDue(stop.id)
       } else if (stop.type === 'job') {
         const newAddr = (form.address || '').trim()
         const oldAddr = (stop.address || '').trim()
@@ -526,20 +488,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           })
           if (insErr) throw insErr
 
-          if (poolId && form.scheduled_date) {
-            await supabase.from('pools').update({
-              next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
-            }).eq('id', poolId)
-          }
-          if (form.scheduled_date) {
-            const next = computeNextOccurrence(form.scheduled_date, profileRow)
-            if (next) {
-              await supabase.from('recurring_job_profiles').update({
-                next_generation_at: next.toISOString().split('T')[0],
-                last_generated_at: new Date().toISOString(),
-              }).eq('id', profileId)
-            }
-          }
+          // replaces_recurring_date (above) suppresses the original occurrence;
+          // the chokepoint recomputes next_due_at from the fixed pattern.
+          if (poolId) await recomputePoolNextDue(poolId)
         } else if (!isProjected) {
           const jobUpdates = {}
           if (notesChanged) jobUpdates.notes = form.notes || null
@@ -551,9 +502,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             // this, the Schedule view's pool projection lingers on the
             // old date as a phantom stop alongside the moved job.
             if (dateChanged && stop.pool_id && form.scheduled_date) {
-              await supabase.from('pools').update({
-                next_due_at: new Date(form.scheduled_date + 'T09:00:00').toISOString(),
-              }).eq('id', stop.pool_id)
+              await recomputePoolNextDue(stop.pool_id)
             }
           }
         }
@@ -650,18 +599,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         if (insErr) throw insErr
         jobId = inserted.id
 
-        // Advance the profile's next_generation_at past this occurrence
-        // so the projector doesn't re-emit it. Mirrors handleSave.
-        const dateForAdvance = form.scheduled_date || stop.scheduled_date
-        if (dateForAdvance) {
-          const next = computeNextOccurrence(dateForAdvance, profileRow)
-          if (next) {
-            await supabase.from('recurring_job_profiles').update({
-              next_generation_at: next.toISOString().split('T')[0],
-              last_generated_at: new Date().toISOString(),
-            }).eq('id', profileId)
-          }
-        }
+        // replaces_recurring_date (set on the insert above) suppresses the
+        // original occurrence; the chokepoint recomputes the pool's cache.
+        if (profileRow?.pool_id) await recomputePoolNextDue(profileRow.pool_id)
       } else {
         const { error } = await supabase
           .from('jobs')
@@ -743,29 +683,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       if (stop.type === 'job') {
         const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
         if (isProjected) {
-          // Skip this single occurrence by advancing next_generation_at.
-          // Recurring is single-day-per-occurrence now, so the projector
-          // never re-emits the skipped date once the anchor moves past it.
+          // Skip this single occurrence the canonical way: add it to the
+          // profile's skipped_dates (occurrencesInRange drops it), then let the
+          // chokepoint recompute the pool's next_due_at to the next occurrence.
           const profileId = String(stop.id).replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
           const { data: profile } = await supabase
             .from('recurring_job_profiles')
-            .select('recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month, pool_id')
+            .select('skipped_dates, pool_id')
             .eq('id', profileId)
             .single()
           if (profile) {
             const stopDate = stop.scheduled_date || stop.next_due_at?.split('T')[0]
             if (stopDate) {
-              const next = computeNextOccurrence(stopDate, profile)
-              const updates = {
-                last_generated_at: new Date().toISOString(),
+              const skipped = Array.isArray(profile.skipped_dates) ? profile.skipped_dates : []
+              if (!skipped.includes(stopDate)) {
+                await supabase.from('recurring_job_profiles')
+                  .update({ skipped_dates: [...skipped, stopDate] })
+                  .eq('id', profileId)
               }
-              if (next) updates.next_generation_at = next.toISOString().split('T')[0]
-              await supabase.from('recurring_job_profiles').update(updates).eq('id', profileId)
-              if (profile.pool_id && next) {
-                await supabase.from('pools').update({
-                  next_due_at: next.toISOString(),
-                }).eq('id', profile.pool_id)
-              }
+              if (profile.pool_id) await recomputePoolNextDue(profile.pool_id)
             }
           }
         } else {
@@ -774,14 +710,13 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           if (error) throw error
         }
       } else if (stop.type === 'pool') {
-        // Skip this single pool service by advancing next_due_at
-        const freq = stop.schedule_frequency || 'weekly'
-        const days = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }[freq] || 7
-        const dueDate = stop.next_due_at ? new Date(stop.next_due_at) : new Date()
-        dueDate.setDate(dueDate.getDate() + days)
-        await supabase.from('pools').update({
-          next_due_at: dueDate.toISOString(),
-        }).eq('id', stop.id)
+        // Legacy pool (no profile): "skip" = mark the due date handled so the
+        // chokepoint's legacy branch rolls the cache forward one cycle.
+        // (last_serviced_at is allowed; next_due_at is owned by the chokepoint.)
+        await supabase.from('pools')
+          .update({ last_serviced_at: stop.next_due_at || new Date().toISOString() })
+          .eq('id', stop.id)
+        await recomputePoolNextDue(stop.id)
       }
       setDeleteConfirm(null)
       onClose?.()
@@ -824,10 +759,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         const { error } = await supabase.from('jobs').delete().eq('id', stop.id)
         if (error) throw error
       } else if (stop.type === 'pool') {
-        await supabase.from('pools').update({
-          schedule_frequency: null,
-          next_due_at: null,
-        }).eq('id', stop.id)
+        await supabase.from('pools').update({ schedule_frequency: null }).eq('id', stop.id)
+        await recomputePoolNextDue(stop.id)
       }
       setDeleteConfirm(null)
       onClose?.()
@@ -1021,9 +954,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                     <div className="flex gap-2 mt-1">
                       <input
                         type="date"
-                        value={stop.type === 'pool' ? form.next_due_at : form.scheduled_date}
+                        value={stop.type === 'pool' ? form.next_due_at : form.scheduled_date /* single-writer-ok: read */}
                         onChange={e => stop.type === 'pool'
-                          ? setForm(f => ({ ...f, next_due_at: e.target.value }))
+                          ? setForm(f => ({ ...f, next_due_at: e.target.value })) /* single-writer-ok: form state, not a DB write */
                           : setForm(f => ({ ...f, scheduled_date: e.target.value }))
                         }
                         className="flex-1 px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-pool-500/20 focus:border-pool-500"
@@ -1297,7 +1230,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               placeholder="Start typing a street address..."
             />
             <div className="grid grid-cols-2 gap-3">
-              <Input label="Next Service Date" type="date" value={form.next_due_at} onChange={e => setForm(f => ({ ...f, next_due_at: e.target.value }))} />
+              <Input label="Next Service Date" type="date" value={form.next_due_at} onChange={e => setForm(f => ({ ...f, next_due_at: e.target.value /* single-writer-ok: form state */ }))} />
               <Input label="Time" type="time" value={form.next_due_time} onChange={e => setForm(f => ({ ...f, next_due_time: e.target.value }))} />
             </div>
             {/* The schedule pattern picker used to live here. It's now
