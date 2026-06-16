@@ -82,7 +82,7 @@ export default function TechRunSheet() {
   const [jobs, setJobs] = useState([])
   const [pools, setPools] = useState([])
   const [profiles, setProfiles] = useState([])
-  const [unableToday, setUnableToday] = useState([])
+  const [todayServiceRecords, setTodayServiceRecords] = useState([])
   const [loading, setLoading] = useState(true)
 
   const staffId = staffRecord?.id
@@ -120,21 +120,23 @@ export default function TechRunSheet() {
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .eq('is_active', true),
-      // Today's "unable to service" reports (business-wide). Filtered
-      // client-side to the pools on THIS tech's route below — a pool can
-      // reach the run sheet via its recurring profile while the pool row
+      // Today's completed + unable-to-service records (business-wide).
+      // Filtered client-side to the pools on THIS tech's route below — a pool
+      // can reach the run sheet via its recurring profile while the pool row
       // itself is unassigned, so a pools.assigned_staff_id filter would miss it.
+      // Shown in their own Completed / Unable sections so finished work stays
+      // visible instead of vanishing off the route.
       supabase
         .from('service_records')
         .select('id, pool_id, serviced_at, status, unable_reason, pools(name, address, type, clients(name, phone))')
         .eq('business_id', business.id)
-        .eq('status', 'unable_to_service')
+        .in('status', ['completed', 'unable_to_service'])
         .gte('serviced_at', startOfToday.toISOString()),
     ])
     setJobs(jobsRes.data || [])
     setPools(poolsRes.data || [])
     setProfiles(profilesRes.data || [])
-    setUnableToday(unableRes.data || [])
+    setTodayServiceRecords(unableRes.data || [])
     setLoading(false)
   }
 
@@ -165,18 +167,22 @@ export default function TechRunSheet() {
     const poolIdsCovered = new Set()
     const items = []
 
-    // Unable-to-service reports filed today, limited to pools on THIS tech's
-    // route (their jobs/pools/profiles) — pull those pools out of the active
-    // route (seed poolIdsCovered first) and collect orange stops.
+    // Today's completed + unable records, limited to pools on THIS tech's
+    // route (their jobs/pools/profiles). Pull those pools out of the active
+    // route (seed poolIdsCovered first); skip any pool that already has a real
+    // job today (the job stop represents it) to avoid a duplicate.
     const techPoolIds = new Set()
     for (const j of jobs) if (j.pool_id) techPoolIds.add(j.pool_id)
     for (const p of pools) techPoolIds.add(p.id)
     for (const pr of profiles) if (pr.pool_id) techPoolIds.add(pr.pool_id)
-    const unableStops = []
-    for (const r of unableToday) {
+    const jobPoolsToday = new Set()
+    for (const j of jobs) if (j.scheduled_date === todayKey && j.pool_id) jobPoolsToday.add(j.pool_id)
+    const recordStops = []
+    for (const r of todayServiceRecords) {
       if (!r.pool_id || !techPoolIds.has(r.pool_id)) continue
       poolIdsCovered.add(r.pool_id)
-      unableStops.push(unableToStop(r))
+      if (jobPoolsToday.has(r.pool_id)) continue
+      recordStops.push(r.status === 'unable_to_service' ? unableToStop(r) : completedToStop(r))
     }
 
     // Jobs for today
@@ -267,8 +273,8 @@ export default function TechRunSheet() {
     }
     overdue.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0))
 
-    return [...overdue, ...items, ...unableStops]
-  }, [jobs, pools, profiles, unableToday])
+    return [...overdue, ...items, ...recordStops]
+  }, [jobs, pools, profiles, todayServiceRecords])
 
   // Week groups
   const weekGroups = useMemo(() => {
@@ -826,6 +832,22 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
 }
 
 // ─── Transformers ────────────────────────────
+function completedToStop(r) {
+  return {
+    type: 'pool',
+    id: `completed-${r.id}`,
+    pool_id: r.pool_id,
+    status: 'completed',
+    service_record_id: r.id,
+    client_name: r.pools?.clients?.name || null,
+    pool_name: r.pools?.name || null,
+    address: r.pools?.address || null,
+    phone: r.pools?.clients?.phone || null,
+    pool_type: r.pools?.type || null,
+    isOverdue: false,
+  }
+}
+
 function unableToStop(r) {
   return {
     type: 'pool',
