@@ -120,15 +120,14 @@ export default function TechRunSheet() {
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .eq('is_active', true),
-      // Today's "unable to service" reports for THIS tech's pools — shown in
-      // their own orange section, with the pools pulled out of the active
-      // route. Scoped by the pool's assigned tech (same as jobs/pools above),
-      // so it doesn't depend on staff_id being set on the record.
+      // Today's "unable to service" reports (business-wide). Filtered
+      // client-side to the pools on THIS tech's route below — a pool can
+      // reach the run sheet via its recurring profile while the pool row
+      // itself is unassigned, so a pools.assigned_staff_id filter would miss it.
       supabase
         .from('service_records')
-        .select('id, pool_id, serviced_at, status, unable_reason, pools!inner(name, address, type, assigned_staff_id, clients(name, phone))')
+        .select('id, pool_id, serviced_at, status, unable_reason, pools(name, address, type, clients(name, phone))')
         .eq('business_id', business.id)
-        .eq('pools.assigned_staff_id', staffId)
         .eq('status', 'unable_to_service')
         .gte('serviced_at', startOfToday.toISOString()),
     ])
@@ -166,11 +165,16 @@ export default function TechRunSheet() {
     const poolIdsCovered = new Set()
     const items = []
 
-    // Unable-to-service reports filed today: pull their pools out of the
-    // active route (seed poolIdsCovered first) and collect orange stops.
+    // Unable-to-service reports filed today, limited to pools on THIS tech's
+    // route (their jobs/pools/profiles) — pull those pools out of the active
+    // route (seed poolIdsCovered first) and collect orange stops.
+    const techPoolIds = new Set()
+    for (const j of jobs) if (j.pool_id) techPoolIds.add(j.pool_id)
+    for (const p of pools) techPoolIds.add(p.id)
+    for (const pr of profiles) if (pr.pool_id) techPoolIds.add(pr.pool_id)
     const unableStops = []
     for (const r of unableToday) {
-      if (!r.pool_id) continue
+      if (!r.pool_id || !techPoolIds.has(r.pool_id)) continue
       poolIdsCovered.add(r.pool_id)
       unableStops.push(unableToStop(r))
     }

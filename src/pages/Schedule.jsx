@@ -359,6 +359,35 @@ function Schedule({ business }) {
       coverPool(d, j.pool_id)
     }
 
+    // 1b. Completed / unable-to-service records. Emitted BEFORE the pool and
+    // profile projections (paths 2/3) so a serviced or unable day wins over
+    // their "already serviced — suppress" coverage. Otherwise the stop the
+    // operator wants to SEE (dim completed / orange unable) gets pre-empted
+    // by that coverage and the day renders blank. Skipped only when a real
+    // job (path 1) already covered the pool for that day.
+    const poolById = new Map()
+    for (const p of allPools) poolById.set(p.id, p)
+    for (const r of serviceRecords) {
+      if (!r.pool_id || !r.serviced_at) continue
+      const d = new Date(r.serviced_at)
+      if (isNaN(d.getTime())) continue
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      if (dayStart < weekStart || dayStart > weekEnd) continue
+      if (isPoolCovered(dayStart, r.pool_id)) continue
+      const pool = poolById.get(r.pool_id)
+      if (!pool) continue
+      // Unable records render orange (and stay prominent); completed render dim.
+      const isUnable = r.status === 'unable_to_service'
+      const stop = poolToStop(
+        { ...pool, next_due_at: r.serviced_at },
+        isUnable
+          ? { isUnable: true, serviceRecordId: r.id }
+          : { isCompleted: true, serviceRecordId: r.id }
+      )
+      ensure(dayStart).stops.push(stop)
+      coverPool(dayStart, r.pool_id)
+    }
+
     // 2. Pools with next_due_at in range — project at frequency.
     // Skip pools that have an active recurring profile: the profile
     // is the source of truth for those, and the pool's next_due_at
@@ -493,41 +522,8 @@ function Schedule({ business }) {
       }
     }
 
-    // 5. Completed pool services in the visible week. NewService.jsx
-    // creates a service_record on completion + advances the pool's
-    // next_due_at past today, which means paths 2/3 don't emit a
-    // stop for the completion day anymore — the day just disappears
-    // from the schedule. Operator wants to SEE the completion (with
-    // dim opacity-50 + line-through styling) so the Tuesday they
-    // serviced the pool isn't blank. We emit a status='completed'
-    // pool stop here from each service_record. Dedupe: skip if path
-    // 1 (real jobs) already covered the pool for that day — a
-    // materialized job that was completed will already be on the
-    // schedule with status='completed' from path 1.
-    const poolById = new Map()
-    for (const p of allPools) poolById.set(p.id, p)
-    for (const r of serviceRecords) {
-      if (!r.pool_id || !r.serviced_at) continue
-      const d = new Date(r.serviced_at)
-      if (isNaN(d.getTime())) continue
-      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-      if (dayStart < weekStart || dayStart > weekEnd) continue
-      if (isPoolCovered(dayStart, r.pool_id)) continue
-      const pool = poolById.get(r.pool_id)
-      if (!pool) continue
-      // Unable-to-service records render as an orange stop on the day it
-      // happened (the pool's real next_due_at has already advanced a
-      // cycle, so paths 2/3 won't emit it). Completed records render dim.
-      const isUnable = r.status === 'unable_to_service'
-      const stop = poolToStop(
-        { ...pool, next_due_at: r.serviced_at },
-        isUnable
-          ? { isUnable: true, serviceRecordId: r.id }
-          : { isCompleted: true, serviceRecordId: r.id }
-      )
-      ensure(dayStart).stops.push(stop)
-      coverPool(dayStart, r.pool_id)
-    }
+    // (Completed / unable-to-service service-record stops are projected as
+    // path 1b above, before the pool/profile projections.)
 
     // Sort each day strictly by time (overdue stops are styled with the
     // overdue badge but no longer jump to the top — they slot in at their
