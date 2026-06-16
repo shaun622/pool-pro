@@ -86,7 +86,7 @@ export function useService() {
       try {
         const { data: profiles } = await supabase
           .from('recurring_job_profiles')
-          .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month, duration_type, total_visits, completed_visits, status')
+          .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month, next_generation_at, last_generated_at, duration_type, total_visits, completed_visits, status')
           .eq('pool_id', poolId)
           .eq('is_active', true)
           .in('status', ['active'])
@@ -96,10 +96,11 @@ export function useService() {
         console.warn('Profile fetch failed (non-critical):', e)
       }
 
-      // Next due: prefer the profile's real cadence (handles weekly /
-      // fortnightly / custom / monthly-Nth correctly); fall back to the
+      // Next due: advance the profile's FIXED schedule (its set weekday +
+      // cadence), NOT service-date + interval — so "every Tuesday" stays
+      // Tuesday even if the tech serviced on another day. Fall back to the
       // pool's denormalised frequency for legacy pools with no profile.
-      let nextDue = profile ? computeNextOccurrence(now, profile) : null
+      let nextDue = profile ? nextFixedOccurrence(profile, now) : null
       if (!nextDue) {
         const { data: pool } = await supabase
           .from('pools')
@@ -189,13 +190,13 @@ export function useService() {
       try {
         const { data: profiles } = await supabase
           .from('recurring_job_profiles')
-          .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month')
+          .select('id, recurrence_rule, custom_interval_days, preferred_day_of_week, monthly_week_of_month, next_generation_at, last_generated_at')
           .eq('pool_id', poolId)
           .eq('is_active', true)
           .in('status', ['active'])
           .limit(1)
         const profile = profiles?.[0] || null
-        let nextDue = profile ? computeNextOccurrence(now, profile) : null
+        let nextDue = profile ? nextFixedOccurrence(profile, now) : null
         if (!nextDue) {
           const { data: pool } = await supabase
             .from('pools')
@@ -349,6 +350,25 @@ function convertToWebP(file, maxSize = 1200, quality = 0.82) {
 // where a local-midnight Date's toISOString() lands on the previous day).
 function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Next scheduled occurrence on the profile's FIXED pattern, strictly after
+// `after`. Advances from the profile's scheduled anchor (next_generation_at) —
+// NOT the actual service date — so the weekday + cadence rhythm stay fixed
+// ("every Tuesday" stays Tuesday even if serviced on a Thursday). Rolls forward
+// if the service was done late so the returned date is always in the future.
+function nextFixedOccurrence(profile, after) {
+  const afterMid = new Date(after.getFullYear(), after.getMonth(), after.getDate())
+  const anchor = profile?.next_generation_at || profile?.last_generated_at
+  let cursor = anchor
+    ? computeNextOccurrence(anchor, profile)
+    : computeNextOccurrence(afterMid, profile)
+  let guard = 0
+  while (cursor && cursor <= afterMid && guard < 200) {
+    cursor = computeNextOccurrence(cursor, profile)
+    guard++
+  }
+  return cursor
 }
 
 function calculateNextDueDate(from, frequency) {
