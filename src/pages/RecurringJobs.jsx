@@ -462,12 +462,12 @@ export default function RecurringJobs() {
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.title}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{p.clients?.name || 'Unknown'}</p>
                       {p.__isLegacy && (
                         <Badge variant="warning" className="shrink-0 text-[9px] uppercase tracking-wider">Legacy</Badge>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.clients?.name || 'Unknown'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{p.pools?.name || p.pools?.address || '—'}</p>
                     <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
                       {describeSchedule(p)}
                       {p.next_generation_at && ` · next ${formatDateWithDay(p.next_generation_at)}`}
@@ -489,7 +489,7 @@ export default function RecurringJobs() {
             {/* Table */}
             <Card className="!p-0 md:col-span-7 overflow-hidden">
               <div className="grid grid-cols-[minmax(0,1fr)_8rem_7rem_6rem_5rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                <span>Service / Client</span>
+                <span>Client / Pool</span>
                 <span>Frequency</span>
                 <span>Next due</span>
                 <span className="text-left">State</span>
@@ -515,13 +515,13 @@ export default function RecurringJobs() {
                             'flex items-center gap-1.5 text-sm font-semibold',
                             isSelected ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100',
                           )}>
-                            <span className="truncate">{p.title}</span>
+                            <span className="truncate">{p.clients?.name || 'Unknown'}</span>
                             {p.__isLegacy && (
                               <Badge variant="warning" className="shrink-0 text-[9px] uppercase tracking-wider">Legacy</Badge>
                             )}
                           </span>
                           <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {p.clients?.name || 'Unknown'}
+                            {p.pools?.name || p.pools?.address || '—'}
                           </span>
                         </span>
                         <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
@@ -591,16 +591,13 @@ export default function RecurringJobs() {
                     </div>
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
-                    {selectedProfile.title}
+                    {selectedProfile.clients?.name || 'Unknown client'}
                   </h3>
                   {selectedProfile.__isLegacy && (
                     <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-lg px-2.5 py-1.5">
                       Pool-level legacy schedule. Hit Edit to migrate it into a proper recurring profile.
                     </p>
                   )}
-                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                    {selectedProfile.clients?.name || 'Unknown client'}
-                  </p>
                   {selectedProfile.pools?.name && (
                     <p className="text-xs font-medium text-gray-600 dark:text-gray-300 truncate">
                       {selectedProfile.pools.name}
