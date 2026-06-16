@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
 import {
   Calendar, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronRight,
-  Sparkles, AlertTriangle, Briefcase, Activity, ArrowRight,
+  Sparkles, AlertTriangle, Briefcase, Activity, ArrowRight, Phone, Mail,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -26,6 +26,7 @@ export default function Dashboard() {
   })
   const [todaySummary, setTodaySummary] = useState({ overdue: 0, dueToday: 0, completed: 0, total: 0, notes: [] })
   const [recentActivity, setRecentActivity] = useState([])
+  const [unableFollowups, setUnableFollowups] = useState([])
   const [counts, setCounts] = useState({ clients: 0, pools: 0, services: 0 })
   const [loading, setLoading] = useState(true)
 
@@ -65,6 +66,7 @@ export default function Dashboard() {
         clientCountRes,
         poolCountRes,
         serviceCountRes,
+        unableRes,
       ] = await Promise.all([
         supabase
           .from('service_records')
@@ -149,6 +151,16 @@ export default function Dashboard() {
           .from('service_records')
           .select('id', { count: 'exact', head: true })
           .eq('business_id', business.id),
+
+        // Unable-to-service reports awaiting follow-up — with the customer's
+        // contact so the admin can call/message/email about the access issue.
+        supabase
+          .from('service_records')
+          .select('id, serviced_at, technician_name, unable_reason, pools(name, address, clients(name, phone, email))')
+          .eq('business_id', business.id)
+          .eq('status', 'unable_to_service')
+          .order('serviced_at', { ascending: false })
+          .limit(10),
       ])
 
       const overdueCount = overduePoolsRes.data?.length || 0
@@ -195,6 +207,7 @@ export default function Dashboard() {
         notes: notesItems,
       })
       setRecentActivity(activityRes.data || [])
+      setUnableFollowups(unableRes.data || [])
       setLoading(false)
     }
 
@@ -328,6 +341,57 @@ export default function Dashboard() {
             onClick={() => navigate('/work-orders')}
           />
         </div>
+
+        {/* Unable to service — needs follow-up (only when there are any) */}
+        {unableFollowups.length > 0 && (
+          <Card className="!p-5 mb-6 border-orange-200 dark:border-orange-900 bg-orange-50/40 dark:bg-orange-950/10">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-3.5 h-3.5 text-orange-500" strokeWidth={2.5} />
+              <p className="text-xs font-semibold uppercase tracking-wider text-orange-600 dark:text-orange-400">Unable to service — needs follow-up</p>
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-bold tabular-nums">
+                {unableFollowups.length}
+              </span>
+            </div>
+            <ul className="space-y-1 -mx-2">
+              {unableFollowups.map(r => {
+                const c = r.pools?.clients || {}
+                return (
+                  <li key={r.id} className="flex items-center gap-1">
+                    <button
+                      onClick={() => navigate(`/services/${r.id}`)}
+                      className="flex-1 min-w-0 text-left flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-orange-100/40 dark:hover:bg-orange-950/30 transition-colors group"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-orange-700 dark:group-hover:text-orange-300 transition-colors">
+                          {c.name || r.pools?.name || r.pools?.address || 'Client'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {r.unable_reason ? `${r.unable_reason} · ` : ''}{r.pools?.address || ''}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">
+                          {r.technician_name && `${r.technician_name} · `}{formatDate(r.serviced_at)}
+                        </p>
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-2 shrink-0 pr-1">
+                      {c.phone && (
+                        <a href={`tel:${c.phone}`} aria-label="Call customer" className="w-8 h-8 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-pool-600 dark:text-pool-400 hover:border-pool-300">
+                          <Phone className="w-4 h-4" strokeWidth={2} />
+                        </a>
+                      )}
+                      {c.email && (
+                        <a href={`mailto:${c.email}`} aria-label="Email customer" className="w-8 h-8 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-pool-600 dark:text-pool-400 hover:border-pool-300">
+                          <Mail className="w-4 h-4" strokeWidth={2} />
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </Card>
+        )}
 
         {/* TODAY (compact list) + RECENT ACTIVITY (feed) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

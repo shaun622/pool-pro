@@ -5,7 +5,7 @@ import L from 'leaflet'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import { useBusiness } from '../../hooks/useBusiness'
-import { useLanguage } from '../../contexts/LanguageContext'
+import { useLanguage, translateUnableReason } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 import { cn, formatDate } from '../../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
@@ -82,6 +82,7 @@ export default function TechRunSheet() {
   const [jobs, setJobs] = useState([])
   const [pools, setPools] = useState([])
   const [profiles, setProfiles] = useState([])
+  const [unableToday, setUnableToday] = useState([])
   const [loading, setLoading] = useState(true)
 
   const staffId = staffRecord?.id
@@ -94,7 +95,10 @@ export default function TechRunSheet() {
     const to = new Date()
     to.setDate(to.getDate() + 60)
 
-    const [jobsRes, poolsRes, profilesRes] = await Promise.all([
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+
+    const [jobsRes, poolsRes, profilesRes, unableRes] = await Promise.all([
       supabase
         .from('jobs')
         .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
@@ -116,10 +120,22 @@ export default function TechRunSheet() {
         .eq('business_id', business.id)
         .eq('assigned_staff_id', staffId)
         .eq('is_active', true),
+      // Today's "unable to service" reports for THIS tech's pools — shown in
+      // their own orange section, with the pools pulled out of the active
+      // route. Scoped by the pool's assigned tech (same as jobs/pools above),
+      // so it doesn't depend on staff_id being set on the record.
+      supabase
+        .from('service_records')
+        .select('id, pool_id, serviced_at, status, unable_reason, pools!inner(name, address, type, assigned_staff_id, clients(name, phone))')
+        .eq('business_id', business.id)
+        .eq('pools.assigned_staff_id', staffId)
+        .eq('status', 'unable_to_service')
+        .gte('serviced_at', startOfToday.toISOString()),
     ])
     setJobs(jobsRes.data || [])
     setPools(poolsRes.data || [])
     setProfiles(profilesRes.data || [])
+    setUnableToday(unableRes.data || [])
     setLoading(false)
   }
 
@@ -149,6 +165,15 @@ export default function TechRunSheet() {
 
     const poolIdsCovered = new Set()
     const items = []
+
+    // Unable-to-service reports filed today: pull their pools out of the
+    // active route (seed poolIdsCovered first) and collect orange stops.
+    const unableStops = []
+    for (const r of unableToday) {
+      if (!r.pool_id) continue
+      poolIdsCovered.add(r.pool_id)
+      unableStops.push(unableToStop(r))
+    }
 
     // Jobs for today
     for (const j of jobs) {
@@ -238,8 +263,8 @@ export default function TechRunSheet() {
     }
     overdue.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0))
 
-    return [...overdue, ...items]
-  }, [jobs, pools, profiles])
+    return [...overdue, ...items, ...unableStops]
+  }, [jobs, pools, profiles, unableToday])
 
   // Week groups
   const weekGroups = useMemo(() => {
@@ -324,7 +349,9 @@ export default function TechRunSheet() {
     return [...byKey.values()]
   }, [jobs, pools])
 
-  const completedCount = todayStops.filter(s => s.status === 'completed').length
+  // Both completed and unable-to-service count as "resolved" so the bar can
+  // still reach 100% once every stop has been actioned.
+  const completedCount = todayStops.filter(s => s.status === 'completed' || s.status === 'unable_to_service').length
   const totalCount = todayStops.length
 
   if (loading) {
@@ -394,8 +421,9 @@ export default function TechRunSheet() {
 function TodayView({ stops, navigate, onRefresh }) {
   const { t } = useLanguage()
   const overdue = stops.filter(s => s.isOverdue)
-  const active = stops.filter(s => !s.isOverdue && s.status !== 'completed')
+  const active = stops.filter(s => !s.isOverdue && s.status !== 'completed' && s.status !== 'unable_to_service')
   const completed = stops.filter(s => s.status === 'completed')
+  const unable = stops.filter(s => s.status === 'unable_to_service')
 
   return (
     <div className="space-y-5">
@@ -453,6 +481,21 @@ function TodayView({ stops, navigate, onRefresh }) {
           <div className="space-y-2 opacity-70">
             {completed.map(stop => (
               <TechStopCard key={`c-${stop.id}`} stop={stop} navigate={navigate} completed />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Unable to service */}
+      {unable.length > 0 && (
+        <section>
+          <h3 className="text-xs font-bold uppercase tracking-wide text-orange-600 dark:text-orange-400 mb-2 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+            {t('runsheet.unable')} ({unable.length})
+          </h3>
+          <div className="space-y-2">
+            {unable.map(stop => (
+              <TechStopCard key={`u-${stop.id}`} stop={stop} navigate={navigate} unable />
             ))}
           </div>
         </section>
@@ -661,15 +704,16 @@ function MapView({ pools, navigate }) {
 }
 
 // ─── Tech stop card ──────────────────────────
-function TechStopCard({ stop, number, navigate, compact = false, completed = false }) {
-  const { t } = useLanguage()
-  const color = stop.isOverdue ? '#ef4444' : completed ? '#10b981' : '#0CA5EB'
+function TechStopCard({ stop, number, navigate, compact = false, completed = false, unable = false }) {
+  const { t, lang } = useLanguage()
+  const color = stop.isOverdue ? '#ef4444' : completed ? '#10b981' : unable ? '#f97316' : '#0CA5EB'
 
   return (
     <div
+      onClick={unable && stop.service_record_id ? () => navigate(`/services/${stop.service_record_id}`) : undefined}
       className={cn(
         'bg-white dark:bg-gray-900 rounded-2xl border shadow-card p-3.5 transition-shadow',
-        completed ? 'border-green-200' : stop.isOverdue ? 'border-red-200' : 'border-gray-100 dark:border-gray-800'
+        unable ? 'border-orange-200 dark:border-orange-900 cursor-pointer' : completed ? 'border-green-200' : stop.isOverdue ? 'border-red-200' : 'border-gray-100 dark:border-gray-800'
       )}
       style={{ borderLeft: `4px solid ${color}` }}
     >
@@ -701,10 +745,15 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
               {stop.address && <p className="text-xs text-pool-600 dark:text-pool-400 mt-0.5 truncate">{stop.address}</p>}
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
+              {unable && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 text-right">
+                  {stop.unable_reason ? translateUnableReason(stop.unable_reason, lang) : t('service.unableStatus')}
+                </span>
+              )}
               {stop.isOverdue && (
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${stop.daysOverdue === 0 ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'}`}>{stop.daysOverdue === 0 ? t('runsheet.dueToday') : t('runsheet.daysOverdue', { days: stop.daysOverdue })}</span>
               )}
-              {stop.pool_type && !stop.isOverdue && (
+              {stop.pool_type && !stop.isOverdue && !unable && (
                 <Badge variant="default" className="text-[10px] capitalize">{stop.pool_type}</Badge>
               )}
             </div>
@@ -734,7 +783,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
       </div>
 
       {/* Action buttons */}
-      {!completed && !compact && (
+      {!completed && !unable && !compact && (
         <div className="flex gap-2 mt-3">
           {stop.pool_id && (
             <button
@@ -763,6 +812,23 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
 }
 
 // ─── Transformers ────────────────────────────
+function unableToStop(r) {
+  return {
+    type: 'pool',
+    id: `unable-${r.id}`,
+    pool_id: r.pool_id,
+    status: 'unable_to_service',
+    service_record_id: r.id,
+    client_name: r.pools?.clients?.name || null,
+    pool_name: r.pools?.name || null,
+    address: r.pools?.address || null,
+    phone: r.pools?.clients?.phone || null,
+    pool_type: r.pools?.type || null,
+    unable_reason: r.unable_reason || null,
+    isOverdue: false,
+  }
+}
+
 function jobToStop(j) {
   const duration = j.estimated_duration_minutes || 60
   const timeDisp = j.scheduled_time ? formatTimeRange(j.scheduled_time, duration) : null

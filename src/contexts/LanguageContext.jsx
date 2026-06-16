@@ -70,3 +70,14 @@ export function translateTaskName(englishName, lang, t) {
   const dict = translations[lang] || translations.en
   return (dict && dict[key]) || englishName
 }
+
+// Translate an English "unable to service" reason for DISPLAY only. The
+// English value is what gets stored in service_records.unable_reason and
+// read by the admin email/detail, so those stay English even when the
+// tech works in Indonesian (same approach as translateTaskName).
+export function translateUnableReason(englishReason, lang) {
+  if (!englishReason) return ''
+  const key = `unableReason.${englishReason}`
+  const dict = translations[lang] || translations.en
+  return (dict && dict[key]) || englishReason
+}

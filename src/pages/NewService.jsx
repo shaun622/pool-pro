@@ -7,7 +7,7 @@ import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
 import { useService } from '../hooks/useService'
 import { useBusiness } from '../hooks/useBusiness'
-import { useLanguage, translateTaskName } from '../contexts/LanguageContext'
+import { useLanguage, translateTaskName, translateUnableReason } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import Badge from '../components/ui/Badge'
 import { useToast } from '../contexts/ToastContext'
@@ -66,6 +66,11 @@ const SLIDER_FIELDS = {
 
 const UNIT_OPTIONS = CHEMICAL_UNITS.map(u => ({ value: u, label: u }))
 
+// Canonical (English) reasons a tech can't service a pool. Stored as-is in
+// service_records.unable_reason so the admin email/detail stay English; the
+// on-screen chip is translated for display via translateUnableReason.
+const UNABLE_REASONS = ['Locked gate', 'Pool room locked', 'Dog in yard', 'No access', 'Other']
+
 export default function NewService() {
   const toast = useToast()
   const { id: poolId } = useParams()
@@ -81,6 +86,7 @@ export default function NewService() {
     saveChemicalsAdded,
     saveServicePhoto,
     completeService,
+    markUnableToService,
   } = useService()
 
   const [pool, setPool] = useState(null)
@@ -97,6 +103,7 @@ export default function NewService() {
   const photoInputRef = useRef(null)
   const extraPhotoInputRef = useRef(null)
   const completionPhotoInputRef = useRef(null)
+  const unablePhotoInputRef = useRef(null)
 
   // Pool photo
   const [servicePhoto, setServicePhoto] = useState(null)
@@ -117,6 +124,15 @@ export default function NewService() {
   const [completionPhotoPreview, setCompletionPhotoPreview] = useState(null)
   const [completionPhotoMeta, setCompletionPhotoMeta] = useState(null)
   const [capturingCompletionPhoto, setCapturingCompletionPhoto] = useState(false)
+  // "Unable to Service" sub-flow (entered from the arrival screen). The tech
+  // picks a reason, optionally adds a note + up to 5 watermarked photos
+  // (tag='unable_access'), and submits — no service happens.
+  const [unableMode, setUnableMode] = useState(false)
+  const [unableReason, setUnableReason] = useState('')
+  const [unableNote, setUnableNote] = useState('')
+  const [unablePhotos, setUnablePhotos] = useState([]) // { blob, preview, meta }
+  const [capturingUnablePhoto, setCapturingUnablePhoto] = useState(false)
+  const [unableSubmitted, setUnableSubmitted] = useState(false)
   const gpsRef = useRef(null) // pre-fetched GPS position
 
   // Pre-fetch GPS as soon as the page loads so permission is granted before photo
@@ -378,6 +394,88 @@ export default function NewService() {
     }
   }
 
+  // Capture + watermark a photo for the Unable-to-Service flow (same GPS/
+  // timestamp/technician watermark as the arrival shot). Mirrors the extra-
+  // photo capture; saved later with tag='unable_access'.
+  async function captureUnablePhoto(file) {
+    if (!file || unablePhotos.length >= MAX_EXTRA_PHOTOS) return
+    setCapturingUnablePhoto(true)
+    try {
+      let lat = gpsRef.current?.latitude || null
+      let lng = gpsRef.current?.longitude || null
+      if (!lat) {
+        try {
+          const pos = await new Promise((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true, timeout: 8000, maximumAge: 30000
+            })
+          )
+          lat = pos.coords.latitude
+          lng = pos.coords.longitude
+          gpsRef.current = pos.coords
+        } catch (geoErr) {
+          console.warn('GPS unavailable:', geoErr.message)
+        }
+      }
+      let gpsAddress = ''
+      if (lat && lng) {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`)
+          const data = await res.json()
+          const a = data.address || {}
+          gpsAddress = [a.house_number, a.road, a.suburb, a.city || a.town, a.state].filter(Boolean).join(', ')
+        } catch {
+          gpsAddress = pool?.address || ''
+        }
+      }
+      const now = new Date()
+      const meta = {
+        lat, lng, timestamp: now.toISOString(),
+        address: gpsAddress || pool?.address || '',
+        clientName: client?.name || '',
+        businessName: business?.name || '',
+        technicianName,
+      }
+      const watermarked = await watermarkPhoto(file, meta)
+      setUnablePhotos(prev => [...prev, { blob: watermarked.blob, preview: watermarked.dataUrl, meta }])
+    } catch (err) {
+      console.error('Unable photo capture error:', err)
+    } finally {
+      setCapturingUnablePhoto(false)
+    }
+  }
+
+  // Submit the "unable to service" report. Mirrors handleComplete: create the
+  // record, save the (optional) photos, then mark it unable — which advances
+  // the schedule, alerts the office in-app, and fires the admin email.
+  async function handleUnable() {
+    if (!unableReason) return
+    setSubmitting(true)
+    try {
+      const selectedStaff = staffList.find(s => s.id === selectedStaffId)
+      const techName = selectedStaff?.name || business?.owner_name || 'Owner'
+      const record = await createServiceRecord(poolId, techName, selectedStaffId || null)
+      for (const p of unablePhotos) {
+        try {
+          await saveServicePhoto(record.id, p.blob, p.meta || {}, 'unable_access')
+        } catch (err) {
+          console.error('Unable photo save failed:', err)
+        }
+      }
+      await markUnableToService(record.id, poolId, {
+        reason: unableReason,
+        note: unableNote.trim() || null,
+      })
+      setUnableSubmitted(true)
+      findNextStop()
+    } catch (err) {
+      console.error('Error reporting unable to service:', err)
+      toast.error(t('service.unableFailed') + (err?.message || JSON.stringify(err)))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   function renderDelta(key) {
     if (!lastReadings || lastReadings[key] == null) return null
     const current = parseFloat(readings[key])
@@ -418,6 +516,169 @@ export default function NewService() {
         <PageWrapper>
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin h-8 w-8 border-4 border-pool-500 border-t-transparent rounded-full" />
+          </div>
+        </PageWrapper>
+      </>
+    )
+  }
+
+  // Confirmation after an "unable to service" report.
+  if (unableSubmitted) {
+    return (
+      <>
+        <Header title={t('service.unableTitle')} backTo={-1} />
+        <PageWrapper>
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center mb-4">
+              <Check className="w-8 h-8 text-amber-600 dark:text-amber-400" strokeWidth={2} />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">{t('service.unableDone')}</h2>
+            {pool?.name && <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{pool.name}</p>}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{pool?.address}</p>
+            <p className="text-sm text-amber-600 dark:text-amber-400 mb-6">{t('service.unableDoneDesc')}</p>
+            <div className="flex gap-3 w-full">
+              {isTech && nextStop ? (
+                <Button
+                  className="flex-1 min-h-[48px] bg-amber-600 hover:bg-amber-700"
+                  onClick={() => navigate(`/pools/${nextStop.id}/service?staff=${staffRecord?.id}`)}
+                >
+                  {t('service.nextStop')}
+                </Button>
+              ) : (
+                <Button
+                  className="flex-1 min-h-[48px]"
+                  onClick={() => navigate(isTech ? '/tech' : '/schedule')}
+                >
+                  {isTech ? t('service.runSheet') : t('service.nextPool')}
+                </Button>
+              )}
+            </div>
+            {isTech && nextStop && (
+              <button
+                onClick={() => navigate('/tech')}
+                className="text-sm text-pool-600 dark:text-pool-400 font-semibold mt-2"
+              >
+                {t('profile.backToRunSheet')}
+              </button>
+            )}
+          </div>
+        </PageWrapper>
+      </>
+    )
+  }
+
+  // "Unable to Service" sub-flow — reason + optional note + optional photos.
+  if (unableMode) {
+    return (
+      <>
+        <Header title={t('service.unableTitle')} backTo={-1} />
+        <PageWrapper>
+          <div className="space-y-3">
+            <Card className="bg-amber-50 dark:bg-amber-950/30 border-amber-200">
+              <div className="flex items-start justify-between">
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name || 'Client'}</p>
+                  {pool?.name && <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{pool.name}</p>}
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
+                </div>
+                <Badge variant="warning" className="shrink-0">{t('service.unableStatus')}</Badge>
+              </div>
+            </Card>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('service.unableSubtitle')}</p>
+
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('service.unableReasonLabel')}</h2>
+              <div className="flex flex-wrap gap-2">
+                {UNABLE_REASONS.map(r => (
+                  <button
+                    key={r}
+                    onClick={() => setUnableReason(r)}
+                    className={cn(
+                      'px-3 py-2 rounded-full text-sm font-medium border min-h-[44px] transition-colors',
+                      unableReason === r
+                        ? 'bg-amber-500 border-amber-500 text-white'
+                        : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-amber-400'
+                    )}
+                  >
+                    {translateUnableReason(r, lang)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t('service.unableNoteLabel')} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">{t('service.optionalParen')}</span>
+              </h2>
+              <TextArea
+                value={unableNote}
+                onChange={e => setUnableNote(e.target.value)}
+                rows={3}
+                placeholder={t('service.unableNotePlaceholder')}
+              />
+            </div>
+
+            <div>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                {t('service.photos')} <span className="text-xs font-normal text-gray-400 dark:text-gray-500">{t('service.optionalParen')} · {unablePhotos.length}/{MAX_EXTRA_PHOTOS}</span>
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('service.unablePhotosHint')}</p>
+              <input
+                ref={unablePhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0]
+                  if (f) await captureUnablePhoto(f)
+                  if (unablePhotoInputRef.current) unablePhotoInputRef.current.value = ''
+                }}
+              />
+              <div className="grid grid-cols-4 gap-2">
+                {unablePhotos.map((p, i) => (
+                  <div key={i} className="relative">
+                    <img src={p.preview} alt="" className="w-full aspect-square rounded-lg border border-gray-200 dark:border-gray-700 object-contain bg-gray-50 dark:bg-gray-800" />
+                    <button
+                      onClick={() => setUnablePhotos(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-900/80 text-white flex items-center justify-center"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {unablePhotos.length < MAX_EXTRA_PHOTOS && (
+                  <button
+                    onClick={() => unablePhotoInputRef.current?.click()}
+                    disabled={capturingUnablePhoto}
+                    className="aspect-square rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-amber-400 hover:text-amber-500 flex items-center justify-center transition-colors"
+                  >
+                    {capturingUnablePhoto ? (
+                      <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    ) : (
+                      <Plus className="w-5 h-5" />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" className="flex-1 min-h-[48px]" onClick={() => setUnableMode(false)}>
+                {t('common.back')}
+              </Button>
+              <Button
+                className="flex-1 min-h-[48px] bg-amber-600 hover:bg-amber-700 disabled:opacity-50"
+                onClick={handleUnable}
+                disabled={!unableReason || submitting}
+              >
+                {submitting ? t('service.unableSubmitting') : t('service.unableSubmit')}
+              </Button>
+            </div>
+            {!unableReason && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400">{t('service.unableReasonRequired')}</p>
+            )}
           </div>
         </PageWrapper>
       </>
@@ -609,6 +870,15 @@ export default function NewService() {
             {!servicePhoto && (
               <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">{t('service.photoRequired')}</p>
             )}
+
+            {/* Escape hatch: can't get in (locked gate, no access, …). Doesn't
+                require the arrival photo — the tech may not even reach the pool. */}
+            <button
+              onClick={() => setUnableMode(true)}
+              className="w-full min-h-[48px] mt-2 rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-semibold text-sm hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            >
+              {t('service.unableButton')}
+            </button>
           </div>
         )}
 

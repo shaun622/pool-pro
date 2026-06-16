@@ -142,6 +142,92 @@ export function useService() {
     }
   }, [])
 
+  // Tech couldn't service the pool (locked gate, no access, etc.). Records
+  // a service_record with status='unable_to_service' (+ reason and optional
+  // note), then "skips to the next normal service": advances next_due_at by
+  // one cycle so the stop clears off the active route and the recurrence
+  // continues — WITHOUT marking it serviced. No last_serviced_at write, no
+  // completed_visits bump (no visit happened). Photos are saved by the
+  // caller (tag='unable_access') before this runs, mirroring handleComplete.
+  const markUnableToService = useCallback(async (serviceRecordId, poolId, { reason, note } = {}) => {
+    setLoading(true)
+    try {
+      const now = new Date()
+      const { error } = await supabase
+        .from('service_records')
+        .update({
+          status: 'unable_to_service',
+          unable_reason: reason || null,
+          notes: note || null,
+          serviced_at: now.toISOString(),
+        })
+        .eq('id', serviceRecordId)
+      if (error) throw error
+
+      // Skip to the next normal service — advance next_due_at one cycle.
+      // Deliberately NOT setting last_serviced_at (nothing was serviced).
+      try {
+        const { data: pool } = await supabase
+          .from('pools')
+          .select('schedule_frequency')
+          .eq('id', poolId)
+          .single()
+        const nextDue = calculateNextDueDate(now, pool?.schedule_frequency || 'weekly')
+        await supabase
+          .from('pools')
+          .update({ next_due_at: nextDue.toISOString() })
+          .eq('id', poolId)
+      } catch (e) {
+        console.warn('Unable-to-service next_due advance failed (non-critical):', e)
+      }
+
+      // Drop today's real job (if any) off the active route. Active lists
+      // key on 'scheduled'/'in_progress', so this clears it without it ever
+      // counting as completed.
+      try {
+        const ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        await supabase
+          .from('jobs')
+          .update({ status: 'unable_to_service' })
+          .eq('pool_id', poolId)
+          .eq('scheduled_date', ymd)
+          .in('status', ['scheduled', 'in_progress'])
+      } catch (e) {
+        console.warn('Unable-to-service job update failed (non-critical):', e)
+      }
+
+      // In-app bell alert for the office — works even before the email
+      // function is deployed. RLS allows staff inserts via current_business_id().
+      try {
+        const { data: rec } = await supabase
+          .from('service_records')
+          .select('pools(address, clients(name))')
+          .eq('id', serviceRecordId)
+          .single()
+        const clientName = rec?.pools?.clients?.name || 'A client'
+        const address = rec?.pools?.address || ''
+        await supabase.from('activity_feed').insert({
+          business_id: business.id,
+          type: 'service_unable',
+          title: 'Unable to service',
+          description: `${clientName}${address ? ' · ' + address : ''}${reason ? ' — ' + reason : ''}`,
+          link_to: `/services/${serviceRecordId}`,
+        })
+      } catch (e) {
+        console.warn('Unable-to-service activity insert failed (non-critical):', e)
+      }
+
+      // Fire-and-forget admin email: reason + photos + full customer contact.
+      supabase.functions.invoke('unable-service', {
+        body: { service_record_id: serviceRecordId }
+      }).then(({ error }) => {
+        if (error) console.error('Unable-service email error:', error)
+      }).catch(e => console.error('Unable-service edge function failed:', e))
+    } finally {
+      setLoading(false)
+    }
+  }, [business])
+
   const getServiceHistory = useCallback(async (poolId, limit = 10) => {
     const { data, error } = await supabase
       .from('service_records')
@@ -192,7 +278,7 @@ export function useService() {
     return urlData.publicUrl
   }, [business])
 
-  return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, saveServicePhoto, completeService, getServiceHistory }
+  return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, saveServicePhoto, completeService, markUnableToService, getServiceHistory }
 }
 
 function convertToWebP(file, maxSize = 1200, quality = 0.82) {

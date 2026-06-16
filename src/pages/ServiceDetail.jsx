@@ -48,7 +48,7 @@ export default function ServiceDetail() {
       if (data.pool_id) {
         const { data: poolData } = await supabase
           .from('pools')
-          .select('target_ranges, pool_type')
+          .select('target_ranges, pool_type, name, address, clients(name, email, phone, address)')
           .eq('id', data.pool_id)
           .single()
         setPool(poolData)
@@ -102,6 +102,84 @@ export default function ServiceDetail() {
   ]
 
   const completedTasks = tasks.filter(t => t.completed).length
+
+  // Unable-to-service records have no readings/tasks/chemicals — they're a
+  // failed-access report. Show the reason, note, photos and (importantly)
+  // the customer's contact so the admin can follow up.
+  if (record.status === 'unable_to_service') {
+    const contact = pool?.clients || {}
+    return (
+      <>
+        <Header title="Service Details" backTo={-1} />
+        <PageWrapper>
+          <div className="space-y-4">
+            <Card className="border-orange-200 dark:border-orange-900 bg-orange-50/60 dark:bg-orange-950/20">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950/50 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-orange-700 dark:text-orange-300">Unable to service</p>
+                  {record.unable_reason && <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-0.5">{record.unable_reason}</p>}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDate(record.serviced_at)} · {record.technician_name || '--'}</p>
+                </div>
+              </div>
+            </Card>
+
+            {record.notes && (
+              <Card>
+                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Note from technician</h2>
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{record.notes}</p>
+              </Card>
+            )}
+
+            {photos.length > 0 && (
+              <Card>
+                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Photos</h2>
+                <div className="grid grid-cols-3 gap-2">
+                  {photos.map((photo, i) => (
+                    <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                      <img
+                        src={photo.signed_url || supabase.storage.from('service-photos').getPublicUrl(photo.storage_path).data?.publicUrl}
+                        alt={photo.tag || 'Photo'}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            <Card>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Customer — follow up</h2>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-500 dark:text-gray-400">Name</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100 text-right">{contact.name || '--'}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-500 dark:text-gray-400">Phone</span>
+                  {contact.phone
+                    ? <a href={`tel:${contact.phone}`} className="font-medium text-pool-600 dark:text-pool-400">{contact.phone}</a>
+                    : <span className="text-gray-400 dark:text-gray-500">--</span>}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-gray-500 dark:text-gray-400">Email</span>
+                  {contact.email
+                    ? <a href={`mailto:${contact.email}`} className="font-medium text-pool-600 dark:text-pool-400 truncate max-w-[65%] text-right">{contact.email}</a>
+                    : <span className="text-gray-400 dark:text-gray-500">--</span>}
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-gray-500 dark:text-gray-400 shrink-0">Address</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100 text-right">{pool?.address || contact.address || '--'}</span>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </PageWrapper>
+      </>
+    )
+  }
 
   return (
     <>

@@ -155,6 +155,12 @@ const STATUS_META = {
     accent: 'border-l-red-500 dark:border-l-red-400',
     cardBg: 'bg-red-50/70 hover:bg-red-100/70 dark:bg-red-950/20 dark:hover:bg-red-950/40',
   },
+  unable_to_service: {
+    label: 'Unable to service',
+    badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+    accent: 'border-l-orange-500 dark:border-l-orange-400',
+    cardBg: 'bg-orange-50/70 hover:bg-orange-100/70 dark:bg-orange-950/20 dark:hover:bg-orange-950/40',
+  },
 }
 function statusMeta(stop) {
   if (stop.isOverdue) return STATUS_META.overdue
@@ -276,9 +282,9 @@ function Schedule({ business }) {
       // anything in pools / jobs — has to delete the service_record).
       supabase
         .from('service_records')
-        .select('id, pool_id, serviced_at')
+        .select('id, pool_id, serviced_at, status, unable_reason')
         .eq('business_id', business.id)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'unable_to_service'])
         .gte('serviced_at', from.toISOString())
         .lte('serviced_at', to.toISOString()),
     ])
@@ -509,11 +515,17 @@ function Schedule({ business }) {
       if (isPoolCovered(dayStart, r.pool_id)) continue
       const pool = poolById.get(r.pool_id)
       if (!pool) continue
-      const completedStop = poolToStop(
+      // Unable-to-service records render as an orange stop on the day it
+      // happened (the pool's real next_due_at has already advanced a
+      // cycle, so paths 2/3 won't emit it). Completed records render dim.
+      const isUnable = r.status === 'unable_to_service'
+      const stop = poolToStop(
         { ...pool, next_due_at: r.serviced_at },
-        { isCompleted: true, serviceRecordId: r.id }
+        isUnable
+          ? { isUnable: true, serviceRecordId: r.id }
+          : { isCompleted: true, serviceRecordId: r.id }
       )
-      ensure(dayStart).stops.push(completedStop)
+      ensure(dayStart).stops.push(stop)
       coverPool(dayStart, r.pool_id)
     }
 
@@ -584,6 +596,13 @@ function Schedule({ business }) {
   // the operator wants the full work-order surface, they still go
   // there explicitly via Work Orders in the nav.
   function handleStopSelect(stop) {
+    // Unable-to-service markers go straight to the read-only service detail
+    // (reason, photos, customer contact) — there's nothing to reschedule
+    // here, and the edit modal doesn't apply to a synthetic unable stop.
+    if (stop?.isUnable && stop.service_record_id) {
+      navigate(`/services/${stop.service_record_id}`)
+      return
+    }
     setSelectedStop(stop)
   }
 
@@ -1443,18 +1462,20 @@ function profileToStop(profile, occurrenceDate) {
   }
 }
 
-function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false, serviceRecordId = null } = {}) {
+function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false, isUnable = false, serviceRecordId = null } = {}) {
   const due = p.next_due_at ? new Date(p.next_due_at) : null
   const hh = due ? String(due.getHours()).padStart(2, '0') : null
   const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
   const sortTime = hh && mm ? `${hh}:${mm}` : '09:00'
-  // Status precedence: completed > overdue > due. EventCard / row
-  // renderers check status === 'completed' for the dim + strike-
-  // through styling.
-  const status = isCompleted ? 'completed' : (isOverdue ? 'overdue' : 'due')
+  // Status precedence: unable > completed > overdue > due. EventCard / row
+  // renderers check status === 'completed' for the dim + strike-through
+  // styling; 'unable_to_service' renders orange and stays prominent.
+  const status = isUnable ? 'unable_to_service' : (isCompleted ? 'completed' : (isOverdue ? 'overdue' : 'due'))
   return {
     type: 'pool',
-    id: isCompleted ? `completed-${p.id}-${due ? due.toISOString().slice(0, 10) : ''}` : p.id,
+    id: isUnable
+      ? `unable-${p.id}-${due ? due.toISOString().slice(0, 10) : ''}`
+      : (isCompleted ? `completed-${p.id}-${due ? due.toISOString().slice(0, 10) : ''}` : p.id),
     pool_id: p.id,
     client_id: p.client_id,
     title: 'Pool Service',
@@ -1477,6 +1498,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false
     isOverdue,
     daysOverdue,
     isCompleted,
+    isUnable,
     service_record_id: serviceRecordId,
     tech_name: p.staff?.name || null,
     tech_photo: p.staff?.photo_url || null,
