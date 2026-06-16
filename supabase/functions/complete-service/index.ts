@@ -164,6 +164,12 @@ serve(async (req) => {
 
     const completedTaskCount = tasks.filter((t: any) => t.completed).length
 
+    // Tech's free-text Notes & Issues — escaped for safe HTML embedding and
+    // surfaced prominently to the owner (red callout in the summary email).
+    const notesEscaped = record.notes
+      ? String(record.notes).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      : ''
+
     const html = `
     <!DOCTYPE html>
     <html>
@@ -293,7 +299,7 @@ serve(async (req) => {
         ${record.notes ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 8px;font-size:15px;font-weight:600;color:#111827;">Notes & Recommendations</h3>
-          <p style="font-size:14px;color:#374151;line-height:1.5;margin:0;background:#F9FAFB;border-radius:8px;padding:12px 16px;">${record.notes}</p>
+          <p style="font-size:14px;color:#374151;line-height:1.5;margin:0;background:#F9FAFB;border-radius:8px;padding:12px 16px;">${notesEscaped}</p>
         </div>
         ` : ''}
 
@@ -398,6 +404,14 @@ serve(async (req) => {
               <strong>${techName}</strong> just completed a service at <strong>${pool.address}</strong> for ${client.name}.
             </p>
 
+            ${record.notes ? `
+            <!-- Tech Notes & Issues — red callout so the office sees flagged issues immediately -->
+            <div style="background:#FEF2F2;border:1px solid #FECACA;border-left:4px solid #DC2626;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+              <p style="margin:0 0 5px;font-size:12px;color:#991B1B;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">&#9888;&#65039; Notes &amp; issues from ${techName}</p>
+              <p style="margin:0;font-size:14px;color:#7F1D1D;line-height:1.5;">${notesEscaped}</p>
+            </div>
+            ` : ''}
+
             <!-- Quick stats -->
             <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
               <tr>
@@ -424,7 +438,6 @@ serve(async (req) => {
                 <tr><td style="padding:3px 0;color:#6B7280;">Technician</td><td style="padding:3px 0;text-align:right;font-weight:600;">${techName}</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Tasks</td><td style="padding:3px 0;text-align:right;font-weight:600;">${completedTaskCount}/${tasks.length} completed</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Chemicals added</td><td style="padding:3px 0;text-align:right;font-weight:600;">${chemicalsAdded.length}</td></tr>
-                ${record.notes ? `<tr><td style="padding:3px 0;color:#6B7280;">Notes</td><td style="padding:3px 0;text-align:right;font-weight:600;">${record.notes}</td></tr>` : ''}
               </table>
             </div>
 
