@@ -130,6 +130,8 @@ export const translations = {
     'service.notesIssuesTitle': 'Notes & Issues',
     'service.notesIssuesHint': 'Flag anything for the office or next visit',
     'service.notesIssuesPlaceholder': 'Issues found, recommendations, things for next visit…',
+    'service.tasksCustomerNote': 'Shown on the customer report',
+    'service.noTasksDone': 'No tasks completed',
 
     // ── run sheet ──
     'runsheet.today': 'Today',
@@ -284,6 +286,8 @@ export const translations = {
     'service.notesIssuesTitle': 'Catatan & Masalah',
     'service.notesIssuesHint': 'Catat hal untuk kantor atau kunjungan berikutnya',
     'service.notesIssuesPlaceholder': 'Masalah ditemukan, rekomendasi, hal untuk kunjungan berikutnya…',
+    'service.tasksCustomerNote': 'Ditampilkan di laporan pelanggan',
+    'service.noTasksDone': 'Tidak ada tugas selesai',
 
     // ── run sheet ──
     'runsheet.today': 'Hari Ini',

@@ -136,9 +136,14 @@ serve(async (req) => {
         </tr>
       `).join('')
 
-    const tasksHtml = tasks.map((t: any) => `
-      <li style="padding:4px 0;color:${t.completed ? '#374151' : '#9CA3AF'};">
-        <span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${t.completed ? '#22C55E' : '#E5E7EB'};color:white;text-align:center;line-height:18px;font-size:11px;margin-right:8px;vertical-align:middle;">${t.completed ? '&#10003;' : ''}</span>
+    // Customer email lists ONLY completed tasks — the customer doesn't
+    // need to see what wasn't done. Admins see the full ticked/unticked
+    // list on the in-app service detail page.
+    const tasksHtml = tasks
+      .filter((t: any) => t.completed)
+      .map((t: any) => `
+      <li style="padding:4px 0;color:#374151;">
+        <span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:#22C55E;color:white;text-align:center;line-height:18px;font-size:11px;margin-right:8px;vertical-align:middle;">&#10003;</span>
         ${t.task_name}
       </li>
     `).join('')
@@ -244,10 +249,10 @@ serve(async (req) => {
         </div>
         ` : ''}
 
-        <!-- Tasks -->
-        ${tasks.length > 0 ? `
+        <!-- Tasks (completed only) -->
+        ${completedTaskCount > 0 ? `
         <div style="background:white;padding:0 24px 20px;">
-          <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Tasks Completed <span style="font-weight:400;color:#9CA3AF;font-size:13px;">(${completedTaskCount}/${tasks.length})</span></h3>
+          <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Tasks Completed <span style="font-weight:400;color:#9CA3AF;font-size:13px;">(${completedTaskCount})</span></h3>
           <div style="background:#F9FAFB;border-radius:8px;padding:12px 16px;">
             <ul style="list-style:none;padding:0;margin:0;font-size:13px;">
               ${tasksHtml}

@@ -1220,27 +1220,25 @@ export default function NewService() {
               </div>
             </Card>
 
-            {/* Tasks summary */}
+            {/* Tasks summary — ONLY completed tasks, because this card
+                mirrors what the customer sees on their report. Admins see
+                the full ticked/unticked list on the service detail page. */}
             <Card>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-1">
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('service.tasksTitle')}</h3>
-                <span className={cn(
-                  'text-xs font-medium px-2 py-0.5 rounded-full',
-                  completedCount === tasks.length ? 'bg-green-100 text-green-700' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                )}>
-                  {completedCount}/{tasks.length}
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                  {completedCount}
                 </span>
               </div>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2">{t('service.tasksCustomerNote')}</p>
               <div className="space-y-1.5">
-                {tasks.map(task => (
+                {tasks.filter(t => t.completed).length === 0 ? (
+                  <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-2">{t('service.noTasksDone')}</p>
+                ) : tasks.filter(t => t.completed).map(task => (
                   <div key={task.name} className="flex items-center gap-2 text-sm">
-                    {task.completed ? (
-                      <Check className="w-4 h-4 text-green-500 shrink-0" strokeWidth={2} />
-                    ) : (
-                      <X className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" strokeWidth={2} />
-                    )}
-                    <span className={task.completed ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'}>
-                      {task.name}
+                    <Check className="w-4 h-4 text-green-500 shrink-0" strokeWidth={2} />
+                    <span className="text-gray-900 dark:text-gray-100">
+                      {translateTaskName(task.name, lang)}
                     </span>
                   </div>
                 ))}

@@ -223,18 +223,16 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, ranges, prevLog, 
           )}
 
           {/* Tasks */}
-          {tasks?.length > 0 && (
+          {/* Customer view — only the tasks that were actually completed. */}
+          {tasks?.some(t => t.completed) && (
             <div>
               <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Tasks ({tasks.filter(t => t.completed).length}/{tasks.length})
+                Tasks ({tasks.filter(t => t.completed).length})
               </h5>
               <div className="flex flex-wrap gap-1.5">
-                {tasks.map((t, i) => (
-                  <span key={i} className={cn(
-                    'text-xs px-2 py-1 rounded-full',
-                    t.completed ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'
-                  )}>
-                    {t.completed && '✓ '}{t.task_name}
+                {tasks.filter(t => t.completed).map((t, i) => (
+                  <span key={i} className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700">
+                    ✓ {t.task_name}
                   </span>
                 ))}
               </div>

@@ -158,11 +158,13 @@ export default function ServiceDetail() {
             </div>
           </Card>
 
-          {/* Tasks */}
+          {/* Tasks — admin view shows the full ticked / unticked list.
+              The customer report (email + portal) shows completed only. */}
           <Card>
-            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
               Tasks ({completedTasks}/{tasks.length})
             </h2>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3">Admin view — the customer only sees completed tasks.</p>
             {tasks.length === 0 ? (
               <p className="text-sm text-gray-400 dark:text-gray-500">No tasks recorded</p>
             ) : (
