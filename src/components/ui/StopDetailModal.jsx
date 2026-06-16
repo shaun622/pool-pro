@@ -12,6 +12,8 @@ import { supabase } from '../../lib/supabase'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION, geocodeAddress } from '../../lib/mapbox'
 import { FREQUENCY_LABELS, SCHEDULE_FREQUENCIES, cn } from '../../lib/utils'
 import { useToast } from '../../contexts/ToastContext'
+import { useService } from '../../hooks/useService'
+import { useBusiness } from '../../hooks/useBusiness'
 import {
   computeNextOccurrence,
   describeSchedule,
@@ -44,6 +46,9 @@ const RECURRENCE_OPTIONS = [
 
 const RECURRENCE_DAYS = { weekly: 7, fortnightly: 14, monthly: 30, '6_weekly': 42, quarterly: 90 }
 
+// Canonical (English) reasons for the admin "unable to service" quick picker.
+const UNABLE_REASONS = ['Locked gate', 'Pool room locked', 'Dog in yard', 'No access', 'Other']
+
 const STATUS_VARIANTS = {
   scheduled: 'primary',
   in_progress: 'warning',
@@ -69,6 +74,17 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   const [loadedProfile, setLoadedProfile] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // null | 'confirm' | 'recurring'
   const [deleting, setDeleting] = useState(false)
+  const { createServiceRecord, markUnableToService } = useService()
+  const { business } = useBusiness()
+  // Admin "Edit details" — replaces the old in-modal service editor. Edits the
+  // CLIENT's name/phone/email and writes straight to the clients row, so the
+  // change syncs everywhere this client appears.
+  const [editDetails, setEditDetails] = useState(false)
+  const [clientForm, setClientForm] = useState({ name: '', phone: '', email: '' })
+  // Admin "Unable to service" quick reason picker (no photos — off-site).
+  const [unablePick, setUnablePick] = useState(false)
+  const [unableReason, setUnableReason] = useState('')
+  const [unableNote, setUnableNote] = useState('')
 
   useEffect(() => {
     if (stop) {
@@ -825,15 +841,73 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   }
 
   const hasCoords = stop.lat != null && stop.lng != null
+  async function handleSaveClient() {
+    if (!stop.client_id) { toast.error('No client linked to this stop'); return }
+    setSaving(true)
+    try {
+      const updates = {
+        phone: clientForm.phone.trim() || null,
+        email: clientForm.email.trim() || null,
+      }
+      // clients.name is NOT NULL — only overwrite it when non-empty.
+      if (clientForm.name.trim()) updates.name = clientForm.name.trim()
+      const { error } = await supabase.from('clients').update(updates).eq('id', stop.client_id)
+      if (error) throw error
+      toast.success('Client details updated')
+      setEditDetails(false)
+      onUpdated?.()
+    } catch (err) {
+      console.error('Client update error:', err)
+      toast.error(err.message || 'Failed to update client')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleAdminUnable() {
+    if (!unableReason || !stop.pool_id) return
+    setSaving(true)
+    try {
+      // Office-initiated: create the record then mark it unable (advances the
+      // schedule, drops the activity-feed alert, fires the admin email).
+      const techName = business?.owner_name || 'Office'
+      const record = await createServiceRecord(stop.pool_id, techName, null)
+      await markUnableToService(record.id, stop.pool_id, {
+        reason: unableReason,
+        note: unableNote.trim() || null,
+      })
+      toast.success('Marked unable to service')
+      setUnablePick(false)
+      onClose?.()
+      onUpdated?.()
+    } catch (err) {
+      console.error('Admin unable error:', err)
+      toast.error(err.message || 'Failed to mark unable to service')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const statusLabel = stop.status || (stop.type === 'pool' ? 'due' : 'scheduled')
   const assignedStaff = staffList.find(s => s.id === stop.assigned_staff_id)
+  const isDone = stop.status === 'completed' || !!stop.isCompleted
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={stop.type === 'job' ? 'Job Details' : 'Service Details'}
-      headerAction={null}
+      headerAction={!editDetails && !unablePick && stop.client_id ? (
+        <button
+          type="button"
+          onClick={() => { setClientForm({ name: stop.client_name || '', phone: stop.phone || '', email: stop.email || '' }); setEditDetails(true) }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-pool-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          title="Edit client details"
+          aria-label="Edit client details"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zM19.5 7.125L16.875 4.5" /></svg>
+        </button>
+      ) : null}
     >
       <div className="space-y-4">
         {/* Mini map */}
@@ -897,7 +971,7 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
         </div>
 
         {/* Details — view / quick-edit mode */}
-        {!editing && (
+        {!editing && !editDetails && !unablePick && (
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
 
             {/* Address */}
@@ -1250,51 +1324,87 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
           </div>
         )}
 
+        {/* Edit client details (admin) — writes back to the client record */}
+        {editDetails && (
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Edit client details</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Updates the client record — applies everywhere this client appears.</p>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Client name</label>
+              <Input value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} placeholder="Client name" />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Phone</label>
+              <Input type="tel" value={clientForm.phone} onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))} placeholder="Phone" />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Email</label>
+              <Input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} placeholder="Email" />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" onClick={() => setEditDetails(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleSaveClient} loading={saving} className="flex-1">Save</Button>
+            </div>
+          </div>
+        )}
+
+        {/* Mark unable to service (admin) — quick reason, no photos */}
+        {unablePick && (
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-orange-200 dark:border-orange-900 p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Mark unable to service</p>
+            <div className="flex flex-wrap gap-2">
+              {UNABLE_REASONS.map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setUnableReason(r)}
+                  className={cn(
+                    'px-3 py-2 rounded-full text-sm font-medium border transition-colors',
+                    unableReason === r
+                      ? 'bg-orange-500 border-orange-500 text-white'
+                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-orange-400'
+                  )}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <TextArea value={unableNote} onChange={e => setUnableNote(e.target.value)} rows={2} placeholder="Optional note for the record…" />
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" onClick={() => { setUnablePick(false); setUnableReason(''); setUnableNote('') }} className="flex-1">Cancel</Button>
+              <Button onClick={handleAdminUnable} loading={saving} disabled={!unableReason} className="flex-1 bg-orange-600 hover:bg-orange-700">Mark unable</Button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
-        {!editing ? (
+        {!editDetails && !unablePick && (
           <div className="space-y-2">
-            {stop.type === 'job' && stop.status !== 'completed' && (
+            {!isDone && stop.type === 'job' && (
               <Button onClick={handleStartJob} className="w-full">
                 {stop.status === 'in_progress' ? 'View Job' : 'Start Job'}
               </Button>
             )}
-            {stop.type === 'pool' && (
+            {!isDone && stop.type === 'pool' && (
               <Button onClick={handleStartJob} className="w-full">
                 Start Service
               </Button>
             )}
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setEditing(true)} className="flex-1">
-                {stop.type === 'job' ? 'Edit Job' : 'Edit Service'}
-              </Button>
-              <Button variant="danger" onClick={handleDeleteClick} className="flex-1">
-                Delete
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* For recurring stops, show a hint redirecting schedule-
-                pattern changes to the Recurring page. Edits in this
-                modal only ever apply to THIS stop — that's the whole
-                point of the simpler model. */}
-            {loadedProfile && (
-              <div className="bg-pool-50/60 dark:bg-pool-950/30 border border-pool-200/60 dark:border-pool-800/40 rounded-xl px-3 py-2 text-[12px] text-pool-700 dark:text-pool-300">
-                Edits here apply to this stop only.{' '}
-                <button
-                  type="button"
-                  onClick={() => { onClose?.(); navigate('/recurring-jobs') }}
-                  className="font-semibold underline hover:no-underline"
-                >
-                  Edit the recurring schedule →
-                </button>
-              </div>
+            {!isDone && stop.pool_id && (
+              <button
+                type="button"
+                onClick={() => { setUnableReason(''); setUnableNote(''); setUnablePick(true) }}
+                className="w-full min-h-[44px] rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-semibold text-sm hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+              >
+                Unable to Service
+              </button>
             )}
-            <div className="flex gap-3">
-              <Button variant="secondary" onClick={() => setEditing(false)} className="flex-1">Cancel</Button>
-              <Button onClick={handleSave} loading={saving} className="flex-1">Save</Button>
-            </div>
-          </>
+            <Button variant="danger" onClick={handleDeleteClick} className="w-full">
+              Delete
+            </Button>
+          </div>
         )}
       </div>
 
