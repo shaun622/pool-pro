@@ -65,23 +65,38 @@ export function useService() {
     if (error) throw error
   }, [])
 
-  const completeService = useCallback(async (serviceRecordId, poolId, notes, scheduledDate) => {
+  const completeService = useCallback(async (serviceRecordId, poolId, notes, opts = {}) => {
     setLoading(true)
     try {
       const now = new Date()
-      // Record against the serviced OCCURRENCE's day (not necessarily today) so
-      // the schedule + chokepoint attribute it to the right stop. See occurrenceServicedAt.
-      const occYmd = (scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) ? scheduledDate : ymdLocal(now)
-      const servicedAt = occurrenceServicedAt(occYmd, now)
-      // 1. Mark the record completed.
+      // opts = { occurrenceDate 'YYYY-MM-DD', recurringProfileId }. Back-compat:
+      // a bare string is treated as occurrenceDate.
+      const { occurrenceDate, recurringProfileId } =
+        typeof opts === 'string' ? { occurrenceDate: opts } : (opts || {})
+      const occYmd = (occurrenceDate && /^\d{4}-\d{2}-\d{2}$/.test(occurrenceDate)) ? occurrenceDate : ymdLocal(now)
+      // 1. Mark completed. serviced_at = when it was ACTUALLY performed; the
+      // identity (recurring_profile_id + occurrence_date) records WHICH scheduled
+      // visit it fulfils. Identity is set only for recurring services — ad-hoc
+      // services stay null (they fulfil no occurrence).
       const { error } = await supabase
         .from('service_records')
-        .update({ status: 'completed', notes, serviced_at: servicedAt })
+        .update({
+          status: 'completed',
+          notes,
+          serviced_at: now.toISOString(),
+          recurring_profile_id: recurringProfileId || null,
+          occurrence_date: recurringProfileId ? occYmd : null,
+        })
         .eq('id', serviceRecordId)
-      if (error) throw error
+      if (error) {
+        // Unique (recurring_profile_id, occurrence_date) → this visit is already
+        // fulfilled (double-submit / race). Surface friendly, not a raw DB error.
+        if (error.code === '23505') throw new Error('This visit is already recorded for that day — reopen it to re-service.')
+        throw error
+      }
 
       // 2. last_serviced_at — display-only history of the most recent service.
-      await supabase.from('pools').update({ last_serviced_at: servicedAt }).eq('id', poolId)
+      await supabase.from('pools').update({ last_serviced_at: now.toISOString() }).eq('id', poolId)
 
       // 3. Clear any auto-generated job for that occurrence off the schedule.
       try {
@@ -95,22 +110,31 @@ export function useService() {
         console.warn('Mark-jobs-completed failed (non-critical):', e)
       }
 
-      // 4. Bump completed_visits on the active profile (history side-effect for
-      // the num_visits duration limit). AWAITED before the recompute so the
-      // chokepoint's fresh read sees the post-bump count (no off-by-one).
+      // 4. Bump completed_visits on THIS occurrence's profile (history side-effect
+      // for the num_visits limit). Prefer the explicit profile id (correct for
+      // stacked profiles); fall back to the pool's single active profile. AWAITED
+      // before the recompute so the chokepoint's fresh read sees the post-bump count.
       try {
-        const { data: profiles } = await supabase
-          .from('recurring_job_profiles')
-          .select('id, completed_visits')
-          .eq('pool_id', poolId)
-          .eq('is_active', true)
-          .in('status', ['active'])
-          .limit(1)
-        if (profiles?.length) {
+        let profId = recurringProfileId || null
+        let cur = null
+        if (profId) {
+          const { data } = await supabase.from('recurring_job_profiles').select('completed_visits').eq('id', profId).single()
+          cur = data?.completed_visits
+        } else {
+          const { data: profiles } = await supabase
+            .from('recurring_job_profiles')
+            .select('id, completed_visits')
+            .eq('pool_id', poolId)
+            .eq('is_active', true)
+            .in('status', ['active'])
+            .limit(1)
+          if (profiles?.length) { profId = profiles[0].id; cur = profiles[0].completed_visits }
+        }
+        if (profId) {
           await supabase
             .from('recurring_job_profiles')
-            .update({ completed_visits: (profiles[0].completed_visits || 0) + 1 })
-            .eq('id', profiles[0].id)
+            .update({ completed_visits: (cur || 0) + 1 })
+            .eq('id', profId)
         }
       } catch (e) {
         console.warn('completed_visits bump failed (non-critical):', e)
@@ -143,24 +167,30 @@ export function useService() {
   // continues — WITHOUT marking it serviced. No last_serviced_at write, no
   // completed_visits bump (no visit happened). Photos are saved by the
   // caller (tag='unable_access') before this runs, mirroring handleComplete.
-  const markUnableToService = useCallback(async (serviceRecordId, poolId, { reason, note, scheduledDate } = {}) => {
+  const markUnableToService = useCallback(async (serviceRecordId, poolId, { reason, note, occurrenceDate, recurringProfileId } = {}) => {
     setLoading(true)
     try {
       const now = new Date()
-      // Record against the OCCURRENCE's day (the stop that couldn't be serviced),
-      // not today — otherwise marking a future stop unable draws a phantom stop on
-      // today and fails to clear the real occurrence. See occurrenceServicedAt.
-      const occYmd = (scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) ? scheduledDate : ymdLocal(now)
+      // serviced_at = when the (failed) visit actually happened; identity
+      // (recurring_profile_id + occurrence_date) records WHICH scheduled visit
+      // this unable report fulfils, so it clears the right occurrence and never
+      // draws a phantom on the actual day. Identity only for recurring services.
+      const occYmd = (occurrenceDate && /^\d{4}-\d{2}-\d{2}$/.test(occurrenceDate)) ? occurrenceDate : ymdLocal(now)
       const { error } = await supabase
         .from('service_records')
         .update({
           status: 'unable_to_service',
           unable_reason: reason || null,
           notes: note || null,
-          serviced_at: occurrenceServicedAt(occYmd, now),
+          serviced_at: now.toISOString(),
+          recurring_profile_id: recurringProfileId || null,
+          occurrence_date: recurringProfileId ? occYmd : null,
         })
         .eq('id', serviceRecordId)
-      if (error) throw error
+      if (error) {
+        if (error.code === '23505') throw new Error('This visit has already been recorded.')
+        throw error
+      }
 
       // Drop that occurrence's real job (if any) off the active route. Active lists
       // key on 'scheduled'/'in_progress', so this clears it without it ever
@@ -334,20 +364,9 @@ function ymdLocal(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// A service record represents a specific scheduled OCCURRENCE. Its serviced_at
-// must fall on that occurrence's calendar day, otherwise: (a) the Schedule
-// renders the record on the wrong day (the "phantom stop on today" bug when an
-// admin marks a future occurrence), and (b) the chokepoint's half-open
-// [occ,nextOcc) fulfillment match clears the wrong occurrence (or none).
-// Given the occurrence ymd ('YYYY-MM-DD'), return an ISO timestamp on that day
-// at the current clock time. Falls back to now() for genuine same-day service.
-function occurrenceServicedAt(scheduledDate, now) {
-  if (!scheduledDate || !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) return now.toISOString()
-  const [y, m, d] = scheduledDate.split('-').map(Number)
-  const sa = new Date(now)
-  sa.setFullYear(y, m - 1, d)
-  return sa.toISOString()
-}
+// (occurrenceServicedAt removed — serviced_at is now the actual performed time;
+// which occurrence a record fulfils is stored explicitly as occurrence_date +
+// recurring_profile_id, matched by identity rather than by serviced_at bucketing.)
 
 // (nextFixedOccurrence + calculateNextDueDate removed — next_due_at is now owned
 // solely by recomputePoolNextDue, computed from the fixed pattern + history.)

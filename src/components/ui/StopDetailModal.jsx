@@ -528,9 +528,11 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
 
   async function handleStartJob() {
     if (stop.type !== 'job') {
-      // Plain pool service stops route into the chemical-readings flow.
+      // Plain pool service stops route into the chemical-readings flow. Carry
+      // occurrence identity (an overdue recurring stop has it) so completion
+      // fulfils exactly this occurrence.
       onClose?.()
-      navigate(`/pools/${stop.id}/service`)
+      navigate(`/pools/${stop.id}/service`, { state: { recurringProfileId: stop.recurring_profile_id || null, occurrenceDate: stop.occurrence_date || null } })
       return
     }
 
@@ -545,7 +547,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     // schedule + the work orders list.
     if (stop.pool_id) {
       onClose?.()
-      navigate(`/pools/${stop.pool_id}/service`)
+      // Carry occurrence identity (profile + the clicked occurrence's date) so the
+      // completion fulfils exactly this occurrence, not "today".
+      navigate(`/pools/${stop.pool_id}/service`, { state: { recurringProfileId: stop.recurring_profile_id || null, occurrenceDate: stop.occurrence_date || stop.scheduled_date || null } })
       return
     }
 
@@ -808,9 +812,10 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
       await markUnableToService(record.id, stop.pool_id, {
         reason: unableReason,
         note: unableNote.trim() || null,
-        // Tie the record to the occurrence the admin clicked (which may be a
-        // future day), not "now" — otherwise it renders as a phantom stop today.
-        scheduledDate: stop.scheduled_date || (stop.next_due_at ? String(stop.next_due_at).split('T')[0] : null),
+        // Occurrence identity — clears exactly the occurrence the admin clicked.
+        recurringProfileId: stop.recurring_profile_id || null,
+        occurrenceDate: stop.occurrence_date || stop.scheduled_date
+          || (stop.next_due_at ? String(stop.next_due_at).split('T')[0] : null),
       })
       toast.success('Marked unable to service')
       setUnablePick(false)

@@ -282,7 +282,7 @@ function Schedule({ business }) {
       // anything in pools / jobs — has to delete the service_record).
       supabase
         .from('service_records')
-        .select('id, pool_id, serviced_at, status, unable_reason')
+        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date')
         .eq('business_id', business.id)
         .in('status', ['completed', 'unable_to_service'])
         .gte('serviced_at', from.toISOString())
@@ -350,6 +350,17 @@ function Schedule({ business }) {
       return covered ? covered.has(poolId) : false
     }
 
+    // Identity: which occurrences each profile has already fulfilled (a
+    // completed/unable record carrying recurring_profile_id + occurrence_date).
+    // Path 1b renders these on their occurrence day; paths 3/4 suppress them.
+    const fulfilledByProfile = new Map()
+    for (const r of serviceRecords) {
+      if (!r.recurring_profile_id || !r.occurrence_date) continue
+      const k = String(r.occurrence_date).split('T')[0]
+      if (!fulfilledByProfile.has(r.recurring_profile_id)) fulfilledByProfile.set(r.recurring_profile_id, new Set())
+      fulfilledByProfile.get(r.recurring_profile_id).add(k)
+    }
+
     // 1. Real jobs
     for (const j of allJobs) {
       if (!j.scheduled_date) continue
@@ -368,8 +379,15 @@ function Schedule({ business }) {
     const poolById = new Map()
     for (const p of allPools) poolById.set(p.id, p)
     for (const r of serviceRecords) {
-      if (!r.pool_id || !r.serviced_at) continue
-      const d = new Date(r.serviced_at)
+      if (!r.pool_id) continue
+      // Render on the OCCURRENCE day for recurring records — a visit serviced
+      // early/late stays on its scheduled day (one occurrence, one visual).
+      // Ad-hoc records (no occurrence_date) render on the actual serviced day.
+      const renderYmd = r.occurrence_date
+        ? String(r.occurrence_date).split('T')[0]
+        : (r.serviced_at ? ymd(new Date(r.serviced_at)) : null)
+      if (!renderYmd) continue
+      const d = new Date(renderYmd + 'T00:00:00')
       if (isNaN(d.getTime())) continue
       const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate())
       if (dayStart < weekStart || dayStart > weekEnd) continue
@@ -379,10 +397,15 @@ function Schedule({ business }) {
       // Unable records render orange (and stay prominent); completed render dim.
       const isUnable = r.status === 'unable_to_service'
       const stop = poolToStop(
-        { ...pool, next_due_at: r.serviced_at }, /* single-writer-ok: in-memory projection to poolToStop, not a DB write */
-        isUnable
-          ? { isUnable: true, serviceRecordId: r.id }
-          : { isCompleted: true, serviceRecordId: r.id }
+        { ...pool, next_due_at: d.toISOString() }, /* single-writer-ok: in-memory projection to poolToStop, not a DB write */
+        {
+          isUnable,
+          isCompleted: !isUnable,
+          serviceRecordId: r.id,
+          recurringProfileId: r.recurring_profile_id || null,
+          occurrenceDate: r.occurrence_date ? String(r.occurrence_date).split('T')[0] : null,
+          servicedAt: r.serviced_at || null,
+        }
       )
       ensure(dayStart).stops.push(stop)
       coverPool(dayStart, r.pool_id)
@@ -428,6 +451,7 @@ function Schedule({ business }) {
       //   - monthly with monthly_week_of_month: computes Nth weekday of
       //     each month touching the range
       const occurrences = occurrencesInRange(profile, weekStart, weekEnd)
+      const fulfilled = fulfilledByProfile.get(profile.id)
       let occurrenceIdx = 0
       for (const cursor of occurrences) {
         if (!isOccurrenceInRange(profile, cursor, occurrenceIdx)) break
@@ -437,9 +461,9 @@ function Schedule({ business }) {
         const isReplaced = replaced && replaced.has(key)
         if (!isReplaced && (!taken || !taken.has(key))) {
           if (!isPoolCovered(cursor, profile.pool_id)) {
-            // Same defensive filter as the pool projector — suppress
-            // when the pool was already serviced on this day.
-            if (profile.pool_id && serviceDays.has(`${profile.pool_id}:${key}`)) {
+            if (fulfilled && fulfilled.has(key)) {
+              // Already fulfilled (completed/unable) — path 1b renders it on this
+              // day as the completed/unable stop, so suppress the due projection.
               coverPool(cursor, profile.pool_id)
             } else {
               ensure(cursor).stops.push(profileToStop(profile, cursor))
@@ -451,34 +475,45 @@ function Schedule({ business }) {
       }
     }
 
-    // 4. Overdue pools — surface under today's column. Skip pools with
-    // an active profile (same dedupe rule as path 2): the profile is
-    // the source of truth and projects via path 3, so an "overdue
-    // pool stop" for a pool whose profile is healthy is just noise
-    // that appears as a phantom day after the operator skips an
-    // occurrence (handleDeleteSingle backs pool.next_due_at into the
-    // past as the "next" cursor advances). The "random Saturday"
-    // bug after skip-day was this exact pattern.
+    // 4. Overdue — per active profile, the earliest PAST occurrence that isn't
+    // fulfilled (identity), skipped (occurrencesInRange already drops those),
+    // moved (replaced) or already materialized (taken). One stop per profile,
+    // surfaced under today — so stacked profiles overdue on different days each
+    // surface. Derived from ENUMERATION, never from the next_due_at cache.
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     if (startOfToday >= weekStart && startOfToday <= weekEnd) {
-      const todayKey = ymd(now)
-      const todayGroup = byDay.get(todayKey)
+      const todayGroup = byDay.get(ymd(now))
       if (todayGroup) {
-        const poolIdsInToday = new Set(todayGroup.stops.filter(s => s.pool_id).map(s => s.pool_id))
-        for (const p of allPools) {
-          if (!p.next_due_at) continue
-          // No active-profile exclusion here (unlike path 2): next_due_at is now
-          // the faithful oldest-UNFULFILLED occurrence, so a profiled pool that's
-          // overdue surfaces exactly one overdue stop (previously it vanished —
-          // path 3 only projects the visible week). poolIdsInToday dedupes.
-          const d = new Date(p.next_due_at)
-          if (d >= startOfToday) continue
-          if (poolIdsInToday.has(p.id)) continue
-          const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
-          const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
-          todayGroup.stops.unshift(poolToStop(p, { isOverdue: true, daysOverdue: Math.max(daysOver, 1) }))
-          poolIdsInToday.add(p.id)
+        const overdueFrom = new Date(startOfToday); overdueFrom.setDate(overdueFrom.getDate() - 365)
+        // Profiles already represented today (due / completed / unable) — don't double.
+        const shownToday = new Set(todayGroup.stops.filter(s => s.recurring_profile_id).map(s => s.recurring_profile_id))
+        for (const profile of allProfiles) {
+          if (!isProfileActive(profile) || !profile.pool_id) continue
+          if (shownToday.has(profile.id)) continue
+          const fulfilled = fulfilledByProfile.get(profile.id)
+          const taken = takenByProfile.get(profile.id)
+          const replaced = replacedByProfile.get(profile.id)
+          let overdueOcc = null
+          for (const cursor of occurrencesInRange(profile, overdueFrom, weekStart)) {
+            const cs = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate())
+            if (cs >= weekStart) break // only occurrences BEFORE the visible week — in-week ones already render via path 3
+            const key = ymd(cursor)
+            if ((fulfilled && fulfilled.has(key)) || (taken && taken.has(key)) || (replaced && replaced.has(key))) continue
+            overdueOcc = cursor; break // earliest unfulfilled past occurrence
+          }
+          if (!overdueOcc) continue
+          const pool = poolById.get(profile.pool_id)
+          if (!pool) continue
+          const occStart = new Date(overdueOcc.getFullYear(), overdueOcc.getMonth(), overdueOcc.getDate())
+          const daysOver = Math.max(Math.round((startOfToday - occStart) / 86400000), 1)
+          todayGroup.stops.unshift(poolToStop(pool, {
+            isOverdue: true,
+            daysOverdue: daysOver,
+            recurringProfileId: profile.id,
+            occurrenceDate: ymd(overdueOcc),
+          }))
+          shownToday.add(profile.id)
         }
       }
     }
@@ -942,6 +977,16 @@ function EventCard({ stop, onClick }) {
     : stop.title
   const sub = stop.address || (stop.client_name ? null : null)
   const isDone = stop.status === 'completed'
+  // For a recurring visit serviced off its scheduled day, note the actual day.
+  const servedNote = (() => {
+    if (!stop.serviced_at || !stop.occurrence_date) return null
+    const sd = new Date(stop.serviced_at)
+    if (isNaN(sd.getTime())) return null
+    const sdYmd = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, '0')}-${String(sd.getDate()).padStart(2, '0')}`
+    const occ = String(stop.occurrence_date).split('T')[0]
+    if (occ === sdYmd) return null
+    return `serviced ${sdYmd < occ ? 'early' : 'late'}: ${sd.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}`
+  })()
   return (
     <button
       onClick={onClick}
@@ -968,6 +1013,9 @@ function EventCard({ stop, onClick }) {
           'text-[10.5px] font-medium text-gray-600 dark:text-gray-300 leading-tight truncate',
           isDone && 'line-through',
         )}>{stop.pool_name}</p>
+      )}
+      {servedNote && (
+        <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">{servedNote}</p>
       )}
       {sub && (
         <p className={cn(
@@ -1371,6 +1419,13 @@ function jobToStop(j) {
     address: j.pools?.address || null,
     status: j.status,
     scheduled_date: j.scheduled_date,
+    // Occurrence identity for a materialized RECURRING job (so completing it
+    // fulfils its occurrence, not "today"). A moved job fulfils the ORIGINAL
+    // occurrence it replaced; an unmoved one fulfils its scheduled date.
+    recurring_profile_id: j.recurring_profile_id || null,
+    occurrence_date: j.recurring_profile_id
+      ? (String(j.replaces_recurring_date || j.scheduled_date || '').split('T')[0] || null)
+      : null,
     scheduled_time: j.scheduled_time,
     sortTime: j.scheduled_time,
     time_display: timeDisp,
@@ -1402,6 +1457,8 @@ function profileToStop(profile, occurrenceDate) {
     address: profile.pools?.address || null,
     status: 'scheduled',
     scheduled_date: ymd(occurrenceDate),
+    recurring_profile_id: profile.id,
+    occurrence_date: ymd(occurrenceDate),
     scheduled_time: time,
     sortTime: time,
     time_display: timeDisp,
@@ -1419,7 +1476,7 @@ function profileToStop(profile, occurrenceDate) {
   }
 }
 
-function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false, isUnable = false, serviceRecordId = null } = {}) {
+function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false, isUnable = false, serviceRecordId = null, recurringProfileId = null, occurrenceDate = null, servicedAt = null } = {}) {
   const due = p.next_due_at ? new Date(p.next_due_at) : null
   const hh = due ? String(due.getHours()).padStart(2, '0') : null
   const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
@@ -1457,6 +1514,9 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false
     isCompleted,
     isUnable,
     service_record_id: serviceRecordId,
+    recurring_profile_id: recurringProfileId,
+    occurrence_date: occurrenceDate,
+    serviced_at: servicedAt,
     tech_name: p.staff?.name || null,
     tech_photo: p.staff?.photo_url || null,
     assigned_staff_id: p.assigned_staff_id || null,

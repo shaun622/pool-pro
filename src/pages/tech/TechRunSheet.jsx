@@ -128,7 +128,7 @@ export default function TechRunSheet() {
       // visible instead of vanishing off the route.
       supabase
         .from('service_records')
-        .select('id, pool_id, serviced_at, status, unable_reason, pools(name, address, type, clients(name, phone))')
+        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, pools(name, address, type, clients(name, phone))')
         .eq('business_id', business.id)
         .in('status', ['completed', 'unable_to_service'])
         .gte('serviced_at', startOfToday.toISOString()),
@@ -239,7 +239,11 @@ export default function TechRunSheet() {
 
     items.sort((a, b) => (a.sortTime || '99:99').localeCompare(b.sortTime || '99:99'))
 
-    // Overdue
+    // Overdue. Resolve occurrence identity by matching the pool's next_due_at
+    // (the chokepoint's identity-computed earliest-unfulfilled) to the owning
+    // profile's next_generation_at mirror, so completing the stop fulfils THAT
+    // occurrence, not "today". (The admin Schedule enumerates per profile; the
+    // run sheet doesn't load history, so it reads the identity-computed cache.)
     const overdue = []
     for (const p of pools) {
       if (!p.next_due_at) continue
@@ -247,12 +251,15 @@ export default function TechRunSheet() {
       if (d >= startOfToday) continue
       if (poolIdsCovered.has(p.id)) continue
       const dueDate = new Date(d); dueDate.setHours(0, 0, 0, 0)
+      const dueYmd = ymd(d)
+      const owner = profiles.find(pr => pr.pool_id === p.id && isProfileActive(pr) && pr.next_generation_at && String(pr.next_generation_at).split('T')[0] === dueYmd)
+      const idOpts = { recurringProfileId: owner?.id || null, occurrenceDate: owner ? dueYmd : null }
       const daysOver = Math.round((startOfToday - dueDate) / (1000 * 60 * 60 * 24))
       if (daysOver <= 0) {
         // Due today (timezone edge case where timestamp is just before midnight)
-        items.push(poolToStop(p, { isOverdue: false, daysOverdue: 0 }))
+        items.push(poolToStop(p, { isOverdue: false, daysOverdue: 0, ...idOpts }))
       } else {
-        overdue.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver }))
+        overdue.push(poolToStop(p, { isOverdue: true, daysOverdue: daysOver, ...idOpts }))
       }
     }
     overdue.sort((a, b) => (b.daysOverdue || 0) - (a.daysOverdue || 0))
@@ -782,7 +789,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
           <div className="flex gap-2">
             {stop.pool_id && (
               <button
-                onClick={() => navigate(`/pools/${stop.pool_id}/service`)}
+                onClick={() => navigate(`/pools/${stop.pool_id}/service`, { state: { recurringProfileId: stop.recurring_profile_id || null, occurrenceDate: stop.occurrence_date || stop.scheduled_date || null } })}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-brand text-white text-sm font-semibold shadow-md shadow-pool-500/20 active:scale-[0.98] transition-all min-h-tap"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
@@ -803,7 +810,7 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
           </div>
           {stop.pool_id && (
             <button
-              onClick={() => navigate(`/pools/${stop.pool_id}/service?unable=1`)}
+              onClick={() => navigate(`/pools/${stop.pool_id}/service?unable=1`, { state: { recurringProfileId: stop.recurring_profile_id || null, occurrenceDate: stop.occurrence_date || stop.scheduled_date || null } })}
               className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-semibold active:scale-[0.98] transition-all min-h-tap hover:bg-red-50 dark:hover:bg-red-950/30"
             >
               {t('service.unableButton')}
@@ -823,6 +830,9 @@ function completedToStop(r) {
     pool_id: r.pool_id,
     status: 'completed',
     service_record_id: r.id,
+    recurring_profile_id: r.recurring_profile_id || null,
+    occurrence_date: r.occurrence_date ? String(r.occurrence_date).split('T')[0] : null,
+    serviced_at: r.serviced_at || null,
     client_name: r.pools?.clients?.name || null,
     pool_name: r.pools?.name || null,
     address: r.pools?.address || null,
@@ -839,6 +849,9 @@ function unableToStop(r) {
     pool_id: r.pool_id,
     status: 'unable_to_service',
     service_record_id: r.id,
+    recurring_profile_id: r.recurring_profile_id || null,
+    occurrence_date: r.occurrence_date ? String(r.occurrence_date).split('T')[0] : null,
+    serviced_at: r.serviced_at || null,
     client_name: r.pools?.clients?.name || null,
     pool_name: r.pools?.name || null,
     address: r.pools?.address || null,
@@ -858,6 +871,8 @@ function jobToStop(j) {
     client_name: j.clients?.name, pool_name: j.pools?.name || null, address: j.pools?.address || null,
     pool_type: j.pools?.type || null, access_notes: j.pools?.access_notes || null,
     status: j.status, scheduled_date: j.scheduled_date,
+    recurring_profile_id: j.recurring_profile_id || null,
+    occurrence_date: j.recurring_profile_id ? (String(j.replaces_recurring_date || j.scheduled_date || '').split('T')[0] || null) : null,
     scheduled_time: j.scheduled_time, sortTime: j.scheduled_time,
     time_display: timeDisp, duration, price: j.price, notes: j.notes,
     phone: j.clients?.phone, email: j.clients?.email,
@@ -866,7 +881,7 @@ function jobToStop(j) {
   }
 }
 
-function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
+function poolToStop(p, { isOverdue = false, daysOverdue = 0, recurringProfileId = null, occurrenceDate = null } = {}) {
   const due = p.next_due_at ? new Date(p.next_due_at) : null
   const hh = due ? String(due.getHours()).padStart(2, '0') : null
   const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
@@ -883,6 +898,8 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0 } = {}) {
     email: p.clients?.email,
     frequency: p.schedule_frequency,
     isOverdue, daysOverdue,
+    recurring_profile_id: recurringProfileId,
+    occurrence_date: occurrenceDate,
     lat: p.latitude ? Number(p.latitude) : null,
     lng: p.longitude ? Number(p.longitude) : null,
   }
@@ -897,6 +914,7 @@ function profileToStop(profile, date) {
     client_name: profile.clients?.name, pool_name: profile.pools?.name || null, address: profile.pools?.address || null,
     pool_type: profile.pools?.type || null, access_notes: profile.pools?.access_notes || null,
     status: 'scheduled', scheduled_date: ymd(date),
+    recurring_profile_id: profile.id, occurrence_date: ymd(date),
     scheduled_time: time, sortTime: time, time_display: time ? formatTimeRange(time, 60) : null,
     duration: 60, projected: true,
     lat: profile.pools?.latitude ? Number(profile.pools.latitude) : null,

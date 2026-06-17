@@ -70,13 +70,17 @@ export default function ServiceDetail() {
   }
 
   // Undo an unable-to-service: revert it back to a due visit on its original
-  // day (the occurrence's day = the record's serviced_at day).
+  // occurrence day. Use the stored occurrence_date (identity); fall back to the
+  // serviced_at day for legacy rows that predate occurrence identity.
   async function handleReopen() {
     if (!record) return
-    const d = new Date(record.serviced_at)
-    const occYmd = isNaN(d.getTime())
-      ? null
-      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    let occYmd = record.occurrence_date ? String(record.occurrence_date).split('T')[0] : null
+    if (!occYmd) {
+      const d = new Date(record.serviced_at)
+      occYmd = isNaN(d.getTime())
+        ? null
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
     try {
       await revertUnableToService(record.id, record.pool_id, occYmd)
       toast.success('Service reopened — back on the schedule')
@@ -129,6 +133,16 @@ export default function ServiceDetail() {
 
   const completedTasks = tasks.filter(t => t.completed).length
 
+  // Surface "serviced early/late" when the actual service day differs from the
+  // scheduled occurrence day (occurrence_date is the identity).
+  const occDay = record.occurrence_date ? String(record.occurrence_date).split('T')[0] : null
+  const servDay = (() => {
+    if (!record.serviced_at) return null
+    const d = new Date(record.serviced_at)
+    return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
+  const servedOffSchedule = occDay && servDay && occDay !== servDay
+
   // Unable-to-service records have no readings/tasks/chemicals — they're a
   // failed-access report. Show the reason, note, photos and (importantly)
   // the customer's contact so the admin can follow up.
@@ -148,6 +162,9 @@ export default function ServiceDetail() {
                   <p className="text-base font-bold text-orange-700 dark:text-orange-300">Unable to service</p>
                   {record.unable_reason && <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-0.5">{record.unable_reason}</p>}
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{formatDate(record.serviced_at)} · {record.technician_name || '--'}</p>
+                  {servedOffSchedule && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Scheduled visit: {formatDate(occDay)}</p>
+                  )}
                 </div>
               </div>
             </Card>
@@ -235,8 +252,11 @@ export default function ServiceDetail() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Date</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{servedOffSchedule ? 'Serviced' : 'Date'}</p>
                 <p className="text-base font-medium text-gray-900 dark:text-gray-100">{formatDate(record.serviced_at)}</p>
+                {servedOffSchedule && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Scheduled visit: {formatDate(occDay)}</p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-500 dark:text-gray-400">Technician</p>

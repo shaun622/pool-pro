@@ -9,7 +9,7 @@
 // calls recomputePoolNextDue(poolId); nothing else writes these columns. A
 // build-time guard (scripts/check-single-writer.mjs) enforces that.
 import { supabase } from './supabase'
-import { occurrencesInRange, computeNextOccurrence } from './recurringScheduling'
+import { occurrencesInRange } from './recurringScheduling'
 
 function startOfDay(d) {
   const x = new Date(d)
@@ -32,27 +32,17 @@ function profileEnded(profile, now) {
   return false
 }
 
-// Earliest UNFULFILLED occurrence for ONE profile, accounting for history.
-// `records` = [{ t: localMidnightMillis }] of completed/unable services.
-// Returns a Date (local midnight) or null.
-function nextUnfulfilledForProfile(profile, records, now) {
+// Earliest UNFULFILLED occurrence for ONE profile. Fulfillment is matched by
+// IDENTITY: `fulfilled` is a Set of occurrence_date 'YYYY-MM-DD' strings already
+// recorded (completed/unable) for this profile. No serviced_at bucketing — a
+// visit serviced early/late still clears exactly its own occurrence, because the
+// record carries occurrence_date. Returns a Date (local midnight) or null.
+function nextUnfulfilledForProfile(profile, fulfilled, now) {
   const lookback = startOfDay(now); lookback.setDate(lookback.getDate() - 365)
   const horizon = startOfDay(now); horizon.setDate(horizon.getDate() + 365)
   const occ = occurrencesInRange(profile, lookback, horizon)
-  if (!occ.length) return null
-  let guard = 0
   for (let i = 0; i < occ.length; i++) {
-    if (++guard > 5000) break
-    const start = occ[i].getTime()
-    // Upper bound of this occurrence's fulfillment window = the next occurrence.
-    const nextOcc = (i + 1 < occ.length)
-      ? occ[i + 1]
-      : (computeNextOccurrence(occ[i], profile) || new Date(occ[i].getTime() + 365 * 86400000))
-    const end = nextOcc.getTime()
-    // Half-open [start, end): a service done a day or two late still clears the
-    // right occurrence, and one service never clears two adjacent occurrences.
-    const fulfilled = records.some(r => r.t >= start && r.t < end)
-    if (!fulfilled) return occ[i]
+    if (!fulfilled || !fulfilled.has(ymdLocal(occ[i]))) return occ[i]
   }
   return null
 }
@@ -90,11 +80,12 @@ export async function recomputePoolNextDue(poolId, { now = new Date() } = {}) {
     return null
   }
 
-  // Fulfilling history (bounded window — flat as history grows).
+  // Fulfilling history (bounded window — flat as history grows). Matched by
+  // IDENTITY: (recurring_profile_id, occurrence_date), not serviced_at.
   const lookback = startOfDay(now); lookback.setDate(lookback.getDate() - 365)
   const { data: recRows, error: recErr } = await supabase
     .from('service_records')
-    .select('serviced_at, status')
+    .select('recurring_profile_id, occurrence_date, status')
     .eq('pool_id', poolId)
     .in('status', ['completed', 'unable_to_service'])
     .gte('serviced_at', lookback.toISOString())
@@ -104,7 +95,14 @@ export async function recomputePoolNextDue(poolId, { now = new Date() } = {}) {
     console.warn('recomputePoolNextDue: history load failed, leaving next_due_at unchanged', recErr)
     return undefined
   }
-  const records = (recRows || []).map(r => ({ t: startOfDay(new Date(r.serviced_at)).getTime() }))
+  // profileId -> Set of fulfilled occurrence_date 'YYYY-MM-DD'.
+  const fulfilledByProfile = new Map()
+  for (const r of (recRows || [])) {
+    if (!r.recurring_profile_id || !r.occurrence_date) continue
+    const occYmd = String(r.occurrence_date).split('T')[0]
+    if (!fulfilledByProfile.has(r.recurring_profile_id)) fulfilledByProfile.set(r.recurring_profile_id, new Set())
+    fulfilledByProfile.get(r.recurring_profile_id).add(occYmd)
+  }
 
   // Per-profile: an ended profile flips to completed INDIVIDUALLY and drops out
   // (it must not null the pool when a sibling profile is still live); each
@@ -115,7 +113,7 @@ export async function recomputePoolNextDue(poolId, { now = new Date() } = {}) {
       await supabase.from('recurring_job_profiles').update({ status: 'completed' }).eq('id', profile.id)
       continue
     }
-    const occ = nextUnfulfilledForProfile(profile, records, now)
+    const occ = nextUnfulfilledForProfile(profile, fulfilledByProfile.get(profile.id), now)
     if (occ) {
       // Mirror this profile's own next occurrence (read-only; /recurring shows it).
       await supabase.from('recurring_job_profiles').update({ next_generation_at: ymdLocal(occ) }).eq('id', profile.id)

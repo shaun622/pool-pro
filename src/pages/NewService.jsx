@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
@@ -76,6 +76,7 @@ export default function NewService() {
   const { id: poolId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { business, staffRecord, userRole } = useBusiness()
   const { t, lang } = useLanguage()
   const {
@@ -88,6 +89,31 @@ export default function NewService() {
     completeService,
     markUnableToService,
   } = useService()
+
+  // Occurrence identity for the visit being serviced. Carried via route state
+  // from the clicked stop (profile + the occurrence's date) so completion/unable
+  // fulfils EXACTLY that occurrence — not "today". Falls back to the pool's
+  // single active profile + its current due occurrence when the tech opened the
+  // pool directly (no specific stop).
+  async function resolveOccurrence() {
+    let recurringProfileId = location.state?.recurringProfileId || null
+    let occurrenceDate = location.state?.occurrenceDate || null
+    if (!recurringProfileId) {
+      const { data } = await supabase
+        .from('recurring_job_profiles')
+        .select('id, next_generation_at')
+        .eq('pool_id', poolId)
+        .eq('is_active', true)
+        .in('status', ['active'])
+      if (data && data.length === 1) {
+        recurringProfileId = data[0].id
+        if (!occurrenceDate) {
+          occurrenceDate = data[0].next_generation_at ? String(data[0].next_generation_at).split('T')[0] : null
+        }
+      }
+    }
+    return { recurringProfileId, occurrenceDate }
+  }
 
   const [pool, setPool] = useState(null)
   const [client, setClient] = useState(null)
@@ -382,8 +408,9 @@ export default function NewService() {
         }
       }
 
-      // Complete the service
-      await completeService(record.id, poolId, notes)
+      // Complete the service against the clicked occurrence's identity.
+      const occ = await resolveOccurrence()
+      await completeService(record.id, poolId, notes, occ)
 
       // Navigate to completion URL so it survives page reloads
       navigate(`/pools/${poolId}/service?done=1`, { replace: true })
@@ -465,9 +492,12 @@ export default function NewService() {
           console.error('Unable photo save failed:', err)
         }
       }
+      const occ = await resolveOccurrence()
       await markUnableToService(record.id, poolId, {
         reason: unableReason,
         note: unableNote.trim() || null,
+        recurringProfileId: occ.recurringProfileId,
+        occurrenceDate: occ.occurrenceDate,
       })
       setUnableSubmitted(true)
       findNextStop()
