@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ChevronLeft, ChevronRight, Pause, Pencil, Play, Plus, Repeat, Trash2, Wallet,
+  ChevronLeft, ChevronRight, Pause, Pencil, Play, Plus, Repeat, Search, Trash2, Wallet,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
@@ -86,6 +86,7 @@ export default function RecurringJobs() {
   const [deletingService, setDeletingService] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState(null)
   const [stateFilter, setStateFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
 
   useEffect(() => {
@@ -134,9 +135,18 @@ export default function RecurringJobs() {
   }), [enriched])
 
   const filtered = useMemo(() => {
-    if (stateFilter === 'all') return enriched
-    return enriched.filter(p => p._state === stateFilter)
-  }, [enriched, stateFilter])
+    const q = search.trim().toLowerCase()
+    return enriched.filter(p => {
+      if (stateFilter !== 'all' && p._state !== stateFilter) return false
+      if (!q) return true
+      return (
+        (p.clients?.name || '').toLowerCase().includes(q) ||
+        (p.pools?.name || '').toLowerCase().includes(q) ||
+        (p.pools?.address || '').toLowerCase().includes(q) ||
+        (p.title || '').toLowerCase().includes(q)
+      )
+    })
+  }, [enriched, stateFilter, search])
 
   // KPI metrics (across all profiles)
   const recurringValue = useMemo(
@@ -149,7 +159,7 @@ export default function RecurringJobs() {
   const pausedCount = stateCounts.paused
 
   // Pagination
-  useEffect(() => { setPage(0) }, [stateFilter])
+  useEffect(() => { setPage(0) }, [stateFilter, search])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
   const pageStart = safePage * PAGE_SIZE
@@ -358,6 +368,20 @@ export default function RecurringJobs() {
         />
       ) : (
         <>
+          {/* Mobile search (desktop search lives inside the table card) */}
+          <div className="md:hidden mb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" strokeWidth={2} />
+              <input
+                type="search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by client, pool, or address..."
+                className="w-full pl-9 pr-3 h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-pool-500/30"
+              />
+            </div>
+          </div>
+
           {/* State filter pills */}
           <div className="flex flex-wrap gap-2 mb-4">
             {[
@@ -417,12 +441,28 @@ export default function RecurringJobs() {
                 </div>
               </Card>
             ))}
+            {filtered.length === 0 && (
+              <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-8">No recurring services match your search.</p>
+            )}
           </div>
 
           {/* DESKTOP: master-detail */}
           <div className="hidden md:grid md:grid-cols-12 gap-4">
             {/* Table */}
             <Card className="!p-0 md:col-span-7 overflow-hidden">
+              {/* Search bar inside the card */}
+              <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" strokeWidth={2} />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search recurring services..."
+                    className="w-full pl-9 pr-3 h-9 rounded-lg bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-pool-500/30"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-[minmax(0,1fr)_8rem_7rem_6rem_5rem] gap-3 px-4 py-2 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-800 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                 <span>Client / Pool</span>
                 <span>Frequency</span>
@@ -475,6 +515,9 @@ export default function RecurringJobs() {
                     </li>
                   )
                 })}
+                {filtered.length === 0 && (
+                  <li className="px-4 py-10 text-center text-sm text-gray-400 dark:text-gray-500">No recurring services match your search.</li>
+                )}
               </ul>
 
               {pageCount > 1 && (

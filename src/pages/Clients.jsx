@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, Plus, Search, Trash2, Users } from 'lucide-react'
+import { ArrowRight, Briefcase, CheckCircle2, ChevronLeft, ChevronRight, Plus, RotateCw, Search, Trash2, Users } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
@@ -12,10 +12,12 @@ import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import NewClientModal from '../components/ui/NewClientModal'
+import AddRecurringModal from '../components/ui/AddRecurringModal'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
+import { useStaff } from '../hooks/useStaff'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { formatDate, cn } from '../lib/utils'
@@ -97,12 +99,19 @@ export default function Clients() {
   const { business } = useBusiness()
   const { clients, loading: clientsLoading, deleteClient } = useClients()
   const { pools, loading: poolsLoading } = usePools()
+  const { staff } = useStaff()
   const toast = useToast()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [jobs, setJobs] = useState([])
+  const [recurringProfiles, setRecurringProfiles] = useState([])
+  const [jobTypes, setJobTypes] = useState([])
+  // "View recurring services" reuses the SAME AddRecurringModal as /recurring
+  // (edit mode) — no duplicate modal.
+  const [recurModalOpen, setRecurModalOpen] = useState(false)
+  const [recurEditProfile, setRecurEditProfile] = useState(null)
   const [page, setPage] = useState(0)
   // Delete-from-detail-card dialog state. We track the target client
   // separately from selectedClientId so the detail panel keeps its
@@ -136,6 +145,29 @@ export default function Clients() {
       .select('id, client_id, status, scheduled_date, title')
       .eq('business_id', business.id)
       .then(({ data }) => setJobs(data || []))
+  }, [business?.id])
+
+  // Recurring services per client (count + the full rows, so the detail panel
+  // can open the SAME edit modal /recurring uses). Refetched after a save.
+  const loadRecurring = useCallback(() => {
+    if (!business?.id) return
+    supabase
+      .from('recurring_job_profiles')
+      .select('*, clients(name), pools(name, address)')
+      .eq('business_id', business.id)
+      .then(({ data }) => setRecurringProfiles(data || []))
+  }, [business?.id])
+
+  useEffect(() => { loadRecurring() }, [loadRecurring])
+
+  // Job-type templates for the recurring modal's "Job Type" picker.
+  useEffect(() => {
+    if (!business?.id) return
+    supabase
+      .from('job_type_templates')
+      .select('id, name, color, default_tasks, estimated_duration_minutes, default_price')
+      .eq('business_id', business.id).eq('is_active', true)
+      .then(({ data }) => setJobTypes(data || []))
   }, [business?.id])
 
   const startOfYear = useMemo(
@@ -176,6 +208,28 @@ export default function Clients() {
     }
     return map
   }, [jobs])
+
+  // Live recurring services (active or paused) per client — drives the
+  // detail-panel count + the "View recurring services" button.
+  const recurringByClient = useMemo(() => {
+    const map = {}
+    for (const p of recurringProfiles) {
+      if (p.status === 'cancelled' || p.status === 'completed') continue
+      if (!p.client_id) continue
+      if (!map[p.client_id]) map[p.client_id] = []
+      map[p.client_id].push(p)
+    }
+    // Active profiles first so the button opens a live one.
+    for (const k in map) map[k].sort((a, b) => (b.status === 'active') - (a.status === 'active'))
+    return map
+  }, [recurringProfiles])
+
+  function openClientRecurring(clientId) {
+    const profs = recurringByClient[clientId] || []
+    if (!profs.length) return
+    setRecurEditProfile(profs[0])
+    setRecurModalOpen(true)
+  }
 
   const activeJobsCount = useMemo(
     () => jobs.filter(j => j.status === 'scheduled' || j.status === 'in_progress').length,
@@ -489,11 +543,17 @@ export default function Clients() {
                       <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{selectedClient.phone}</p>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4 mt-5">
+                    <div className="grid grid-cols-3 gap-4 mt-5">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pools</p>
                         <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">
                           {selectedClient._pools.length}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recurring</p>
+                        <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">
+                          {(recurringByClient[selectedClient.id] || []).length}
                         </p>
                       </div>
                       <div>
@@ -524,6 +584,16 @@ export default function Clients() {
                         </ul>
                       )}
                     </div>
+
+                    {(recurringByClient[selectedClient.id] || []).length > 0 && (
+                      <button
+                        onClick={() => openClientRecurring(selectedClient.id)}
+                        className="mt-4 w-full inline-flex items-center justify-center gap-2 h-10 rounded-lg border border-pool-200 dark:border-pool-800/60 bg-pool-50/60 dark:bg-pool-950/30 text-sm font-semibold text-pool-700 dark:text-pool-300 hover:bg-pool-100 dark:hover:bg-pool-900/40 transition-colors"
+                      >
+                        <RotateCw className="w-4 h-4" strokeWidth={2} />
+                        View recurring service{(recurringByClient[selectedClient.id] || []).length > 1 ? 's' : ''}
+                      </button>
+                    )}
 
                     <div className="mt-5 flex flex-wrap items-center gap-2">
                       <button
@@ -595,6 +665,17 @@ export default function Clients() {
           navigate(`/clients/${client.id}?addPool=1`)
         }}
         zLayer={50}
+      />
+
+      {/* Reuses the EXACT modal /recurring uses (edit mode) — no duplicate. */}
+      <AddRecurringModal
+        open={recurModalOpen}
+        onClose={() => { setRecurModalOpen(false); setRecurEditProfile(null) }}
+        business={business}
+        staff={staff}
+        jobTypes={jobTypes}
+        editProfile={recurEditProfile}
+        onCreated={() => { setRecurModalOpen(false); setRecurEditProfile(null); loadRecurring() }}
       />
     </>
   )
