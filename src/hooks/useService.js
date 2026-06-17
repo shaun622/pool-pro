@@ -217,6 +217,37 @@ export function useService() {
     }
   }, [business])
 
+  // Undo an "unable to service": remove the unable record (and its photos) so
+  // the occurrence is UNFULFILLED again, restore any job that was knocked to
+  // unable_to_service for that day, and recompute — next_due returns to that
+  // occurrence and it shows as due. For when the client reopens access after a
+  // failed visit. scheduledDate ('YYYY-MM-DD') is the occurrence's day.
+  const revertUnableToService = useCallback(async (serviceRecordId, poolId, scheduledDate) => {
+    setLoading(true)
+    try {
+      const now = new Date()
+      // Restore the materialized job (if any) for that occurrence.
+      if (scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+        try {
+          await supabase
+            .from('jobs')
+            .update({ status: 'scheduled' })
+            .eq('pool_id', poolId)
+            .eq('scheduled_date', scheduledDate)
+            .eq('status', 'unable_to_service')
+        } catch (e) { console.warn('revert: job restore failed (non-critical):', e) }
+      }
+      // Drop the unable record + its photos (FK likely cascades, but be explicit).
+      try { await supabase.from('service_photos').delete().eq('service_record_id', serviceRecordId) } catch (e) { /* cascade handles it */ }
+      const { error } = await supabase.from('service_records').delete().eq('id', serviceRecordId)
+      if (error) throw error
+      // The occurrence is unfulfilled again → next_due returns to it.
+      try { await recomputePoolNextDue(poolId, { now }) } catch (e) { console.warn('revert: recompute failed (non-critical):', e) }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   const getServiceHistory = useCallback(async (poolId, limit = 10) => {
     const { data, error } = await supabase
       .from('service_records')
@@ -267,7 +298,7 @@ export function useService() {
     return urlData.publicUrl
   }, [business])
 
-  return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, saveServicePhoto, completeService, markUnableToService, getServiceHistory }
+  return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, saveServicePhoto, completeService, markUnableToService, revertUnableToService, getServiceHistory }
 }
 
 function convertToWebP(file, maxSize = 1200, quality = 0.82) {

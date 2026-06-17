@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
+import { RotateCcw } from 'lucide-react'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import ConfirmModal from '../components/ui/ConfirmModal'
 import EmptyState from '../components/ui/EmptyState'
 import { supabase } from '../lib/supabase'
+import { useService } from '../hooks/useService'
+import { useToast } from '../contexts/ToastContext'
 import {
   formatDate,
   getChemicalStatus,
@@ -21,6 +26,10 @@ export default function ServiceDetail() {
   const [record, setRecord] = useState(null)
   const [pool, setPool] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [confirmReopen, setConfirmReopen] = useState(false)
+  const navigate = useNavigate()
+  const toast = useToast()
+  const { revertUnableToService, loading: reverting } = useService()
 
   useEffect(() => {
     loadService()
@@ -57,6 +66,23 @@ export default function ServiceDetail() {
       console.error('Error loading service record:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Undo an unable-to-service: revert it back to a due visit on its original
+  // day (the occurrence's day = the record's serviced_at day).
+  async function handleReopen() {
+    if (!record) return
+    const d = new Date(record.serviced_at)
+    const occYmd = isNaN(d.getTime())
+      ? null
+      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    try {
+      await revertUnableToService(record.id, record.pool_id, occYmd)
+      toast.success('Service reopened — back on the schedule')
+      navigate(-1)
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reopen service')
     }
   }
 
@@ -126,6 +152,16 @@ export default function ServiceDetail() {
               </div>
             </Card>
 
+            <Button
+              variant="secondary"
+              leftIcon={RotateCcw}
+              onClick={() => setConfirmReopen(true)}
+              loading={reverting}
+              className="w-full"
+            >
+              Reopen — mark serviceable again
+            </Button>
+
             {record.notes && (
               <Card>
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Note from technician</h2>
@@ -177,6 +213,15 @@ export default function ServiceDetail() {
             </Card>
           </div>
         </PageWrapper>
+
+        <ConfirmModal
+          open={confirmReopen}
+          onClose={() => !reverting && setConfirmReopen(false)}
+          title="Reopen this service?"
+          description="Undoes the “unable to service” report and puts the visit back on the schedule as due on its original day — as if it was never marked. Use this when the client has reopened access."
+          confirmLabel={reverting ? 'Reopening…' : 'Reopen service'}
+          onConfirm={handleReopen}
+        />
       </>
     )
   }
