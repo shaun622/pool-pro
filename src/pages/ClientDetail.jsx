@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Header from '../components/layout/Header'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -12,12 +12,14 @@ import EmptyState from '../components/ui/EmptyState'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { useStaff } from '../hooks/useStaff'
+import { useBusiness } from '../hooks/useBusiness'
 import StaffCard from '../components/ui/StaffCard'
 import LocationField from '../components/ui/LocationField'
 import { supabase } from '../lib/supabase'
 import { geocodeAddress } from '../lib/mapbox'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import EditPoolModal from '../components/ui/EditPoolModal'
+import AddRecurringModal from '../components/ui/AddRecurringModal'
 import { useToast } from '../contexts/ToastContext'
 import { Briefcase, Calendar, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
 import {
@@ -39,10 +41,16 @@ export default function ClientDetail() {
   const { updateClient, deleteClient } = useClients()
   const { pools, loading: poolsLoading, createPool, updatePool, deletePool, refetch: refetchPools } = usePools(id)
   const { staff: staffList, loading: staffLoading } = useStaff()
+  const { business } = useBusiness()
 
   const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
   const [recurringProfiles, setRecurringProfiles] = useState([])
+  const [jobTypes, setJobTypes] = useState([])
+  // The "Recurring services" cards open the SAME AddRecurringModal /recurring
+  // uses (edit mode) — one shared module, no duplicate.
+  const [recurEditProfile, setRecurEditProfile] = useState(null)
+  const [recurModalOpen, setRecurModalOpen] = useState(false)
 
   // Edit client modal
   const [editOpen, setEditOpen] = useState(false)
@@ -108,18 +116,37 @@ export default function ClientDetail() {
       })
   }, [id, navigate])
 
-  // Fetch recurring profiles for this client
-  useEffect(() => {
+  // Fetch this client's recurring services — full rows + pool join so the cards
+  // can open the SAME edit modal /recurring uses. Refetched after a save.
+  const loadRecurring = useCallback(() => {
     if (!id) return
     supabase
       .from('recurring_job_profiles')
-      .select('id, pool_id, duration_type, end_date, total_visits, completed_visits, status, recurrence_rule')
+      .select('*, pools(name, address)')
       .eq('client_id', id)
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
       .then(({ data }) => setRecurringProfiles(data || []))
   }, [id])
+  useEffect(() => { loadRecurring() }, [loadRecurring])
 
-  // Build a lookup: pool_id -> recurring profile
+  // Job-type templates for the recurring modal's picker.
+  useEffect(() => {
+    if (!business?.id) return
+    supabase
+      .from('job_type_templates')
+      .select('id, name, color, default_tasks, estimated_duration_minutes, default_price')
+      .eq('business_id', business.id).eq('is_active', true)
+      .then(({ data }) => setJobTypes(data || []))
+  }, [business?.id])
+
+  function openRecur(profile) {
+    setRecurEditProfile(profile)
+    setRecurModalOpen(true)
+  }
+
+  // Build a lookup: pool_id -> recurring profile (first per pool, for the pool
+  // card's duration label).
   const profileByPool = {}
   for (const rp of recurringProfiles) {
     if (rp.pool_id) profileByPool[rp.pool_id] = rp
@@ -380,6 +407,45 @@ export default function ClientDetail() {
           </Button>
         </div>
 
+        {/* Recurring Services Section — every schedule this client has, across
+            all pools. Clicking one opens the SAME AddRecurringModal /recurring
+            uses (edit mode). */}
+        {recurringProfiles.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Recurring services</h2>
+            <div className="space-y-2">
+              {recurringProfiles.map(rp => {
+                const freq = FREQUENCY_LABELS[rp.recurrence_rule] || rp.recurrence_rule
+                const st = rp.status || 'active'
+                const stColor = st === 'active'
+                  ? 'text-green-600 dark:text-green-400'
+                  : st === 'paused' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'
+                return (
+                  <button key={rp.id} onClick={() => openRecur(rp)} className="block w-full text-left">
+                    <Card className="p-3.5 hover:border-pool-200 dark:hover:border-pool-800 transition-colors">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <RotateCw className="w-4 h-4 text-pool-500 shrink-0" strokeWidth={2} />
+                            <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{rp.pools?.name || 'Pool'}</p>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {freq}{rp.next_generation_at ? ` · Next ${formatDate(rp.next_generation_at)}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={cn('text-xs font-semibold capitalize', stColor)}>{st}</span>
+                          <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600" strokeWidth={2} />
+                        </div>
+                      </div>
+                    </Card>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Pools Section */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Pools</h2>
@@ -491,22 +557,9 @@ export default function ClientDetail() {
                     />
                   </div>
 
-                  {/* Action buttons */}
+                  {/* Action buttons — servicing happens from the Schedule (with
+                      occurrence identity), not a generic pool-level Start. */}
                   <div className="flex gap-2 mt-3">
-                    <Button
-                      variant="secondary"
-                      className="flex-1 text-sm min-h-[44px]"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/pools/${pool.id}/service${pool.assigned_staff_id ? `?staff=${pool.assigned_staff_id}` : ''}`)
-                      }}
-                    >
-                      <svg className="w-4 h-4 mr-1.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Start Service
-                    </Button>
                     <button
                       type="button"
                       aria-label="Edit pool"
@@ -695,6 +748,17 @@ export default function ClientDetail() {
         onClose={() => setPoolToEdit(null)}
         pool={poolToEdit}
         onSaved={() => { setPoolToEdit(null); refetchPools() }}
+      />
+
+      {/* The EXACT recurring-service editor /recurring uses — one shared module. */}
+      <AddRecurringModal
+        open={recurModalOpen}
+        onClose={() => { setRecurModalOpen(false); setRecurEditProfile(null) }}
+        business={business}
+        staff={staffList}
+        jobTypes={jobTypes}
+        editProfile={recurEditProfile}
+        onCreated={() => { setRecurModalOpen(false); setRecurEditProfile(null); loadRecurring(); refetchPools() }}
       />
 
 

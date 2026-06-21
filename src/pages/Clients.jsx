@@ -12,12 +12,10 @@ import AddressAutocomplete from '../components/ui/AddressAutocomplete'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import NewClientModal from '../components/ui/NewClientModal'
-import AddRecurringModal from '../components/ui/AddRecurringModal'
 import EmptyState from '../components/ui/EmptyState'
 import { useBusiness } from '../hooks/useBusiness'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
-import { useStaff } from '../hooks/useStaff'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { formatDate, cn } from '../lib/utils'
@@ -99,7 +97,6 @@ export default function Clients() {
   const { business } = useBusiness()
   const { clients, loading: clientsLoading, deleteClient } = useClients()
   const { pools, loading: poolsLoading } = usePools()
-  const { staff } = useStaff()
   const toast = useToast()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
@@ -107,11 +104,6 @@ export default function Clients() {
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [jobs, setJobs] = useState([])
   const [recurringProfiles, setRecurringProfiles] = useState([])
-  const [jobTypes, setJobTypes] = useState([])
-  // "View recurring services" reuses the SAME AddRecurringModal as /recurring
-  // (edit mode) — no duplicate modal.
-  const [recurModalOpen, setRecurModalOpen] = useState(false)
-  const [recurEditProfile, setRecurEditProfile] = useState(null)
   const [page, setPage] = useState(0)
   // Delete-from-detail-card dialog state. We track the target client
   // separately from selectedClientId so the detail panel keeps its
@@ -159,16 +151,6 @@ export default function Clients() {
   }, [business?.id])
 
   useEffect(() => { loadRecurring() }, [loadRecurring])
-
-  // Job-type templates for the recurring modal's "Job Type" picker.
-  useEffect(() => {
-    if (!business?.id) return
-    supabase
-      .from('job_type_templates')
-      .select('id, name, color, default_tasks, estimated_duration_minutes, default_price')
-      .eq('business_id', business.id).eq('is_active', true)
-      .then(({ data }) => setJobTypes(data || []))
-  }, [business?.id])
 
   const startOfYear = useMemo(
     () => new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10),
@@ -223,13 +205,6 @@ export default function Clients() {
     for (const k in map) map[k].sort((a, b) => (b.status === 'active') - (a.status === 'active'))
     return map
   }, [recurringProfiles])
-
-  function openClientRecurring(clientId) {
-    const profs = recurringByClient[clientId] || []
-    if (!profs.length) return
-    setRecurEditProfile(profs[0])
-    setRecurModalOpen(true)
-  }
 
   const activeJobsCount = useMemo(
     () => jobs.filter(j => j.status === 'scheduled' || j.status === 'in_progress').length,
@@ -587,7 +562,7 @@ export default function Clients() {
 
                     {(recurringByClient[selectedClient.id] || []).length > 0 && (
                       <button
-                        onClick={() => openClientRecurring(selectedClient.id)}
+                        onClick={() => navigate(`/clients/${selectedClient.id}`)}
                         className="mt-4 w-full inline-flex items-center justify-center gap-2 h-10 rounded-lg border border-pool-200 dark:border-pool-800/60 bg-pool-50/60 dark:bg-pool-950/30 text-sm font-semibold text-pool-700 dark:text-pool-300 hover:bg-pool-100 dark:hover:bg-pool-900/40 transition-colors"
                       >
                         <RotateCw className="w-4 h-4" strokeWidth={2} />
@@ -665,17 +640,6 @@ export default function Clients() {
           navigate(`/clients/${client.id}?addPool=1`)
         }}
         zLayer={50}
-      />
-
-      {/* Reuses the EXACT modal /recurring uses (edit mode) — no duplicate. */}
-      <AddRecurringModal
-        open={recurModalOpen}
-        onClose={() => { setRecurModalOpen(false); setRecurEditProfile(null) }}
-        business={business}
-        staff={staff}
-        jobTypes={jobTypes}
-        editProfile={recurEditProfile}
-        onCreated={() => { setRecurModalOpen(false); setRecurEditProfile(null); loadRecurring() }}
       />
     </>
   )
