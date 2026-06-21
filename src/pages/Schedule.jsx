@@ -43,6 +43,18 @@ function addDays(date, days) {
   return d
 }
 
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1)
+}
+
+function addMonths(date, n) {
+  return new Date(date.getFullYear(), date.getMonth() + n, 1)
+}
+
+function isSameMonth(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+}
+
 function formatRangeTitle(start, end) {
   const sameMonth = start.getMonth() === end.getMonth()
   const sameYear = start.getFullYear() === end.getFullYear()
@@ -206,8 +218,9 @@ export default function Route() {
 function Schedule({ business }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [view, setView] = useState('week') // 'week' | 'day' | 'map'
+  const [view, setView] = useState('week') // 'week' | 'day' | 'month' | 'map'
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()))
+  const [monthAnchor, setMonthAnchor] = useState(() => new Date()) // any date in the displayed month
   const [allJobs, setAllJobs] = useState([])
   const [allPools, setAllPools] = useState([])
   const [allProfiles, setAllProfiles] = useState([])
@@ -243,7 +256,16 @@ function Schedule({ business }) {
   // Filter the grid + today list to a single tech (or 'unassigned') —
   // toggled by clicking a pill in the "On service / Crew" card.
   // null = no filter (show everyone).
-  const [techFilter, setTechFilter] = useState(null)
+  // Crew multi-select: a Set of crew ids ('unassigned' = no crew) that are
+  // UNCHECKED/hidden. Empty = all crews shown. A stop renders when its crew
+  // isn't hidden. '__all__' clears the set (show all).
+  const [hiddenCrews, setHiddenCrews] = useState(() => new Set())
+  const toggleCrew = (id) => setHiddenCrews(prev => {
+    if (id === '__all__') return new Set()
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
 
   async function fetchData() {
     if (!business?.id) return
@@ -324,8 +346,21 @@ function Schedule({ business }) {
   }, [business?.id])
 
   // Build a Map<ymdKey, Stop[]> for the visible 7-day window.
+  // Active date range — the visible week (week/day views) or the month grid
+  // (month view: a Monday-aligned 6-week block). The projection runs over this.
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    if (view === 'month') {
+      const gridStart = getMondayOfWeek(startOfMonth(monthAnchor))
+      return { rangeStart: gridStart, rangeEnd: addDays(gridStart, 41) }
+    }
+    return { rangeStart: weekStart, rangeEnd: addDays(weekStart, 6) }
+  }, [view, weekStart, monthAnchor])
+
   const stopsByDay = useMemo(() => {
-    const weekEnd = addDays(weekStart, 6)
+    // Alias the active range onto the projection's existing week vars so the
+    // body below is unchanged whether we're showing a week or a month.
+    const weekStart = rangeStart
+    const weekEnd = rangeEnd
     weekEnd.setHours(23, 59, 59, 999)
 
     const byDay = new Map()
@@ -334,7 +369,7 @@ function Schedule({ business }) {
       if (!byDay.has(key)) byDay.set(key, { date: new Date(d), stops: [] })
       return byDay.get(key)
     }
-    for (let i = 0; i < 7; i++) ensure(addDays(weekStart, i))
+    for (let d = new Date(weekStart); d <= weekEnd; d = addDays(d, 1)) ensure(new Date(d))
 
     // Track which pool_ids are covered per day to dedupe profile/pool projections.
     const poolIdsCoveredByDay = new Map()
@@ -534,13 +569,14 @@ function Schedule({ business }) {
     const flat = new Map()
     for (const [k, v] of byDay.entries()) flat.set(k, v.stops)
     return flat
-  }, [allJobs, allPools, allProfiles, weekStart, serviceDays, serviceRecords])
+  }, [allJobs, allPools, allProfiles, rangeStart, rangeEnd, serviceDays, serviceRecords])
 
-  const weekDays = useMemo(() => {
+  // Days in the active range (7 for week/day, ~42 for the month grid).
+  const periodDays = useMemo(() => {
     const days = []
-    for (let i = 0; i < 7; i++) days.push(addDays(weekStart, i))
+    for (let d = new Date(rangeStart); d <= rangeEnd; d = addDays(d, 1)) days.push(new Date(d))
     return days
-  }, [weekStart])
+  }, [rangeStart, rangeEnd])
 
   const today = new Date()
   const todayStops = stopsByDay.get(ymd(today)) || []
@@ -553,26 +589,23 @@ function Schedule({ business }) {
     return out
   }, [stopsByDay])
 
-  // Apply techFilter to the grid + today list. The "On service" card
-  // always sees the unfiltered set so the user can switch between techs.
-  const stopMatchesFilter = (s) => {
-    if (!techFilter) return true
-    if (techFilter === 'unassigned') return !s.assigned_staff_id
-    return s.assigned_staff_id === techFilter
-  }
+  // Apply the crew checkboxes to the grid + today list. The crew card always
+  // sees the unfiltered set so every crew stays toggleable.
+  // A stop is hidden when its crew's checkbox is unchecked.
+  const stopMatchesFilter = (s) => !hiddenCrews.has(s.assigned_staff_id || 'unassigned')
   const filteredStopsByDay = useMemo(() => {
-    if (!techFilter) return stopsByDay
+    if (hiddenCrews.size === 0) return stopsByDay
     const filtered = new Map()
     for (const [k, stops] of stopsByDay.entries()) {
       filtered.set(k, stops.filter(stopMatchesFilter))
     }
     return filtered
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopsByDay, techFilter])
+  }, [stopsByDay, hiddenCrews])
   const filteredTodayStops = useMemo(
     () => todayStops.filter(stopMatchesFilter),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todayStops, techFilter],
+    [todayStops, hiddenCrews],
   )
 
   const weekEnd = addDays(weekStart, 6)
@@ -599,10 +632,12 @@ function Schedule({ business }) {
   }
 
   // Eyebrow + title vary by view
-  const eyebrowLabel = view === 'map' ? 'Map view' : view === 'day' ? 'Day view' : 'Week view'
+  const eyebrowLabel = view === 'map' ? 'Map view' : view === 'day' ? 'Day view' : view === 'month' ? 'Month view' : 'Week view'
   const heroTitle = view === 'day'
     ? today.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
-    : formatRangeTitle(weekStart, weekEnd)
+    : view === 'month'
+      ? monthAnchor.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+      : formatRangeTitle(weekStart, weekEnd)
 
   return (
     <PageWrapper width="wide">
@@ -619,10 +654,11 @@ function Schedule({ business }) {
           <div className="flex items-center gap-2 flex-wrap md:justify-end">
             {view !== 'map' && (
               <NavPills
-                isThisWeek={isThisWeek}
-                onPrev={() => setWeekStart(d => addDays(d, -7))}
-                onThisWeek={() => setWeekStart(getMondayOfWeek(new Date()))}
-                onNext={() => setWeekStart(d => addDays(d, 7))}
+                isCurrent={view === 'month' ? isSameMonth(monthAnchor, new Date()) : isThisWeek}
+                label={view === 'month' ? 'This month' : 'This week'}
+                onPrev={view === 'month' ? () => setMonthAnchor(d => addMonths(d, -1)) : () => setWeekStart(d => addDays(d, -7))}
+                onCurrent={view === 'month' ? () => setMonthAnchor(new Date()) : () => setWeekStart(getMondayOfWeek(new Date()))}
+                onNext={view === 'month' ? () => setMonthAnchor(d => addMonths(d, 1)) : () => setWeekStart(d => addDays(d, 7))}
               />
             )}
             <ViewToggle view={view} setView={setView} />
@@ -637,32 +673,35 @@ function Schedule({ business }) {
       ) : view === 'day' ? (
         <>
           {todayStops.length > 0 && (
-            <TechsOnService
-              stops={todayStops}
-              scope="day"
-              activeFilter={techFilter}
-              onSelect={(id) => setTechFilter(prev => prev === id ? null : id)}
-            />
+            <TechsOnService stops={todayStops} allStaff={allStaff} scope="day" hiddenCrews={hiddenCrews} onToggle={toggleCrew} />
           )}
           <TodayList stops={filteredTodayStops} onStopSelect={handleStopSelect} variant="standalone" />
+        </>
+      ) : view === 'month' ? (
+        <>
+          <MonthGrid
+            monthDays={periodDays}
+            monthAnchor={monthAnchor}
+            stopsByDay={filteredStopsByDay}
+            onStopSelect={handleStopSelect}
+            onDrillToWeek={(day) => { setWeekStart(getMondayOfWeek(day)); setView('week') }}
+          />
+          {allWeekStops.length > 0 && (
+            <TechsOnService stops={allWeekStops} allStaff={allStaff} scope="month" hiddenCrews={hiddenCrews} onToggle={toggleCrew} />
+          )}
         </>
       ) : (
         <>
           {/* Desktop: 7-column grid */}
           <div className="hidden md:block">
-            <WeekGrid weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} onFocusDay={focusDay} />
+            <WeekGrid weekDays={periodDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} onFocusDay={focusDay} />
           </div>
           {/* Mobile: stacked-by-day list */}
           <div className="md:hidden">
-            <WeekStack weekDays={weekDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} />
+            <WeekStack weekDays={periodDays} stopsByDay={filteredStopsByDay} onStopSelect={handleStopSelect} />
           </div>
           {allWeekStops.length > 0 && (
-            <TechsOnService
-              stops={allWeekStops}
-              scope="week"
-              activeFilter={techFilter}
-              onSelect={(id) => setTechFilter(prev => prev === id ? null : id)}
-            />
+            <TechsOnService stops={allWeekStops} allStaff={allStaff} scope="week" hiddenCrews={hiddenCrews} onToggle={toggleCrew} />
           )}
           {/* Selected-day list. Default = today; clicking a day header
               or "+N more" in the week grid flips this section to that
@@ -710,7 +749,7 @@ function Schedule({ business }) {
 }
 
 // ─── Prev / This week / Next — three separate rounded-full pills ──────
-function NavPills({ isThisWeek, onPrev, onThisWeek, onNext }) {
+function NavPills({ isCurrent, label = 'This week', onPrev, onCurrent, onNext }) {
   const pillBase = 'inline-flex items-center gap-1 px-3.5 h-9 rounded-full text-sm font-medium transition-colors border'
   const idle = 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 shadow-card'
   const activeNow = 'bg-pool-50 dark:bg-pool-950/40 border-pool-200/70 dark:border-pool-800/40 text-pool-700 dark:text-pool-300 shadow-card'
@@ -720,8 +759,8 @@ function NavPills({ isThisWeek, onPrev, onThisWeek, onNext }) {
         <ChevronLeft className="w-4 h-4" strokeWidth={2} />
         Prev
       </button>
-      <button onClick={onThisWeek} className={cn(pillBase, isThisWeek ? activeNow : idle)}>
-        This week
+      <button onClick={onCurrent} className={cn(pillBase, isCurrent ? activeNow : idle)}>
+        {label}
       </button>
       <button onClick={onNext} className={cn(pillBase, idle)}>
         Next
@@ -743,6 +782,9 @@ function ViewToggle({ view, setView }) {
       </button>
       <button onClick={() => setView('day')} className={cn(base, view === 'day' ? active : inactive)} aria-pressed={view === 'day'}>
         Day
+      </button>
+      <button onClick={() => setView('month')} className={cn(base, view === 'month' ? active : inactive)} aria-pressed={view === 'month'}>
+        Month
       </button>
       <button onClick={() => setView('map')} className={cn(base, view === 'map' ? active : inactive)} aria-pressed={view === 'map'}>
         Map
@@ -967,6 +1009,83 @@ function DayColumn({ day, stops, isToday, onStopSelect, onFocusDay }) {
   )
 }
 
+// ─── Month grid (6-week Monday-aligned block) ──
+// Compact: each day shows up to 3 stops as "name · pool" chips; click a chip to
+// open the stop, click the day number / "+N more" to drill into that week.
+function MonthChip({ stop, onClick }) {
+  const meta = statusMeta(stop)
+  const isDone = stop.status === 'completed'
+  return (
+    <button
+      onClick={onClick}
+      title={`${stop.client_name || stop.title}${stop.pool_name ? ' · ' + stop.pool_name : ''}`}
+      className={cn(
+        'block w-full text-left rounded border-l-2 px-1.5 py-0.5 text-[10.5px] leading-tight truncate',
+        meta.accent, meta.cardBg, isDone && 'opacity-50 line-through',
+      )}
+    >
+      <span className="font-semibold text-gray-900 dark:text-gray-100">{stop.client_name || stop.title}</span>
+      {stop.pool_name && <span className="text-gray-500 dark:text-gray-400"> · {stop.pool_name}</span>}
+    </button>
+  )
+}
+
+function MonthGrid({ monthDays, monthAnchor, stopsByDay, onStopSelect, onDrillToWeek }) {
+  const curMonth = monthAnchor.getMonth()
+  const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const CAP = 3
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-card border border-gray-100 dark:border-gray-800 overflow-hidden mb-4">
+      <div className="grid grid-cols-7 border-b border-gray-100 dark:border-gray-800">
+        {dows.map(d => (
+          <div key={d} className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 text-center">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {monthDays.map(day => {
+          const stops = stopsByDay.get(ymd(day)) || []
+          const inMonth = day.getMonth() === curMonth
+          const isToday = sameYMD(day, new Date())
+          return (
+            <div
+              key={ymd(day)}
+              className={cn(
+                'min-h-[96px] p-1.5 border-b border-r border-gray-100 dark:border-gray-800',
+                !inMonth && 'bg-gray-50/60 dark:bg-gray-900/40',
+              )}
+            >
+              <button
+                onClick={() => onDrillToWeek && onDrillToWeek(day)}
+                className={cn(
+                  'mb-1 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-semibold transition-colors',
+                  isToday ? 'bg-pool-500 text-white hover:bg-pool-600'
+                    : inMonth ? 'text-gray-700 dark:text-gray-300 hover:bg-pool-50 dark:hover:bg-pool-950/40'
+                    : 'text-gray-300 dark:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800',
+                )}
+              >
+                {day.getDate()}
+              </button>
+              <div className="space-y-1">
+                {stops.slice(0, CAP).map(s => (
+                  <MonthChip key={s.id} stop={s} onClick={() => onStopSelect(s)} />
+                ))}
+                {stops.length > CAP && (
+                  <button
+                    onClick={() => onDrillToWeek && onDrillToWeek(day)}
+                    className="block px-1 text-[10px] font-medium text-gray-400 dark:text-gray-500 hover:text-pool-500"
+                  >
+                    +{stops.length - CAP} more
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function EventCard({ stop, onClick }) {
   const meta = statusMeta(stop)
   const time = stop.scheduled_time ? stop.scheduled_time.slice(0, 5) : null
@@ -1027,36 +1146,49 @@ function EventCard({ stop, onClick }) {
   )
 }
 
-// ─── On service today / Crew this week ──
-// scope='week' → "Crew this week" + counts across the visible 7-day window
-// scope='day'  → "On service today" + counts for today only
-// Click a pill to filter the grid + today list to that tech (or 'unassigned').
-// Click again to clear. activeFilter / onSelect drive that.
-function TechsOnService({ stops, scope = 'day', activeFilter, onSelect }) {
-  const byTech = new Map()
+// ─── Crew filter (multi-select checkboxes) ──
+// Lists every active crew + a "No crew" row, each with a checkbox + stop count
+// for the active period (today / week / month). Unchecking hides that crew's
+// stops from the grid + lists. Default: all checked. hiddenCrews / onToggle drive it.
+function TechsOnService({ stops, allStaff = [], scope = 'day', hiddenCrews, onToggle }) {
+  const counts = new Map()
   let unassigned = 0
   for (const stop of stops) {
-    if (stop.assigned_staff_id) {
-      const key = stop.assigned_staff_id
-      if (!byTech.has(key)) {
-        byTech.set(key, {
-          id: key,
-          name: stop.tech_name || 'Tech',
-          photo: stop.tech_photo,
-          count: 0,
-        })
-      }
-      byTech.get(key).count += 1
-    } else {
-      unassigned += 1
-    }
+    if (stop.assigned_staff_id) counts.set(stop.assigned_staff_id, (counts.get(stop.assigned_staff_id) || 0) + 1)
+    else unassigned += 1
   }
-  const techs = Array.from(byTech.values()).sort((a, b) => b.count - a.count)
+  // List ALL active staff (each a "crew") so any can be toggled even with no
+  // stops this period; plus a "No crew" row. Busiest crews first, then by name.
+  const crews = allStaff
+    .filter(s => s.is_active)
+    .map(s => ({ id: s.id, name: s.name || 'Tech', photo: s.photo_url, count: counts.get(s.id) || 0 }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  if (crews.length === 0 && unassigned === 0) return null
+
   const totalStops = stops.length
+  const eyebrowLabel = scope === 'week' ? 'Crew this week' : scope === 'month' ? 'Crew this month' : 'On service today'
 
-  if (techs.length === 0 && unassigned === 0) return null
-
-  const eyebrowLabel = scope === 'week' ? 'Crew this week' : 'On service today'
+  function CrewItem({ id, name, count, avatar, amber }) {
+    const checked = !hiddenCrews.has(id)
+    return (
+      <label className={cn(
+        'inline-flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border cursor-pointer transition-colors select-none',
+        checked
+          ? 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
+          : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-55',
+      )}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggle(id)}
+          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-pool-500 focus:ring-pool-500/30"
+        />
+        {avatar || <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', amber ? 'bg-amber-400' : 'bg-gray-300')} />}
+        <span className="text-sm font-semibold leading-none text-gray-900 dark:text-gray-100">{name}</span>
+        <span className="text-xs tabular-nums leading-none text-gray-500 dark:text-gray-400">· {count}</span>
+      </label>
+    )
+  }
 
   return (
     <Card className="!p-0 overflow-hidden mb-4">
@@ -1066,14 +1198,12 @@ function TechsOnService({ stops, scope = 'day', activeFilter, onSelect }) {
           {eyebrowLabel}
         </p>
         <div className="flex items-center gap-2">
-          {activeFilter && (
+          {hiddenCrews.size > 0 && (
             <button
-              onClick={() => onSelect && onSelect(activeFilter)}
-              className="inline-flex items-center gap-1 px-2 h-6 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 text-[10.5px] font-semibold uppercase tracking-wider hover:bg-pool-100 transition-colors"
-              title="Clear filter"
+              onClick={() => onToggle('__all__')}
+              className="px-2 h-6 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 text-[10.5px] font-semibold uppercase tracking-wider hover:bg-pool-100 transition-colors"
             >
-              <X className="w-3 h-3" strokeWidth={2.5} />
-              Clear
+              Show all
             </button>
           )}
           <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
@@ -1082,49 +1212,10 @@ function TechsOnService({ stops, scope = 'day', activeFilter, onSelect }) {
         </div>
       </div>
       <div className="px-4 py-3 flex flex-wrap gap-2">
-        {techs.map(t => {
-          const active = activeFilter === t.id
-          return (
-            <button
-              key={t.id}
-              onClick={() => onSelect && onSelect(t.id)}
-              className={cn(
-                'inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-colors',
-                active
-                  ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200 dark:border-pool-800/40 ring-1 ring-pool-300/60 dark:ring-pool-700/40'
-                  : 'bg-gray-50 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800',
-              )}
-            >
-              <TechAvatar photo={t.photo} name={t.name} />
-              <span className={cn(
-                'text-sm font-semibold leading-none',
-                active ? 'text-pool-700 dark:text-pool-300' : 'text-gray-900 dark:text-gray-100',
-              )}>
-                {t.name.split(' ')[0]}
-              </span>
-              <span className={cn(
-                'text-xs tabular-nums leading-none',
-                active ? 'text-pool-600 dark:text-pool-400' : 'text-gray-500 dark:text-gray-400',
-              )}>
-                · {t.count} stop{t.count !== 1 ? 's' : ''}
-              </span>
-            </button>
-          )
-        })}
-        {unassigned > 0 && (
-          <button
-            onClick={() => onSelect && onSelect('unassigned')}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold transition-colors',
-              activeFilter === 'unassigned'
-                ? 'bg-amber-100 dark:bg-amber-950/50 border-amber-300/70 dark:border-amber-800/60 text-amber-800 dark:text-amber-200 ring-1 ring-amber-300/60'
-                : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100/70',
-            )}
-          >
-            <AlertCircle className="w-3.5 h-3.5" strokeWidth={2.5} />
-            <span className="tabular-nums">{unassigned}</span> unassigned
-          </button>
-        )}
+        {crews.map(c => (
+          <CrewItem key={c.id} id={c.id} name={c.name.split(' ')[0]} count={c.count} avatar={<TechAvatar photo={c.photo} name={c.name} />} />
+        ))}
+        <CrewItem id="unassigned" name="No crew" count={unassigned} amber />
       </div>
     </Card>
   )
