@@ -293,7 +293,7 @@ function Schedule({ business }) {
         .eq('is_active', true),
       supabase
         .from('staff_members')
-        .select('id, name, photo_url')
+        .select('id, name, photo_url, is_active')
         .eq('business_id', business.id)
         .eq('is_active', true),
       // Completed services in the visible window — used to suppress pool
@@ -1157,16 +1157,16 @@ function TechsOnService({ stops, allStaff = [], scope = 'day', hiddenCrews, onTo
     if (stop.assigned_staff_id) counts.set(stop.assigned_staff_id, (counts.get(stop.assigned_staff_id) || 0) + 1)
     else unassigned += 1
   }
-  // List ALL active staff (each a "crew") so any can be toggled even with no
-  // stops this period; plus a "No crew" row. Busiest crews first, then by name.
+  // List every technician created in settings (so any can be toggled even with
+  // no stops this period); plus an "Unassigned" row. Busiest first, then by name.
   const crews = allStaff
-    .filter(s => s.is_active)
+    .filter(s => s.is_active !== false)
     .map(s => ({ id: s.id, name: s.name || 'Tech', photo: s.photo_url, count: counts.get(s.id) || 0 }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
   if (crews.length === 0 && unassigned === 0) return null
 
   const totalStops = stops.length
-  const eyebrowLabel = scope === 'week' ? 'Crew this week' : scope === 'month' ? 'Crew this month' : 'On service today'
+  const eyebrowLabel = scope === 'week' ? 'Technicians this week' : scope === 'month' ? 'Technicians this month' : 'Technicians today'
 
   function CrewItem({ id, name, count, avatar, amber }) {
     const checked = !hiddenCrews.has(id)
@@ -1215,7 +1215,7 @@ function TechsOnService({ stops, allStaff = [], scope = 'day', hiddenCrews, onTo
         {crews.map(c => (
           <CrewItem key={c.id} id={c.id} name={c.name.split(' ')[0]} count={c.count} avatar={<TechAvatar photo={c.photo} name={c.name} />} />
         ))}
-        <CrewItem id="unassigned" name="No crew" count={unassigned} amber />
+        <CrewItem id="unassigned" name="Unassigned" count={unassigned} amber />
       </div>
     </Card>
   )
