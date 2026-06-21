@@ -218,7 +218,7 @@ export default function Route() {
 function Schedule({ business }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [view, setView] = useState('week') // 'week' | 'day' | 'month' | 'map'
+  const [view, setView] = useState('month') // 'month' | 'week' | 'day' | 'map'
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()))
   const [monthAnchor, setMonthAnchor] = useState(() => new Date()) // any date in the displayed month
   const [allJobs, setAllJobs] = useState([])
@@ -777,14 +777,14 @@ function ViewToggle({ view, setView }) {
   const inactive = 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
   return (
     <div className="inline-flex items-center gap-1 shrink-0">
+      <button onClick={() => setView('month')} className={cn(base, view === 'month' ? active : inactive)} aria-pressed={view === 'month'}>
+        Month
+      </button>
       <button onClick={() => setView('week')} className={cn(base, view === 'week' ? active : inactive)} aria-pressed={view === 'week'}>
         Week
       </button>
       <button onClick={() => setView('day')} className={cn(base, view === 'day' ? active : inactive)} aria-pressed={view === 'day'}>
         Day
-      </button>
-      <button onClick={() => setView('month')} className={cn(base, view === 'month' ? active : inactive)} aria-pressed={view === 'month'}>
-        Month
       </button>
       <button onClick={() => setView('map')} className={cn(base, view === 'map' ? active : inactive)} aria-pressed={view === 'map'}>
         Map
