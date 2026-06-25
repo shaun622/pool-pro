@@ -677,7 +677,7 @@ function Schedule({ business }) {
       <OneOffVisitPicker open={oneOffOpen} onClose={() => setOneOffOpen(false)} />
 
       <div className="mb-4">
-        <Button variant="primary" size="lg" leftIcon={Plus} onClick={() => setOneOffOpen(true)} className="w-full sm:w-auto">
+        <Button variant="primary" size="md" leftIcon={Plus} onClick={() => setOneOffOpen(true)} className="w-full sm:w-auto">
           Service a one-off visit
         </Button>
       </div>
