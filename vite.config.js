@@ -44,6 +44,19 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/assets\//],
         runtimeCaching: [
           {
+            // Service photos: cache-first so a just-captured / recently-viewed
+            // photo renders offline. Must come BEFORE the general supabase rule
+            // (Workbox uses the first matching route). statuses [0,200] covers
+            // opaque cross-origin responses from the public bucket.
+            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/service-photos\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'service-photos',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: 'NetworkFirst',
             options: {

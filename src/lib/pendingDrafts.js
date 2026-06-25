@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { putDraft, getAllDrafts, deleteDraft, quotaOk } from './offlineDb'
+import { putDraft, getAllDrafts, deleteDraft, quotaOk, SCHEMA_VERSION } from './offlineDb'
 import { recomputePoolNextDue } from './recomputePoolNextDue'
 
 // Manual draft & submit — the offline model. Every completion/unable report is
@@ -20,6 +20,13 @@ import { recomputePoolNextDue } from './recomputePoolNextDue'
 //   createdAt,
 // }
 
+// Fired whenever the draft set changes (created / submitted) so the Pending
+// indicator can re-count live without polling.
+export const PENDING_EVENT = 'pendingdrafts:changed'
+function notifyPendingChanged() {
+  try { window.dispatchEvent(new Event(PENDING_EVENT)) } catch { /* non-browser */ }
+}
+
 export async function createDraft(draft) {
   // Quota gate — only for photo-bearing drafts. A photoless completion is never
   // blocked. Throws so the caller can tell the tech to submit before capturing more.
@@ -29,7 +36,9 @@ export async function createDraft(draft) {
       throw new Error('Storage is full — submit your pending visits before capturing more photos.')
     }
   }
+  draft.schemaVersion = SCHEMA_VERSION
   await putDraft(draft) // throws on IndexedDB failure — durability is the top property
+  notifyPendingChanged()
   return draft.serviceRecordId
 }
 
@@ -75,6 +84,9 @@ function buildPayload(draft, photoRows) {
 // success/conflict. On a retry the photos overwrite their deterministic paths.
 export async function submitOne(draft, currentBusinessId) {
   try {
+    // A draft written by a newer app version (after a deploy/SW swap) can't be
+    // safely submitted by older code — leave it for the updated client.
+    if (draft.schemaVersion && draft.schemaVersion > SCHEMA_VERSION) return 'pending'
     if (currentBusinessId && draft.businessId && draft.businessId !== currentBusinessId) {
       return 'wrong-org'
     }
@@ -110,6 +122,7 @@ export async function submitOne(draft, currentBusinessId) {
 
     // 3. Delete the draft — only now that both upload + RPC returned.
     await deleteDraft(draft.serviceRecordId)
+    notifyPendingChanged()
 
     // 4. Best-effort next_due recompute (does NOT gate draft deletion — the
     //    completion is already committed; recompute re-derives the cache).

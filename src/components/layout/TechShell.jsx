@@ -5,6 +5,8 @@ import { useBusiness } from '../../hooks/useBusiness'
 import { useLanguage, LANGUAGES } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 import { cn } from '../../lib/utils'
+import { usePendingDrafts } from '../../hooks/usePendingDrafts'
+import PendingDrafts from '../tech/PendingDrafts'
 
 export default function TechShell() {
   const { signOut } = useAuth()
@@ -12,6 +14,7 @@ export default function TechShell() {
   const { lang, setLang, seedFromProfile, t } = useLanguage()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { count: pendingCount, submitting: pendingSubmitting, submit: submitPending } = usePendingDrafts()
 
   const techName = staffRecord?.name || 'Tech'
   const initials = techName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -101,7 +104,10 @@ export default function TechShell() {
                     {t('nav.profile')}
                   </button>
                   <button
-                    onClick={async () => { setMenuOpen(false); await signOut(); navigate('/login') }}
+                    onClick={async () => {
+                      if (pendingCount > 0 && !window.confirm(`You have ${pendingCount} unsent visit${pendingCount > 1 ? 's' : ''} saved on this device. Log out anyway? They'll stay until you sign back in and Submit.`)) return
+                      setMenuOpen(false); await signOut(); navigate('/login')
+                    }}
                     className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -116,6 +122,9 @@ export default function TechShell() {
           </div>
         </div>
       </header>
+
+      {/* Unsent offline visits — loud, persistent, manual Submit */}
+      <PendingDrafts count={pendingCount} submitting={pendingSubmitting} onSubmit={submitPending} />
 
       {/* Page content */}
       <Outlet />
