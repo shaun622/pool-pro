@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import PageHero from '../components/layout/PageHero'
 import PageWrapper from '../components/layout/PageWrapper'
+import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
@@ -669,18 +670,17 @@ function Schedule({ business }) {
                 onNext={view === 'month' ? () => setMonthAnchor(d => addMonths(d, 1)) : () => setWeekStart(d => addDays(d, 7))}
               />
             )}
-            <button
-              onClick={() => setOneOffOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 px-3 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              <Plus className="w-4 h-4" strokeWidth={2} />
-              One-off visit
-            </button>
             <ViewToggle view={view} setView={setView} />
           </div>
         }
       />
       <OneOffVisitPicker open={oneOffOpen} onClose={() => setOneOffOpen(false)} />
+
+      <div className="mb-4">
+        <Button variant="primary" size="lg" leftIcon={Plus} onClick={() => setOneOffOpen(true)} className="w-full sm:w-auto">
+          Service a one-off visit
+        </Button>
+      </div>
 
       {view === 'map' ? (
         <MapView pools={allPools} onSelect={handleStopSelect} />
