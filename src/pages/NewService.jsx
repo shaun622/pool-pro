@@ -1861,60 +1861,67 @@ function watermarkPhoto(file, meta) {
       const ctx = canvas.getContext('2d')
       ctx.drawImage(img, 0, 0, width, height)
 
-      // Watermark bar at bottom
-      const barH = Math.max(80, height * 0.1)
-      const grad = ctx.createLinearGradient(0, height - barH, 0, height)
-      grad.addColorStop(0, 'rgba(0,0,0,0)')
-      grad.addColorStop(0.3, 'rgba(0,0,0,0.6)')
-      grad.addColorStop(1, 'rgba(0,0,0,0.8)')
-      ctx.fillStyle = grad
-      ctx.fillRect(0, height - barH, width, barH)
-
-      // Text settings
+      // ── Watermark bar (bottom), sized to fit ALL its text ──────────────
+      // Both columns are drawn from the bottom edge UPWARD, so the lowest line
+      // sits `pad` above the image edge and nothing is ever clipped off the
+      // canvas. (The old layout used fixed per-line offsets that, scaled up on
+      // large/tall photos, pushed the address + GPS past the bottom and baked
+      // them off the image.)
       const scale = Math.min(width, height) / 400
-      const pad = 12 * scale
+      const pad = 14 * scale
+      const gap = 6 * scale
+      const fontFor = (l) => `${l.bold ? 'bold ' : ''}${l.size}px -apple-system, BlinkMacSystemFont, sans-serif`
 
-      // Timestamp — large
       const ts = new Date(meta.timestamp)
       const timeStr = ts.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase()
       const dateStr = ts.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
 
-      ctx.fillStyle = 'white'
-      ctx.font = `bold ${Math.round(18 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
-      ctx.textBaseline = 'bottom'
-      ctx.fillText(timeStr, pad, height - barH + 30 * scale)
+      // Left column — top → bottom display order (time, date, address, GPS).
+      const leftLines = [
+        { text: timeStr, size: Math.round(20 * scale), bold: true, alpha: 1 },
+        { text: dateStr, size: Math.round(12 * scale), bold: false, alpha: 0.85 },
+      ]
+      if (meta.address) leftLines.push({ text: meta.address, size: Math.round(11 * scale), bold: false, alpha: 0.9 })
+      if (meta.lat && meta.lng) leftLines.push({ text: `${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)}`, size: Math.round(9 * scale), bold: false, alpha: 0.6 })
 
-      ctx.font = `${Math.round(11 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
-      ctx.fillStyle = 'rgba(255,255,255,0.8)'
-      ctx.fillText(dateStr, pad, height - barH + 45 * scale)
+      // Right column — technician above the (bottom-most) business name.
+      const rightLines = []
+      if (meta.technicianName) rightLines.push({ text: meta.technicianName, size: Math.round(10 * scale), bold: false, alpha: 0.85 })
+      if (meta.businessName) rightLines.push({ text: meta.businessName, size: Math.round(12 * scale), bold: true, alpha: 0.9 })
 
-      // Address
-      if (meta.address) {
-        ctx.font = `${Math.round(10 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
-        ctx.fillStyle = 'rgba(255,255,255,0.9)'
-        ctx.fillText(meta.address, pad, height - barH + 60 * scale)
+      // Bar tall enough to contain the taller column + top & bottom padding.
+      const colHeight = (lines) => lines.reduce((s, l) => s + l.size, 0) + gap * Math.max(0, lines.length - 1)
+      const barH = Math.max(colHeight(leftLines), colHeight(rightLines)) + pad * 2
+
+      const grad = ctx.createLinearGradient(0, height - barH, 0, height)
+      grad.addColorStop(0, 'rgba(0,0,0,0)')
+      grad.addColorStop(0.3, 'rgba(0,0,0,0.65)')
+      grad.addColorStop(1, 'rgba(0,0,0,0.85)')
+      ctx.fillStyle = grad
+      ctx.fillRect(0, height - barH, width, barH)
+
+      ctx.textBaseline = 'alphabetic'
+
+      // Left column, drawn bottom → top.
+      ctx.textAlign = 'left'
+      let ly = height - pad
+      for (let i = leftLines.length - 1; i >= 0; i--) {
+        const l = leftLines[i]
+        ctx.font = fontFor(l)
+        ctx.fillStyle = `rgba(255,255,255,${l.alpha})`
+        ctx.fillText(l.text, pad, ly)
+        ly -= l.size + gap
       }
 
-      // GPS coordinates
-      if (meta.lat && meta.lng) {
-        ctx.font = `${Math.round(9 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
-        ctx.fillStyle = 'rgba(255,255,255,0.6)'
-        ctx.fillText(`${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)}`, pad, height - barH + 73 * scale)
-      }
-
-      // Right side — technician name stacked above the business name.
+      // Right column, drawn bottom → top.
       ctx.textAlign = 'right'
-      let rightY = height - pad
-      if (meta.businessName) {
-        ctx.font = `bold ${Math.round(11 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
-        ctx.fillStyle = 'rgba(255,255,255,0.7)'
-        ctx.fillText(meta.businessName, width - pad, rightY)
-        rightY -= 14 * scale
-      }
-      if (meta.technicianName) {
-        ctx.font = `${Math.round(10 * scale)}px -apple-system, BlinkMacSystemFont, sans-serif`
-        ctx.fillStyle = 'rgba(255,255,255,0.85)'
-        ctx.fillText(meta.technicianName, width - pad, rightY)
+      let ry = height - pad
+      for (let i = rightLines.length - 1; i >= 0; i--) {
+        const l = rightLines[i]
+        ctx.font = fontFor(l)
+        ctx.fillStyle = `rgba(255,255,255,${l.alpha})`
+        ctx.fillText(l.text, width - pad, ry)
+        ry -= l.size + gap
       }
       ctx.textAlign = 'left'
 
