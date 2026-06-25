@@ -5,7 +5,8 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
-import { useService } from '../hooks/useService'
+import { createDraft, submitOne } from '../lib/pendingDrafts'
+import { appendCachedServiceRecord } from '../lib/offlineStore'
 import { useBusiness } from '../hooks/useBusiness'
 import { useLanguage, translateTaskName, translateUnableReason } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
@@ -79,16 +80,6 @@ export default function NewService() {
   const location = useLocation()
   const { business, staffRecord, userRole } = useBusiness()
   const { t, lang } = useLanguage()
-  const {
-    loading: serviceLoading,
-    createServiceRecord,
-    saveChemicalLog,
-    saveTasks,
-    saveChemicalsAdded,
-    saveServicePhoto,
-    completeService,
-    markUnableToService,
-  } = useService()
 
   // Occurrence identity for the visit being serviced. Carried via route state
   // from the clicked stop (profile + the occurrence's date) so completion/unable
@@ -340,88 +331,88 @@ export default function NewService() {
   async function handleComplete() {
     setSubmitting(true)
     try {
-      // Create service record
       const selectedStaff = staffList.find(s => s.id === selectedStaffId)
       const techName = selectedStaff?.name || business?.owner_name || 'Owner'
-      const record = await createServiceRecord(poolId, techName, selectedStaffId || null)
+      const serviceRecordId = crypto.randomUUID()
 
-      // Save chemical readings (convert empty strings to null)
+      // Readings → null for blanks.
       const cleanReadings = {}
       for (const [k, v] of Object.entries(readings)) {
         cleanReadings[k] = v === '' ? null : parseFloat(v)
       }
-      await saveChemicalLog(record.id, cleanReadings)
 
-      // Save tasks
-      await saveTasks(record.id, tasks)
+      // Chemicals — keep rows with a dose or a stock note (see prior reasoning).
+      const validChemicals = chemicalsAdded
+        .filter(c => c.product_name && ((c.dose_text && c.dose_text.trim()) || (c.stock_remaining && c.stock_remaining.trim())))
+        .map(c => ({
+          product_name: c.product_name,
+          dose_text: c.dose_text?.trim() || null,
+          stock_remaining: c.stock_remaining?.trim() || null,
+        }))
 
-      // Save chemicals — keep rows where EITHER dose_text OR
-      // stock_remaining is non-empty. A "noticed salt is low, bring
-      // some" entry with no dose still saves so the office sees the
-      // restock signal; same for a dose with no remaining note.
-      const validChemicals = chemicalsAdded.filter(c => c.product_name && (
-        (c.dose_text && c.dose_text.trim()) ||
-        (c.stock_remaining && c.stock_remaining.trim())
-      ))
-      await saveChemicalsAdded(record.id, validChemicals.map(c => ({
-        product_name: c.product_name,
-        dose_text: c.dose_text?.trim() || null,
-        stock_remaining: c.stock_remaining?.trim() || null,
-      })))
+      // All photos ride in the draft: mandatory arrival/test-kit + up to 5 extra
+      // + the optional completion shot. Each gets its own client_photo_id.
+      const photos = []
+      if (servicePhoto) photos.push({ clientPhotoId: crypto.randomUUID(), blob: servicePhoto, tag: 'test-kit', meta: photoMeta || {} })
+      for (const p of extraPhotos) photos.push({ clientPhotoId: crypto.randomUUID(), blob: p.blob, tag: 'extra', meta: p.meta || {} })
+      if (completionPhoto) photos.push({ clientPhotoId: crypto.randomUUID(), blob: completionPhoto, tag: 'completion', meta: completionPhotoMeta || {} })
 
-      // Bump use_count on the library row so the admin can see which
-      // chemicals are actually getting used. No new-row insert path —
-      // tech can't add chemicals from this flow anymore (admin-only
-      // via Settings → Chemicals).
-      try {
-        for (const c of validChemicals) {
-          const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
-          if (existing) {
-            await supabase.from('chemical_products')
-              .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
-              .eq('id', existing.id)
-          }
-        }
-      } catch (e) {
-        console.warn('Chemical use_count bump failed (non-critical):', e)
-      }
-
-      // Upload pool photo
-      if (servicePhoto) {
-        // Mandatory test-kit / arrival photo (always present at this point — gated at step 0).
-        await saveServicePhoto(record.id, servicePhoto, photoMeta || {}, 'test-kit')
-        // Optional extra photos from the tasks step (up to 5). Saved with
-        // tag='extra' so the report can render them under "On-site photos"
-        // rather than mixed with the test-kit shot. Each is non-fatal.
-        for (const p of extraPhotos) {
-          try {
-            await saveServicePhoto(record.id, p.blob, p.meta || {}, 'extra')
-          } catch (err) {
-            console.error('Extra photo save failed:', err)
-          }
-        }
-        // Optional completion / departure photo from the review step.
-        // Tag='completion' so the renderer can pair it with the
-        // arrival shot ("here's the pool when I arrived ↔ when I left").
-        if (completionPhoto) {
-          try {
-            await saveServicePhoto(record.id, completionPhoto, completionPhotoMeta || {}, 'completion')
-          } catch (err) {
-            // Non-fatal — same reasoning as extra photo above.
-            console.error('Completion photo save failed:', err)
-          }
-        }
-      }
-
-      // Complete the service against the clicked occurrence's identity.
-      // A one-off carries null identity + is_one_off so it never touches recurring.
+      // Occurrence identity (from route state; null for a one-off / ad-hoc visit).
       const occ = await resolveOccurrence()
-      await completeService(record.id, poolId, notes, { ...occ, isOneOff: !!location.state?.oneOff })
+      const servicedAt = new Date().toISOString()
 
-      // Navigate to completion URL so it survives page reloads
+      const draft = {
+        serviceRecordId,
+        kind: 'complete',
+        businessId: business.id,
+        poolId,
+        staffId: selectedStaffId || null,
+        technicianName: techName,
+        servicedAt,
+        recurringProfileId: occ.recurringProfileId || null,
+        occurrenceDate: occ.occurrenceDate || null,
+        isOneOff: !!location.state?.oneOff,
+        notes,
+        readings: cleanReadings,
+        tasks: tasks.map(t => ({ name: t.name, completed: t.completed })),
+        chemicals: validChemicals,
+        photos,
+        createdAt: Date.now(),
+      }
+
+      // Persist the draft FIRST (durability is the top property), then submit:
+      // online it sends + clears on the same tap; offline it stays pending.
+      await createDraft(draft)
+      appendCachedServiceRecord({
+        id: serviceRecordId, pool_id: poolId, status: 'completed', serviced_at: servicedAt,
+        recurring_profile_id: draft.recurringProfileId, occurrence_date: draft.occurrenceDate,
+        is_one_off: draft.isOneOff,
+      })
+      const status = await submitOne(draft, business.id)
+
+      // Online-only analytics: bump chemical library use_count after a real send.
+      if (status === 'sent' && validChemicals.length) {
+        try {
+          for (const c of validChemicals) {
+            const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
+            if (existing) {
+              await supabase.from('chemical_products')
+                .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
+                .eq('id', existing.id)
+            }
+          }
+        } catch (e) {
+          console.warn('Chemical use_count bump failed (non-critical):', e)
+        }
+      }
+
+      // Success screen survives reload either way.
       navigate(`/pools/${poolId}/service?done=1`, { replace: true })
       setCompleted(true)
       findNextStop()
+      if (status === 'pending') {
+        toast.success("Saved on your device — tap Submit when you're back online.")
+      }
     } catch (err) {
       console.error('Error completing service:', err)
       toast.error(t('service.completeFailed') + (err?.message || JSON.stringify(err)))
@@ -490,24 +481,49 @@ export default function NewService() {
     try {
       const selectedStaff = staffList.find(s => s.id === selectedStaffId)
       const techName = selectedStaff?.name || business?.owner_name || 'Owner'
-      const record = await createServiceRecord(poolId, techName, selectedStaffId || null)
-      for (const p of unablePhotos) {
-        try {
-          await saveServicePhoto(record.id, p.blob, p.meta || {}, 'unable_access')
-        } catch (err) {
-          console.error('Unable photo save failed:', err)
-        }
-      }
+      const serviceRecordId = crypto.randomUUID()
       const occ = await resolveOccurrence()
-      await markUnableToService(record.id, poolId, {
-        reason: unableReason,
-        note: unableNote.trim() || null,
-        recurringProfileId: occ.recurringProfileId,
-        occurrenceDate: occ.occurrenceDate,
+      const servicedAt = new Date().toISOString()
+      const reason = unableReason
+      const note = unableNote.trim() || null
+      const clientName = client?.name || 'A client'
+      const address = pool?.address || ''
+
+      const draft = {
+        serviceRecordId,
+        kind: 'unable',
+        businessId: business.id,
+        poolId,
+        staffId: selectedStaffId || null,
+        technicianName: techName,
+        servicedAt,
+        recurringProfileId: occ.recurringProfileId || null,
+        occurrenceDate: occ.occurrenceDate || null,
         isOneOff: !!location.state?.oneOff,
+        reason,
+        note,
+        activity: {
+          type: 'service_unable',
+          title: 'Unable to service',
+          description: `${clientName}${address ? ' · ' + address : ''}${reason ? ' — ' + reason : ''}`,
+          linkTo: `/services/${serviceRecordId}`,
+        },
+        photos: unablePhotos.map(p => ({ clientPhotoId: crypto.randomUUID(), blob: p.blob, tag: 'unable_access', meta: p.meta || {} })),
+        createdAt: Date.now(),
+      }
+
+      await createDraft(draft)
+      appendCachedServiceRecord({
+        id: serviceRecordId, pool_id: poolId, status: 'unable_to_service', serviced_at: servicedAt,
+        unable_reason: reason, recurring_profile_id: draft.recurringProfileId, occurrence_date: draft.occurrenceDate,
+        is_one_off: draft.isOneOff,
       })
+      const status = await submitOne(draft, business.id)
       setUnableSubmitted(true)
       findNextStop()
+      if (status === 'pending') {
+        toast.success("Saved on your device — tap Submit when you're back online.")
+      }
     } catch (err) {
       console.error('Error reporting unable to service:', err)
       toast.error(t('service.unableFailed') + (err?.message || JSON.stringify(err)))

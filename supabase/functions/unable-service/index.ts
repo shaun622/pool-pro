@@ -39,6 +39,13 @@ serve(async (req) => {
       })
     }
 
+    // Idempotent: a retried offline submit can invoke this twice — don't re-notify.
+    if (record.report_sent_at) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'notification already sent' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { data: business } = await supabase
       .from('businesses')
       .select('*')
