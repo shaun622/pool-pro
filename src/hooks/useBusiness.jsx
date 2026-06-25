@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, createContext, useCallback, useRef } f
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { usePlans } from './usePlans'
+import { cacheContext, readCachedContext } from '../lib/offlineStore'
 
 const BusinessContext = createContext(null)
 
@@ -49,6 +50,7 @@ export function BusinessProvider({ children }) {
         setBusiness(ownedBiz)
         setStaffRecord(null)
         setUserRole('owner')
+        cacheContext(userId, { business: ownedBiz, staffRecord: null, userRole: 'owner' })
         setBusinessLoading(false)
         return
       }
@@ -70,6 +72,7 @@ export function BusinessProvider({ children }) {
         const r = staffRow.role?.toLowerCase()
         const isAdmin = r === 'admin' || r === 'manager' || r === 'owner'
         setUserRole(isAdmin ? 'admin' : 'tech')
+        cacheContext(userId, { business: staffRow.businesses, staffRecord: staffRow, userRole: isAdmin ? 'admin' : 'tech' })
         setBusinessLoading(false)
         return
       }
@@ -83,12 +86,23 @@ export function BusinessProvider({ children }) {
       setBusinessLoading(false)
     }
 
-    resolve().catch((err) => {
+    resolve().catch(async (err) => {
       if (cancelled) return
       console.error('Network error fetching business:', err)
-      setBusiness(null)
-      setStaffRecord(null)
-      setUserRole(null)
+      // Offline / network failure: fall back to the cached boot context so the
+      // PWA still mounts (TechGuard/RoleShell require a non-null business)
+      // instead of bouncing to /login. Only the same user's context is returned.
+      const cached = await readCachedContext(userId)
+      if (cancelled) return
+      if (cached?.business) {
+        setBusiness(cached.business)
+        setStaffRecord(cached.staffRecord || null)
+        setUserRole(cached.userRole || null)
+      } else {
+        setBusiness(null)
+        setStaffRecord(null)
+        setUserRole(null)
+      }
       setBusinessLoading(false)
     })
 

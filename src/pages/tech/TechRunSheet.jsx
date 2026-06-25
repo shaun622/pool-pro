@@ -8,6 +8,8 @@ import OneOffVisitPicker from '../../components/ui/OneOffVisitPicker'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useLanguage, translateUnableReason } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
+import { cacheRoute, readCachedRoute } from '../../lib/offlineStore'
+import { requestPersist } from '../../lib/offlineDb'
 import { cn, formatDate } from '../../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
 import { occurrencesInRange } from '../../lib/recurringScheduling'
@@ -85,6 +87,7 @@ export default function TechRunSheet() {
   const [profiles, setProfiles] = useState([])
   const [todayServiceRecords, setTodayServiceRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fromCache, setFromCache] = useState(false) // route hydrated from the offline snapshot
 
   const staffId = staffRecord?.id
 
@@ -99,47 +102,75 @@ export default function TechRunSheet() {
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
 
-    const [jobsRes, poolsRes, profilesRes, unableRes] = await Promise.all([
-      supabase
-        .from('jobs')
-        .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
-        .eq('business_id', business.id)
-        .eq('assigned_staff_id', staffId)
-        .gte('scheduled_date', ymd(from))
-        .lte('scheduled_date', ymd(to))
-        .order('scheduled_date')
-        .order('scheduled_time'),
-      supabase
-        .from('pools')
-        .select('*, clients(name, phone, email)')
-        .eq('business_id', business.id)
-        .eq('assigned_staff_id', staffId)
-        .not('next_due_at', 'is', null),
-      supabase
-        .from('recurring_job_profiles')
-        .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
-        .eq('business_id', business.id)
-        .eq('assigned_staff_id', staffId)
-        .eq('is_active', true),
-      // Today's completed + unable-to-service records (business-wide).
-      // Filtered client-side to the pools on THIS tech's route below — a pool
-      // can reach the run sheet via its recurring profile while the pool row
-      // itself is unassigned, so a pools.assigned_staff_id filter would miss it.
-      // Shown in their own Completed / Unable sections so finished work stays
-      // visible instead of vanishing off the route.
-      supabase
-        .from('service_records')
-        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, is_one_off, pools(name, address, type, clients(name, phone))')
-        .eq('business_id', business.id)
-        .in('status', ['completed', 'unable_to_service'])
-        .gte('serviced_at', startOfToday.toISOString()),
-    ])
-    setJobs(jobsRes.data || [])
-    setPools(poolsRes.data || [])
-    setProfiles(profilesRes.data || [])
-    setTodayServiceRecords(unableRes.data || [])
-    setLoading(false)
+    try {
+      const [jobsRes, poolsRes, profilesRes, unableRes] = await Promise.all([
+        supabase
+          .from('jobs')
+          .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
+          .eq('business_id', business.id)
+          .eq('assigned_staff_id', staffId)
+          .gte('scheduled_date', ymd(from))
+          .lte('scheduled_date', ymd(to))
+          .order('scheduled_date')
+          .order('scheduled_time'),
+        supabase
+          .from('pools')
+          .select('*, clients(name, phone, email)')
+          .eq('business_id', business.id)
+          .eq('assigned_staff_id', staffId)
+          .not('next_due_at', 'is', null),
+        supabase
+          .from('recurring_job_profiles')
+          .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
+          .eq('business_id', business.id)
+          .eq('assigned_staff_id', staffId)
+          .eq('is_active', true),
+        // Today's completed + unable-to-service records (business-wide).
+        // Filtered client-side to the pools on THIS tech's route below — a pool
+        // can reach the run sheet via its recurring profile while the pool row
+        // itself is unassigned, so a pools.assigned_staff_id filter would miss it.
+        // Shown in their own Completed / Unable sections so finished work stays
+        // visible instead of vanishing off the route.
+        supabase
+          .from('service_records')
+          .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, is_one_off, pools(name, address, type, clients(name, phone))')
+          .eq('business_id', business.id)
+          .in('status', ['completed', 'unable_to_service'])
+          .gte('serviced_at', startOfToday.toISOString()),
+      ])
+      // supabase-js resolves with { data:null, error } on a network failure
+      // (it doesn't throw), so check explicitly and fall through to the cache.
+      const err = jobsRes.error || poolsRes.error || profilesRes.error || unableRes.error
+      if (err) throw err
+
+      const jobs = jobsRes.data || []
+      const pools = poolsRes.data || []
+      const profiles = profilesRes.data || []
+      const serviceRecords = unableRes.data || []
+      setJobs(jobs)
+      setPools(pools)
+      setProfiles(profiles)
+      setTodayServiceRecords(serviceRecords)
+      setFromCache(false)
+      // Cache the full result so the run sheet (incl. Week/Upcoming) renders offline.
+      cacheRoute({ businessId: business.id, staffId, jobs, pools, profiles, serviceRecords })
+    } catch (e) {
+      console.warn('Run sheet fetch failed — falling back to offline cache:', e?.message || e)
+      const snap = await readCachedRoute(business.id, staffId)
+      if (snap) {
+        setJobs(snap.jobs || [])
+        setPools(snap.pools || [])
+        setProfiles(snap.profiles || [])
+        setTodayServiceRecords(snap.serviceRecords || [])
+        setFromCache(true)
+      }
+    } finally {
+      setLoading(false)
+    }
   }
+
+  // Ask the browser to keep our storage (route cache + drafts) from being evicted.
+  useEffect(() => { requestPersist() }, [])
 
   useEffect(() => { fetchData() }, [business?.id, staffId, location.key])
 
@@ -150,11 +181,16 @@ export default function TechRunSheet() {
     function onVisible() {
       if (document.visibilityState === 'visible') fetchData()
     }
+    // Read refresh only — re-pull the route when signal returns. (This does NOT
+    // submit drafts; sending unsent work is always a deliberate Submit tap.)
+    function onOnline() { fetchData() }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
+    window.addEventListener('online', onOnline)
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
+      window.removeEventListener('online', onOnline)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business?.id, staffId])

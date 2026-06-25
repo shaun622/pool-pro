@@ -35,17 +35,14 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,ico,png,svg}'],
-        navigateFallback: null,
+        globPatterns: ['**/*.{js,css,ico,png,svg,html}'],
+        // SPA offline boot: serve the precached index.html for any in-app
+        // navigation that fails (no network), so /tech etc. load offline and
+        // the router + cached data layer take over. Assets are precached
+        // separately and aren't navigations, but denylist /assets/ as insurance.
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/assets\//],
         runtimeCaching: [
-          {
-            urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'pages',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 5 }
-            }
-          },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: 'NetworkFirst',
