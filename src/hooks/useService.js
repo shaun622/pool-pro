@@ -301,13 +301,15 @@ export function useService() {
   // found on site). Default stays 'test-kit' so existing callers that
   // omit the tag keep the old behaviour.
   const saveServicePhoto = useCallback(async (serviceRecordId, file, meta = {}, tag = 'test-kit') => {
-    // If file is already a Blob (watermarked WebP), upload directly; otherwise convert
+    // If file is already a Blob (watermarked JPEG), upload directly; otherwise convert.
+    // JPEG (not WebP) so the photo renders in every email client — Outlook
+    // desktop / Outlook.com don't render WebP at all.
     const isBlob = file instanceof Blob && !(file instanceof File)
-    const uploadBlob = isBlob ? file : await convertToWebP(file, 1200, 0.82)
-    const path = `${business.id}/${serviceRecordId}/${Date.now()}.webp`
+    const uploadBlob = isBlob ? file : await convertToJpeg(file, 1200, 0.82)
+    const path = `${business.id}/${serviceRecordId}/${Date.now()}.jpg`
     const { error: uploadErr } = await supabase.storage
       .from('service-photos')
-      .upload(path, uploadBlob, { upsert: true, contentType: 'image/webp' })
+      .upload(path, uploadBlob, { upsert: true, contentType: 'image/jpeg' })
     if (uploadErr) throw uploadErr
     const { data: urlData } = supabase.storage
       .from('service-photos')
@@ -331,7 +333,7 @@ export function useService() {
   return { loading, createServiceRecord, saveChemicalLog, saveTasks, saveChemicalsAdded, saveServicePhoto, completeService, markUnableToService, revertUnableToService, getServiceHistory }
 }
 
-function convertToWebP(file, maxSize = 1200, quality = 0.82) {
+function convertToJpeg(file, maxSize = 1200, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
@@ -347,8 +349,8 @@ function convertToWebP(file, maxSize = 1200, quality = 0.82) {
       const ctx = canvas.getContext('2d')
       ctx.drawImage(img, 0, 0, width, height)
       canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error('WebP conversion failed')),
-        'image/webp',
+        (blob) => blob ? resolve(blob) : reject(new Error('JPEG conversion failed')),
+        'image/jpeg',
         quality
       )
     }

@@ -277,7 +277,7 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, photos, ranges, p
                   key={i}
                   src={photo.signed_url || supabase.storage.from('service-photos').getPublicUrl(photo.storage_path).data?.publicUrl}
                   alt="Pool & test kit"
-                  className="w-full rounded-lg object-cover max-h-64"
+                  className="w-full h-auto rounded-lg"
                 />
               ))}
             </div>

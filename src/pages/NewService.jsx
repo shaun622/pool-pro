@@ -1900,10 +1900,12 @@ function watermarkPhoto(file, meta) {
       canvas.toBlob(
         (blob) => {
           if (!blob) return reject(new Error('Watermark failed'))
-          const dataUrl = canvas.toDataURL('image/webp', 0.85)
+          // JPEG, not WebP — Outlook desktop / Outlook.com don't render WebP,
+          // so the watermarked report photo must be a universally-supported format.
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
           resolve({ blob, dataUrl })
         },
-        'image/webp',
+        'image/jpeg',
         0.85
       )
     }

@@ -234,7 +234,7 @@ serve(async (req) => {
         ${photoUrl ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Pool & Test Kit Photo</h3>
-          <img src="${photoUrl}" alt="Pool and test kit" style="width:100%;max-height:400px;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;" />
+          <img src="${photoUrl}" alt="Pool and test kit" width="520" style="width:100%;max-width:520px;height:auto;display:block;border-radius:8px;border:1px solid #E5E7EB;" />
         </div>
         ` : ''}
 
@@ -444,7 +444,7 @@ serve(async (req) => {
             ${photoUrl ? `
             <div style="margin-bottom:16px;">
               <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Pool Photo</p>
-              <img src="${photoUrl}" alt="Pool and test kit" style="width:100%;max-height:300px;object-fit:cover;border-radius:6px;border:1px solid #E5E7EB;" />
+              <img src="${photoUrl}" alt="Pool and test kit" width="512" style="width:100%;max-width:512px;height:auto;display:block;border-radius:6px;border:1px solid #E5E7EB;" />
             </div>
             ` : ''}
 

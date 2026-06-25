@@ -101,7 +101,7 @@ serve(async (req) => {
       ? `<div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Photos</h3>
           ${photoUrls.map((u: string) =>
-            `<img src="${u}" alt="Access issue" style="width:100%;max-height:340px;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;margin-bottom:8px;" />`
+            `<img src="${u}" alt="Access issue" width="520" style="width:100%;max-width:520px;height:auto;display:block;border-radius:8px;border:1px solid #E5E7EB;margin-bottom:8px;" />`
           ).join('')}
         </div>`
       : ''

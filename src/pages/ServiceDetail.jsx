@@ -189,13 +189,13 @@ export default function ServiceDetail() {
             {photos.length > 0 && (
               <Card>
                 <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Photos</h2>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {photos.map((photo, i) => (
-                    <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                    <div key={i} className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 self-start">
                       <img
                         src={photo.signed_url || supabase.storage.from('service-photos').getPublicUrl(photo.storage_path).data?.publicUrl}
                         alt={photo.tag || 'Photo'}
-                        className="w-full h-full object-cover"
+                        className="w-full h-auto"
                       />
                     </div>
                   ))}
@@ -366,16 +366,16 @@ export default function ServiceDetail() {
           {photos.length > 0 && (
             <Card>
               <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Photos</h2>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {photos.map((photo, i) => (
-                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
+                  <div key={i} className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 self-start">
                     <img
                       src={photo.signed_url || supabase.storage.from('service-photos').getPublicUrl(photo.storage_path).data?.publicUrl}
                       alt={photo.tag || 'Service photo'}
-                      className="w-full h-full object-cover"
+                      className="w-full h-auto"
                     />
                     {photo.tag && (
-                      <Badge className="absolute bottom-1 left-1 text-[10px]" variant="default">
+                      <Badge className="absolute top-1 left-1 text-[10px]" variant="default">
                         {photo.tag}
                       </Badge>
                     )}
