@@ -7,9 +7,10 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
+import OneOffVisitPicker from '../components/ui/OneOffVisitPicker'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
-import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Users, X } from 'lucide-react'
+import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Plus, Users, X } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
@@ -219,6 +220,7 @@ function Schedule({ business }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [view, setView] = useState('month') // 'month' | 'week' | 'day' | 'map'
+  const [oneOffOpen, setOneOffOpen] = useState(false) // "Service a one-off visit" picker
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()))
   const [monthAnchor, setMonthAnchor] = useState(() => new Date()) // any date in the displayed month
   const [allJobs, setAllJobs] = useState([])
@@ -304,7 +306,7 @@ function Schedule({ business }) {
       // anything in pools / jobs — has to delete the service_record).
       supabase
         .from('service_records')
-        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date')
+        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, is_one_off')
         .eq('business_id', business.id)
         .in('status', ['completed', 'unable_to_service'])
         .gte('serviced_at', from.toISOString())
@@ -426,7 +428,12 @@ function Schedule({ business }) {
       if (isNaN(d.getTime())) continue
       const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate())
       if (dayStart < weekStart || dayStart > weekEnd) continue
-      if (isPoolCovered(dayStart, r.pool_id)) continue
+      // A one-off / ad-hoc record (null occurrence identity) fulfils no occurrence:
+      // it must neither be hidden by, nor hide, a recurring stop on the same day.
+      // So it always renders and never participates in coverage. Only an
+      // identity-bearing (recurring) record dedupes against / contributes to coverage.
+      const hasIdentity = !!r.recurring_profile_id
+      if (hasIdentity && isPoolCovered(dayStart, r.pool_id)) continue
       const pool = poolById.get(r.pool_id)
       if (!pool) continue
       // Unable records render orange (and stay prominent); completed render dim.
@@ -440,10 +447,11 @@ function Schedule({ business }) {
           recurringProfileId: r.recurring_profile_id || null,
           occurrenceDate: r.occurrence_date ? String(r.occurrence_date).split('T')[0] : null,
           servicedAt: r.serviced_at || null,
+          isOneOff: !!r.is_one_off,
         }
       )
       ensure(dayStart).stops.push(stop)
-      coverPool(dayStart, r.pool_id)
+      if (hasIdentity) coverPool(dayStart, r.pool_id)
     }
 
     // 2. (Removed.) Legacy pool-level projection — pools.next_due_at +
@@ -661,10 +669,18 @@ function Schedule({ business }) {
                 onNext={view === 'month' ? () => setMonthAnchor(d => addMonths(d, 1)) : () => setWeekStart(d => addDays(d, 7))}
               />
             )}
+            <button
+              onClick={() => setOneOffOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 px-3 h-9 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" strokeWidth={2} />
+              One-off visit
+            </button>
             <ViewToggle view={view} setView={setView} />
           </div>
         }
       />
+      <OneOffVisitPicker open={oneOffOpen} onClose={() => setOneOffOpen(false)} />
 
       {view === 'map' ? (
         <MapView pools={allPools} onSelect={handleStopSelect} />
@@ -1136,6 +1152,9 @@ function EventCard({ stop, onClick }) {
       {servedNote && (
         <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">{servedNote}</p>
       )}
+      {stop.is_one_off && (
+        <p className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 leading-tight truncate">Extra visit</p>
+      )}
       {sub && (
         <p className={cn(
           'text-[10.5px] text-gray-500 dark:text-gray-400 leading-tight truncate',
@@ -1567,7 +1586,7 @@ function profileToStop(profile, occurrenceDate) {
   }
 }
 
-function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false, isUnable = false, serviceRecordId = null, recurringProfileId = null, occurrenceDate = null, servicedAt = null } = {}) {
+function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false, isUnable = false, serviceRecordId = null, recurringProfileId = null, occurrenceDate = null, servicedAt = null, isOneOff = false } = {}) {
   const due = p.next_due_at ? new Date(p.next_due_at) : null
   const hh = due ? String(due.getHours()).padStart(2, '0') : null
   const mm = due ? String(due.getMinutes()).padStart(2, '0') : null
@@ -1578,9 +1597,12 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false
   const status = isUnable ? 'unable_to_service' : (isCompleted ? 'completed' : (isOverdue ? 'overdue' : 'due'))
   return {
     type: 'pool',
+    // Keyed on the service_record id (when present) so two same-day visits on one
+    // pool — e.g. two one-offs, or a one-off alongside a recurring completion —
+    // get distinct React keys instead of colliding and dropping one.
     id: isUnable
-      ? `unable-${p.id}-${due ? due.toISOString().slice(0, 10) : ''}`
-      : (isCompleted ? `completed-${p.id}-${due ? due.toISOString().slice(0, 10) : ''}` : p.id),
+      ? `unable-${serviceRecordId || `${p.id}-${due ? due.toISOString().slice(0, 10) : ''}`}`
+      : (isCompleted ? `completed-${serviceRecordId || `${p.id}-${due ? due.toISOString().slice(0, 10) : ''}`}` : p.id),
     pool_id: p.id,
     client_id: p.client_id,
     title: 'Pool Service',

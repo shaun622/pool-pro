@@ -71,7 +71,7 @@ export function useService() {
       const now = new Date()
       // opts = { occurrenceDate 'YYYY-MM-DD', recurringProfileId }. Back-compat:
       // a bare string is treated as occurrenceDate.
-      const { occurrenceDate, recurringProfileId } =
+      const { occurrenceDate, recurringProfileId, isOneOff } =
         typeof opts === 'string' ? { occurrenceDate: opts } : (opts || {})
       const occYmd = (occurrenceDate && /^\d{4}-\d{2}-\d{2}$/.test(occurrenceDate)) ? occurrenceDate : ymdLocal(now)
       // 1. Mark completed. serviced_at = when it was ACTUALLY performed; the
@@ -86,6 +86,7 @@ export function useService() {
           serviced_at: now.toISOString(),
           recurring_profile_id: recurringProfileId || null,
           occurrence_date: recurringProfileId ? occYmd : null,
+          is_one_off: !!isOneOff,
         })
         .eq('id', serviceRecordId)
       if (error) {
@@ -111,33 +112,22 @@ export function useService() {
       }
 
       // 4. Bump completed_visits on THIS occurrence's profile (history side-effect
-      // for the num_visits limit). Prefer the explicit profile id (correct for
-      // stacked profiles); fall back to the pool's single active profile. AWAITED
+      // for the num_visits limit). Gated STRICTLY on the explicit profile id so a
+      // one-off / ad-hoc visit never consumes a scheduled visit toward num_visits.
+      // resolveOccurrence() populates recurringProfileId for genuine recurring
+      // completions (incl. single-active-profile direct opens) before this runs, so
+      // the explicit-id branch still fires for real recurring services. AWAITED
       // before the recompute so the chokepoint's fresh read sees the post-bump count.
-      try {
-        let profId = recurringProfileId || null
-        let cur = null
-        if (profId) {
-          const { data } = await supabase.from('recurring_job_profiles').select('completed_visits').eq('id', profId).single()
-          cur = data?.completed_visits
-        } else {
-          const { data: profiles } = await supabase
-            .from('recurring_job_profiles')
-            .select('id, completed_visits')
-            .eq('pool_id', poolId)
-            .eq('is_active', true)
-            .in('status', ['active'])
-            .limit(1)
-          if (profiles?.length) { profId = profiles[0].id; cur = profiles[0].completed_visits }
-        }
-        if (profId) {
+      if (recurringProfileId) {
+        try {
+          const { data } = await supabase.from('recurring_job_profiles').select('completed_visits').eq('id', recurringProfileId).single()
           await supabase
             .from('recurring_job_profiles')
-            .update({ completed_visits: (cur || 0) + 1 })
-            .eq('id', profId)
+            .update({ completed_visits: (data?.completed_visits || 0) + 1 })
+            .eq('id', recurringProfileId)
+        } catch (e) {
+          console.warn('completed_visits bump failed (non-critical):', e)
         }
-      } catch (e) {
-        console.warn('completed_visits bump failed (non-critical):', e)
       }
 
       // 5. THE single chokepoint recomputes next_due_at from the fixed pattern +
@@ -167,7 +157,7 @@ export function useService() {
   // continues — WITHOUT marking it serviced. No last_serviced_at write, no
   // completed_visits bump (no visit happened). Photos are saved by the
   // caller (tag='unable_access') before this runs, mirroring handleComplete.
-  const markUnableToService = useCallback(async (serviceRecordId, poolId, { reason, note, occurrenceDate, recurringProfileId } = {}) => {
+  const markUnableToService = useCallback(async (serviceRecordId, poolId, { reason, note, occurrenceDate, recurringProfileId, isOneOff } = {}) => {
     setLoading(true)
     try {
       const now = new Date()
@@ -185,6 +175,7 @@ export function useService() {
           serviced_at: now.toISOString(),
           recurring_profile_id: recurringProfileId || null,
           occurrence_date: recurringProfileId ? occYmd : null,
+          is_one_off: !!isOneOff,
         })
         .eq('id', serviceRecordId)
       if (error) {

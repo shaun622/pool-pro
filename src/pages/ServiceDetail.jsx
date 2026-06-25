@@ -263,10 +263,13 @@ export default function ServiceDetail() {
                 <p className="text-base font-medium text-gray-900 dark:text-gray-100">{record.technician_name || '--'}</p>
               </div>
             </div>
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-2">
               <Badge variant={record.status === 'completed' ? 'success' : 'warning'}>
                 {record.status}
               </Badge>
+              {record.is_one_off && (
+                <Badge variant="default">Extra visit (one-off)</Badge>
+              )}
             </div>
           </Card>
 

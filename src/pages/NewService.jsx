@@ -96,6 +96,11 @@ export default function NewService() {
   // single active profile + its current due occurrence when the tech opened the
   // pool directly (no specific stop).
   async function resolveOccurrence() {
+    // One-off visit: NEVER fulfil or advance any recurring occurrence. Return
+    // null identity BEFORE the single-active-profile fallback below — otherwise a
+    // one-off on a pool that has a lone recurring profile would silently attach to
+    // it. Shared by handleComplete AND handleUnable, so an "unable one-off" is inert too.
+    if (location.state?.oneOff) return { recurringProfileId: null, occurrenceDate: null }
     let recurringProfileId = location.state?.recurringProfileId || null
     let occurrenceDate = location.state?.occurrenceDate || null
     if (!recurringProfileId) {
@@ -409,8 +414,9 @@ export default function NewService() {
       }
 
       // Complete the service against the clicked occurrence's identity.
+      // A one-off carries null identity + is_one_off so it never touches recurring.
       const occ = await resolveOccurrence()
-      await completeService(record.id, poolId, notes, occ)
+      await completeService(record.id, poolId, notes, { ...occ, isOneOff: !!location.state?.oneOff })
 
       // Navigate to completion URL so it survives page reloads
       navigate(`/pools/${poolId}/service?done=1`, { replace: true })
@@ -498,6 +504,7 @@ export default function NewService() {
         note: unableNote.trim() || null,
         recurringProfileId: occ.recurringProfileId,
         occurrenceDate: occ.occurrenceDate,
+        isOneOff: !!location.state?.oneOff,
       })
       setUnableSubmitted(true)
       findNextStop()
@@ -758,6 +765,11 @@ export default function NewService() {
                   <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name || 'Client'}</p>
                   {pool?.name && <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{pool.name}</p>}
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
+                  {location.state?.oneOff && (
+                    <span className="inline-flex items-center mt-2 text-[11px] font-bold px-2 py-0.5 rounded-lg text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-950/50">
+                      One-off visit · not part of the schedule
+                    </span>
+                  )}
                 </div>
                 <Badge variant={pool?.type || 'default'} className="shrink-0 capitalize">{pool?.type || 'pool'}</Badge>
               </div>
@@ -916,6 +928,11 @@ export default function NewService() {
                   <p className="text-base font-bold text-gray-900 dark:text-gray-100">{client?.name || 'Client'}</p>
                   {pool?.name && <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{pool.name}</p>}
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{pool?.address}</p>
+                  {location.state?.oneOff && (
+                    <span className="inline-flex items-center mt-2 text-[11px] font-bold px-2 py-0.5 rounded-lg text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-950/50">
+                      One-off visit · not part of the schedule
+                    </span>
+                  )}
                 </div>
                 <Badge variant={pool?.type || 'default'} className="shrink-0 capitalize">{pool?.type || 'pool'}</Badge>
               </div>
@@ -1570,15 +1587,17 @@ export default function NewService() {
               )
             })()}
 
-            {/* Next service */}
-            <Card className="bg-gray-50 dark:bg-gray-800">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{t('service.nextServiceDue')}</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
-                </span>
-              </div>
-            </Card>
+            {/* Next service — hidden for a one-off (it doesn't set the recurring cadence). */}
+            {!location.state?.oneOff && (
+              <Card className="bg-gray-50 dark:bg-gray-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('service.nextServiceDue')}</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
+                  </span>
+                </div>
+              </Card>
+            )}
 
             {/* Required completion photo — proof of departure. Same
                 watermark pipeline as the arrival photo (GPS +
@@ -1769,14 +1788,16 @@ export default function NewService() {
                 {t('service.reportSentTo', { email: client.email })}
               </p>
             )}
-            <Card className="w-full bg-gray-50 dark:bg-gray-800 mb-6">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{t('service.nextService')}</span>
-                <span className="text-sm font-semibold text-pool-600 dark:text-pool-400">
-                  {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
-                </span>
-              </div>
-            </Card>
+            {!location.state?.oneOff && (
+              <Card className="w-full bg-gray-50 dark:bg-gray-800 mb-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('service.nextService')}</span>
+                  <span className="text-sm font-semibold text-pool-600 dark:text-pool-400">
+                    {formatDate(calculateNextDue(new Date(), pool?.schedule_frequency || 'weekly'))}
+                  </span>
+                </div>
+              </Card>
+            )}
             <div className="flex gap-3 w-full">
               {isTech && nextStop ? (
                 <Button

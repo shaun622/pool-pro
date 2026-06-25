@@ -4,13 +4,14 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
+import OneOffVisitPicker from '../../components/ui/OneOffVisitPicker'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useLanguage, translateUnableReason } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 import { cn, formatDate } from '../../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
 import { occurrencesInRange } from '../../lib/recurringScheduling'
-import { Calendar, Check, Clock, MapPin, Phone } from 'lucide-react'
+import { Calendar, Check, Clock, MapPin, Phone, Plus } from 'lucide-react'
 
 // ─── Helpers ───────────────────────────────────
 function ymd(d) {
@@ -128,7 +129,7 @@ export default function TechRunSheet() {
       // visible instead of vanishing off the route.
       supabase
         .from('service_records')
-        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, pools(name, address, type, clients(name, phone))')
+        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, is_one_off, pools(name, address, type, clients(name, phone))')
         .eq('business_id', business.id)
         .in('status', ['completed', 'unable_to_service'])
         .gte('serviced_at', startOfToday.toISOString()),
@@ -180,7 +181,11 @@ export default function TechRunSheet() {
     const recordStops = []
     for (const r of todayServiceRecords) {
       if (!r.pool_id || !techPoolIds.has(r.pool_id)) continue
-      poolIdsCovered.add(r.pool_id)
+      // Only an identity-bearing (recurring) record covers the pool's recurring
+      // projection. A one-off / ad-hoc record (null identity) must NOT suppress the
+      // pool's real recurring due/overdue stop on the same day — otherwise doing a
+      // daily one-off on a scheduled pool would hide its actual scheduled visit.
+      if (r.recurring_profile_id) poolIdsCovered.add(r.pool_id)
       if (jobPoolsToday.has(r.pool_id)) continue
       recordStops.push(r.status === 'unable_to_service' ? unableToStop(r) : completedToStop(r))
     }
@@ -421,6 +426,7 @@ export default function TechRunSheet() {
 // ─── Today view ──────────────────────────────
 function TodayView({ stops, navigate, onRefresh }) {
   const { t } = useLanguage()
+  const [pickerOpen, setPickerOpen] = useState(false)
   const overdue = stops.filter(s => s.isOverdue)
   const active = stops.filter(s => !s.isOverdue && s.status !== 'completed' && s.status !== 'unable_to_service')
   const completed = stops.filter(s => s.status === 'completed')
@@ -428,6 +434,16 @@ function TodayView({ stops, navigate, onRefresh }) {
 
   return (
     <div className="space-y-5">
+      {/* One-off / extra visit — off-route, separate from the schedule */}
+      <button
+        onClick={() => setPickerOpen(true)}
+        className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+      >
+        <Plus className="w-4 h-4" strokeWidth={2} />
+        Service a one-off visit
+      </button>
+      <OneOffVisitPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+
       {/* Overdue — always visible */}
       <section>
         <div className="flex items-center gap-2 mb-2">
@@ -751,6 +767,11 @@ function TechStopCard({ stop, number, navigate, compact = false, completed = fal
                   {stop.unable_reason ? translateUnableReason(stop.unable_reason, lang) : t('service.unableStatus')}
                 </span>
               )}
+              {stop.is_one_off && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40">
+                  Extra visit
+                </span>
+              )}
               {stop.isOverdue && (
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${stop.daysOverdue === 0 ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'}`}>{stop.daysOverdue === 0 ? t('runsheet.dueToday') : t('runsheet.daysOverdue', { days: stop.daysOverdue })}</span>
               )}
@@ -830,6 +851,7 @@ function completedToStop(r) {
     pool_id: r.pool_id,
     status: 'completed',
     service_record_id: r.id,
+    is_one_off: !!r.is_one_off,
     recurring_profile_id: r.recurring_profile_id || null,
     occurrence_date: r.occurrence_date ? String(r.occurrence_date).split('T')[0] : null,
     serviced_at: r.serviced_at || null,

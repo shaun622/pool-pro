@@ -162,6 +162,11 @@ serve(async (req) => {
     }
     const scheduleLabel = frequencyLabel[pool.schedule_frequency] || pool.schedule_frequency || ''
 
+    // A one-off ("extra") visit is off-schedule: it doesn't set or move the
+    // recurring cadence, so the email must not frame it as a routine visit or
+    // promise a "Next Service" date (that date belongs to the unrelated schedule).
+    const isOneOff = !!record.is_one_off
+
     const completedTaskCount = tasks.filter((t: any) => t.completed).length
 
     // Tech's free-text Notes & Issues — escaped for safe HTML embedding and
@@ -185,7 +190,9 @@ serve(async (req) => {
         <div style="background:white;padding:28px 24px 20px;">
           <p style="margin:0 0 4px;font-size:16px;color:#111827;">Hi ${client.name},</p>
           <p style="margin:0 0 16px;font-size:15px;color:#6B7280;line-height:1.5;">
-            Your pool at <strong>${pool.address}</strong> has been serviced. Here's a summary of everything we did today.
+            ${isOneOff
+              ? `We made an extra one-off visit to your pool at <strong>${pool.address}</strong>. Here's a summary of what we did.`
+              : `Your pool at <strong>${pool.address}</strong> has been serviced. Here's a summary of everything we did today.`}
           </p>
 
           ${pool.portal_token ? `
@@ -303,8 +310,8 @@ serve(async (req) => {
         </div>
         ` : ''}
 
-        <!-- Next Service -->
-        ${nextServiceDate ? `
+        <!-- Next Service (suppressed for one-off visits — not part of the schedule) -->
+        ${nextServiceDate && !isOneOff ? `
         <div style="background:white;padding:0 24px 24px;">
           <div style="background:${brandColour}10;border:1px solid ${brandColour}30;border-radius:8px;padding:16px;text-align:center;">
             <p style="margin:0 0 4px;font-size:13px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Next Service${scheduleLabel ? ` (${scheduleLabel})` : ''}</p>

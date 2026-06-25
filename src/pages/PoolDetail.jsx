@@ -367,6 +367,9 @@ export default function PoolDetail() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {formatDate(record.serviced_at)}
+                          {record.is_one_off && (
+                            <span className="ml-2 align-middle text-[10px] font-bold px-1.5 py-0.5 rounded text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40">Extra visit</span>
+                          )}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">{record.technician_name}</span>
                       </div>
