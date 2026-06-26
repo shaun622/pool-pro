@@ -23,6 +23,7 @@ import {
   CHEMICAL_LABELS,
   DEFAULT_TARGET_RANGES,
   FREQUENCY_LABELS,
+  genId,
   cn,
 } from '../lib/utils'
 
@@ -333,7 +334,7 @@ export default function NewService() {
     try {
       const selectedStaff = staffList.find(s => s.id === selectedStaffId)
       const techName = selectedStaff?.name || business?.owner_name || 'Owner'
-      const serviceRecordId = crypto.randomUUID()
+      const serviceRecordId = genId()
 
       // Readings → null for blanks.
       const cleanReadings = {}
@@ -353,9 +354,9 @@ export default function NewService() {
       // All photos ride in the draft: mandatory arrival/test-kit + up to 5 extra
       // + the optional completion shot. Each gets its own client_photo_id.
       const photos = []
-      if (servicePhoto) photos.push({ clientPhotoId: crypto.randomUUID(), blob: servicePhoto, tag: 'test-kit', meta: photoMeta || {} })
-      for (const p of extraPhotos) photos.push({ clientPhotoId: crypto.randomUUID(), blob: p.blob, tag: 'extra', meta: p.meta || {} })
-      if (completionPhoto) photos.push({ clientPhotoId: crypto.randomUUID(), blob: completionPhoto, tag: 'completion', meta: completionPhotoMeta || {} })
+      if (servicePhoto) photos.push({ clientPhotoId: genId(), blob: servicePhoto, tag: 'test-kit', meta: photoMeta || {} })
+      for (const p of extraPhotos) photos.push({ clientPhotoId: genId(), blob: p.blob, tag: 'extra', meta: p.meta || {} })
+      if (completionPhoto) photos.push({ clientPhotoId: genId(), blob: completionPhoto, tag: 'completion', meta: completionPhotoMeta || {} })
 
       // Occurrence identity (from route state; null for a one-off / ad-hoc visit).
       const occ = await resolveOccurrence()
@@ -387,6 +388,9 @@ export default function NewService() {
         id: serviceRecordId, pool_id: poolId, status: 'completed', serviced_at: servicedAt,
         recurring_profile_id: draft.recurringProfileId, occurrence_date: draft.occurrenceDate,
         is_one_off: draft.isOneOff,
+        // Nested shape matches the run-sheet select so the optimistic stop renders
+        // with client/pool names on an offline reload (before the real row syncs).
+        pools: { name: pool?.name, address: pool?.address, type: pool?.type, clients: { name: client?.name, phone: client?.phone } },
       })
       const status = await submitOne(draft, business.id)
 
@@ -481,7 +485,7 @@ export default function NewService() {
     try {
       const selectedStaff = staffList.find(s => s.id === selectedStaffId)
       const techName = selectedStaff?.name || business?.owner_name || 'Owner'
-      const serviceRecordId = crypto.randomUUID()
+      const serviceRecordId = genId()
       const occ = await resolveOccurrence()
       const servicedAt = new Date().toISOString()
       const reason = unableReason
@@ -508,7 +512,7 @@ export default function NewService() {
           description: `${clientName}${address ? ' · ' + address : ''}${reason ? ' — ' + reason : ''}`,
           linkTo: `/services/${serviceRecordId}`,
         },
-        photos: unablePhotos.map(p => ({ clientPhotoId: crypto.randomUUID(), blob: p.blob, tag: 'unable_access', meta: p.meta || {} })),
+        photos: unablePhotos.map(p => ({ clientPhotoId: genId(), blob: p.blob, tag: 'unable_access', meta: p.meta || {} })),
         createdAt: Date.now(),
       }
 
@@ -517,6 +521,7 @@ export default function NewService() {
         id: serviceRecordId, pool_id: poolId, status: 'unable_to_service', serviced_at: servicedAt,
         unable_reason: reason, recurring_profile_id: draft.recurringProfileId, occurrence_date: draft.occurrenceDate,
         is_one_off: draft.isOneOff,
+        pools: { name: pool?.name, address: pool?.address, type: pool?.type, clients: { name: client?.name, phone: client?.phone } },
       })
       const status = await submitOne(draft, business.id)
       setUnableSubmitted(true)
@@ -1432,7 +1437,7 @@ export default function NewService() {
 
             <button
               type="button"
-              onClick={() => setChemicalsAdded(prev => [...prev, { product_name: '', dose_text: '', stock_remaining: '', custom: true, _id: crypto.randomUUID() }])}
+              onClick={() => setChemicalsAdded(prev => [...prev, { product_name: '', dose_text: '', stock_remaining: '', custom: true, _id: genId() }])}
               className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-pool-300 dark:border-pool-700 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:bg-pool-50 dark:hover:bg-pool-950/40 transition-colors min-h-tap"
             >
               <Plus className="w-4 h-4" strokeWidth={2.5} /> {t('service.addCustomChemical')}

@@ -2,6 +2,19 @@ import { format, parseISO, differenceInDays, addDays, addWeeks } from 'date-fns'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
+// UUID v4 with a fallback. crypto.randomUUID needs a secure context + a recent
+// browser; this is the offline draft idempotency key (RPC p_id), so generation
+// must NEVER throw on an older WebView.
+export function genId() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  } catch { /* fall through */ }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
 export function formatDate(date) {
   if (!date) return ''
   const d = typeof date === 'string' ? parseISO(date) : date

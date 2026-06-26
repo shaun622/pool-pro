@@ -36,8 +36,11 @@ export function usePendingDrafts() {
     try {
       // Always attempt — never trust navigator.onLine to BLOCK (it lies when the
       // link is up but dead). Use it only to word the message.
-      const { sent, pending } = await submitAll(business?.id)
+      const { sent, pending, wrongOrg } = await submitAll(business?.id)
       await refresh()
+      if (wrongOrg > 0) {
+        toast.error(`${wrongOrg} visit${wrongOrg > 1 ? 's' : ''} belong to another organisation and can't be sent from this account.`)
+      }
       if (sent > 0 && pending === 0) {
         toast.success(sent === 1 ? '1 visit sent.' : `${sent} visits sent.`)
       } else if (sent > 0) {

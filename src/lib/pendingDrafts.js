@@ -152,10 +152,12 @@ export async function submitAll(currentBusinessId) {
   const drafts = await listDrafts()
   let sent = 0
   let pending = 0
+  let wrongOrg = 0
   for (const d of drafts) {
     const status = await submitOne(d, currentBusinessId)
     if (status === 'sent' || status === 'conflict') sent++
+    else if (status === 'wrong-org') wrongOrg++
     else pending++
   }
-  return { sent, pending, total: drafts.length }
+  return { sent, pending, wrongOrg, total: drafts.length }
 }
