@@ -16,7 +16,7 @@ import { useBusiness } from '../hooks/useBusiness'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
-import { occurrencesInRange } from '../lib/recurringScheduling'
+import { occurrencesInRange, isProfileActive, isOccurrenceInRange } from '../lib/recurringScheduling'
 
 // ─── Helpers ───────────────────────────────────
 function ymd(d) {
@@ -101,24 +101,6 @@ function profileIntervalDays(profile) {
   if (!profile) return null
   if (profile.recurrence_rule === 'custom') return Number(profile.custom_interval_days) || 7
   return frequencyToDays(profile.recurrence_rule)
-}
-
-function isProfileActive(profile) {
-  if (profile.status === 'completed' || profile.status === 'cancelled' || profile.status === 'paused') return false
-  if (profile.duration_type === 'num_visits' && profile.total_visits && (profile.completed_visits || 0) >= profile.total_visits) return false
-  if (profile.duration_type === 'until_date' && profile.end_date && new Date(profile.end_date) < new Date()) return false
-  return true
-}
-
-function isOccurrenceInRange(profile, occurrenceDate, occurrenceIndex) {
-  if (profile.duration_type === 'until_date' && profile.end_date) {
-    return occurrenceDate <= new Date(profile.end_date + 'T23:59:59')
-  }
-  if (profile.duration_type === 'num_visits' && profile.total_visits) {
-    const remaining = profile.total_visits - (profile.completed_visits || 0)
-    return occurrenceIndex < remaining
-  }
-  return true
 }
 
 function formatTimeRange(start, durationMin) {

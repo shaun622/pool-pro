@@ -320,6 +320,29 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   return out
 }
 
+// Is this profile still generating occurrences? False once it's paused /
+// cancelled / completed, or its num_visits / until_date bound is exhausted.
+// (Shared by the Schedule projector and the technician fulfilment report.)
+export function isProfileActive(profile) {
+  if (profile.status === 'completed' || profile.status === 'cancelled' || profile.status === 'paused') return false
+  if (profile.duration_type === 'num_visits' && profile.total_visits && (profile.completed_visits || 0) >= profile.total_visits) return false
+  if (profile.duration_type === 'until_date' && profile.end_date && new Date(profile.end_date) < new Date()) return false
+  return true
+}
+
+// Is a specific enumerated occurrence within the profile's duration bound?
+// occurrenceIndex is the occurrence's position within the queried range.
+export function isOccurrenceInRange(profile, occurrenceDate, occurrenceIndex) {
+  if (profile.duration_type === 'until_date' && profile.end_date) {
+    return occurrenceDate <= new Date(profile.end_date + 'T23:59:59')
+  }
+  if (profile.duration_type === 'num_visits' && profile.total_visits) {
+    const remaining = profile.total_visits - (profile.completed_visits || 0)
+    return occurrenceIndex < remaining
+  }
+  return true
+}
+
 // Map a form's RecurrencePicker state + first-date into the set of DB
 // columns we'd write on the recurring_job_profiles row. Centralises
 // the "weekly stores preferred_day_of_week, monthly stores both +

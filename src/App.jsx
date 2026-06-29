@@ -14,6 +14,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Schedule = lazy(() => import('./pages/Schedule'))
+const TechnicianReport = lazy(() => import('./pages/TechnicianReport'))
 const Clients = lazy(() => import('./pages/Clients'))
 const ClientDetail = lazy(() => import('./pages/ClientDetail'))
 const PoolDetail = lazy(() => import('./pages/PoolDetail'))
@@ -155,6 +156,7 @@ export default function App() {
                   <Route path="/settings" element={<Settings />}>
                     <Route index               element={<BusinessDetails />} />
                     <Route path="analytics"    element={<Reports />} />
+                    <Route path="reports"      element={<TechnicianReport />} />
                     <Route path="staff"        element={<Staff />} />
                     <Route path="chemicals"    element={<ChemicalLibrary />} />
                     <Route path="templates"    element={<CommunicationTemplates />} />

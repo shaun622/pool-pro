@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Building2, Users, Beaker, Briefcase, Mail, Zap, Star,
   Plug, Upload, CreditCard, LogOut, ChevronRight, BarChart3,
-  Settings as SettingsIcon,
+  ClipboardList, Settings as SettingsIcon,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import Header from '../components/layout/Header'
@@ -38,6 +38,7 @@ import { cn } from '../lib/utils'
 const SIDEBAR = [
   { to: '/settings',                label: 'Business details', Icon: Building2,    end: true },
   { to: '/settings/analytics',      label: 'Analytics',        Icon: BarChart3 },
+  { to: '/settings/reports',        label: 'Technician report', Icon: ClipboardList },
   { to: '/settings/staff',          label: 'Team & roles',     Icon: Users },
   { to: '/settings/chemicals',      label: 'Chemical library', Icon: Beaker },
   { to: '/settings/job-types',      label: 'Job types',        Icon: Briefcase },
@@ -53,6 +54,7 @@ const SIDEBAR = [
 const MOBILE_ROW_COLORS = {
   'Business details': 'pool',
   Analytics:          'violet',
+  'Technician report': 'teal',
   'Team & roles':     'blue',
   'Chemical library': 'emerald',
   'Job types':        'cyan',
