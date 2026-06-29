@@ -93,6 +93,19 @@ export default function TechnicianReport() {
     const endYmd = ymd(mEnd)
     const techKeyOf = (id) => id || 'unassigned'
 
+    // A pool is the unit of truth — it appears ONCE, filed under one technician
+    // (the technician is just organisation). Owner = the pool's assigned tech
+    // (pool card); else a tech from one of its active schedules; else unassigned.
+    // Keying every row by the pool's owner (not each schedule's tech) stops a
+    // multi-schedule pool from being split across sections.
+    const ownerByPool = new Map()
+    for (const p of pools) ownerByPool.set(p.id, p.assigned_staff_id || null)
+    for (const prof of profiles) {
+      if (!prof.pool_id || !prof.assigned_staff_id || !isProfileActive(prof)) continue
+      if (!ownerByPool.get(prof.pool_id)) ownerByPool.set(prof.pool_id, prof.assigned_staff_id)
+    }
+    const ownerKey = (poolId) => techKeyOf(ownerByPool.get(poolId))
+
     const rows = new Map() // `${techKey}::${poolId}` → row
     function ensureRow(techKey, poolId) {
       const k = `${techKey}::${poolId}`
@@ -120,21 +133,19 @@ export default function TechnicianReport() {
         if (sy >= startYmd && sy <= endYmd) count++
       }
       if (count === 0) continue
-      ensureRow(techKeyOf(profile.assigned_staff_id), profile.pool_id).scheduled += count
+      ensureRow(ownerKey(profile.pool_id), profile.pool_id).scheduled += count
     }
 
-    // Done + unable — attribute to the assigned tech via the fulfilled profile.
+    // Done + unable — into the pool's single row (any technician counts).
     for (const r of recurring) {
-      const prof = profileById.get(r.recurring_profile_id)
-      const techKey = techKeyOf(prof?.assigned_staff_id || poolById.get(r.pool_id)?.assigned_staff_id)
-      const row = ensureRow(techKey, r.pool_id)
+      const row = ensureRow(ownerKey(r.pool_id), r.pool_id)
       if (r.status === 'completed') row.done++
       else if (r.status === 'unable_to_service') row.unable++
     }
 
-    // Extra (one-off) — attribute to the pool's assigned tech.
+    // Extra (one-off) — into the pool's single row.
     for (const r of extra) {
-      ensureRow(techKeyOf(poolById.get(r.pool_id)?.assigned_staff_id), r.pool_id).extra++
+      ensureRow(ownerKey(r.pool_id), r.pool_id).extra++
     }
 
     const byTech = new Map()
