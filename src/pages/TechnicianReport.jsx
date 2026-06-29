@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Download, AlertTriangle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Download, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useBusiness } from '../hooks/useBusiness'
 import { occurrencesInRange, isProfileActive, isOccurrenceInRange } from '../lib/recurringScheduling'
@@ -22,11 +22,18 @@ function ymd(d) {
   const x = new Date(d)
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
 }
+// "Thu 3 Jul" — parse YYYY-MM-DD as local midnight so it never shifts a day.
+function fmtDay(d) {
+  if (!d) return ''
+  const dt = new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T00:00:00' : d)
+  return dt.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+}
 
 export default function TechnicianReport() {
   const { business } = useBusiness()
   const navigate = useNavigate()
   const [monthAnchor, setMonthAnchor] = useState(() => new Date())
+  const [openPool, setOpenPool] = useState(null) // expanded pool row (poolId)
   const [data, setData] = useState({ staff: [], profiles: [], pools: [], recurring: [], extra: [] })
   const [loading, setLoading] = useState(true)
 
@@ -49,7 +56,7 @@ export default function TechnicianReport() {
           // Recurring fulfilment — matched by occurrence_date in the month (so an
           // early/late service still lands in the right month), any technician.
           supabase.from('service_records')
-            .select('id, pool_id, staff_id, status, recurring_profile_id, occurrence_date')
+            .select('id, pool_id, staff_id, status, recurring_profile_id, occurrence_date, serviced_at, technician_name, unable_reason')
             .eq('business_id', business.id)
             .not('recurring_profile_id', 'is', null)
             .in('status', ['completed', 'unable_to_service'])
@@ -57,7 +64,7 @@ export default function TechnicianReport() {
             .lte('occurrence_date', endYmd),
           // One-off / ad-hoc completions (no occurrence identity) — bucketed by serviced_at.
           supabase.from('service_records')
-            .select('id, pool_id, serviced_at')
+            .select('id, pool_id, serviced_at, technician_name')
             .eq('business_id', business.id)
             .is('recurring_profile_id', null)
             .eq('status', 'completed')
@@ -146,6 +153,63 @@ export default function TechnicianReport() {
     // Extra (one-off) — into the pool's single row.
     for (const r of extra) {
       ensureRow(ownerKey(r.pool_id), r.pool_id).extra++
+    }
+
+    // Per-pool month detail (the expandable schedule + history).
+    const activeProfilesByPool = new Map()
+    for (const p of profiles) {
+      if (!isProfileActive(p) || !p.pool_id) continue
+      if (!activeProfilesByPool.has(p.pool_id)) activeProfilesByPool.set(p.pool_id, [])
+      activeProfilesByPool.get(p.pool_id).push(p)
+    }
+    const recByPool = new Map()
+    for (const r of recurring) {
+      if (!recByPool.has(r.pool_id)) recByPool.set(r.pool_id, [])
+      recByPool.get(r.pool_id).push(r)
+    }
+    const extrasByPool = new Map()
+    for (const r of extra) {
+      if (!extrasByPool.has(r.pool_id)) extrasByPool.set(r.pool_id, [])
+      extrasByPool.get(r.pool_id).push(r)
+    }
+    const todayYmd = ymd(new Date())
+
+    for (const row of rows.values()) {
+      const profs = activeProfilesByPool.get(row.poolId) || []
+      const recs = recByPool.get(row.poolId) || []
+      const recByKey = new Map()
+      for (const r of recs) recByKey.set(`${r.recurring_profile_id}|${String(r.occurrence_date).split('T')[0]}`, r)
+      const used = new Set()
+      const occurrences = []
+      for (const p of profs) {
+        const occ = occurrencesInRange(p, mStart, mEnd).filter((d, i) => isOccurrenceInRange(p, d, i))
+        for (const d of occ) {
+          const dy = ymd(d)
+          const rec = recByKey.get(`${p.id}|${dy}`)
+          let status
+          if (rec?.status === 'completed') { status = 'done'; used.add(rec.id) }
+          else if (rec?.status === 'unable_to_service') { status = 'unable'; used.add(rec.id) }
+          else if (dy < todayYmd) status = 'missed'
+          else if (dy === todayYmd) status = 'due'
+          else status = 'upcoming'
+          occurrences.push({ key: `${p.id}-${dy}`, date: dy, status, rec })
+        }
+        for (const s of (Array.isArray(p.skipped_dates) ? p.skipped_dates : [])) {
+          const sy = ymd(s)
+          if (sy >= startYmd && sy <= endYmd) occurrences.push({ key: `${p.id}-skip-${sy}`, date: sy, status: 'skipped', rec: null })
+        }
+      }
+      // Records whose occurrence wasn't enumerated (rule changed) — show as done/unable so the list reconciles.
+      for (const r of recs) {
+        if (used.has(r.id)) continue
+        const dy = String(r.occurrence_date).split('T')[0]
+        occurrences.push({ key: `off-${r.id}`, date: dy, status: r.status === 'completed' ? 'done' : 'unable', rec: r })
+      }
+      occurrences.sort((a, b) => a.date.localeCompare(b.date))
+      row.occurrences = occurrences
+      row.extras = (extrasByPool.get(row.poolId) || [])
+        .map(r => ({ key: r.id, servicedAt: r.serviced_at, tech: r.technician_name }))
+        .sort((a, b) => String(a.servicedAt).localeCompare(String(b.servicedAt)))
     }
 
     const byTech = new Map()
@@ -284,21 +348,25 @@ export default function TechnicianReport() {
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                   {sec.rows.map(r => {
                     const short = Math.max(0, r.scheduled - r.done)
+                    const open = openPool === r.poolId
                     return (
                       <li key={r.poolId}>
                         <button
-                          onClick={() => navigate(`/pools/${r.poolId}`)}
+                          onClick={() => setOpenPool(open ? null : r.poolId)}
                           className="w-full grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem] gap-2 px-4 py-3 text-left items-center hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                         >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{r.clientName || 'Unknown client'}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.poolName || r.poolAddress || 'Pool'}</p>
-                            {(r.unable > 0 || r.extra > 0) && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                {r.unable > 0 && <Badge variant="warning" className="text-[10px]">{r.unable} unable</Badge>}
-                                {r.extra > 0 && <span className="text-[10px] text-gray-400 dark:text-gray-500">+{r.extra} extra</span>}
-                              </div>
-                            )}
+                          <div className="flex items-start gap-2 min-w-0">
+                            <ChevronDown className={cn('w-4 h-4 mt-0.5 shrink-0 text-gray-400 dark:text-gray-500 transition-transform', open && 'rotate-180')} strokeWidth={2} />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{r.clientName || 'Unknown client'}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.poolName || r.poolAddress || 'Pool'}</p>
+                              {(r.unable > 0 || r.extra > 0) && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  {r.unable > 0 && <Badge variant="warning" className="text-[10px]">{r.unable} unable</Badge>}
+                                  {r.extra > 0 && <span className="text-[10px] text-gray-400 dark:text-gray-500">+{r.extra} extra</span>}
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <span className="text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{r.scheduled}</span>
                           <span className="text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{r.done}</span>
@@ -306,6 +374,58 @@ export default function TechnicianReport() {
                             {short > 0 ? short : '—'}
                           </span>
                         </button>
+
+                        {open && (
+                          <div className="px-4 pb-4 pt-2 bg-gray-50/50 dark:bg-gray-900/40 border-t border-gray-100 dark:border-gray-800">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">Scheduled this month</p>
+                            {r.occurrences.length === 0 ? (
+                              <p className="text-sm text-gray-400 dark:text-gray-500">No scheduled visits.</p>
+                            ) : (
+                              <ul className="space-y-1">
+                                {r.occurrences.map(o => (
+                                  <li key={o.key} className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="text-gray-700 dark:text-gray-300 tabular-nums shrink-0">{fmtDay(o.date)}</span>
+                                    <span className="text-right min-w-0 truncate">
+                                      {o.status === 'done' && (
+                                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                                          ✓ Done{o.rec && ymd(o.rec.serviced_at) !== o.date ? ` · ${fmtDay(o.rec.serviced_at)}` : ''}{o.rec?.technician_name ? ` · ${o.rec.technician_name}` : ''}
+                                        </span>
+                                      )}
+                                      {o.status === 'unable' && (
+                                        <span className="text-amber-600 dark:text-amber-400 font-medium">
+                                          ⚠ Unable{o.rec?.unable_reason ? ` · ${o.rec.unable_reason}` : ''}{o.rec?.technician_name ? ` · ${o.rec.technician_name}` : ''}
+                                        </span>
+                                      )}
+                                      {o.status === 'skipped' && <span className="text-gray-400 dark:text-gray-500">Skipped</span>}
+                                      {o.status === 'missed' && <span className="text-red-600 dark:text-red-400 font-medium">Missed</span>}
+                                      {o.status === 'due' && <span className="text-amber-600 dark:text-amber-400 font-medium">Due today</span>}
+                                      {o.status === 'upcoming' && <span className="text-gray-400 dark:text-gray-500">Upcoming</span>}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {r.extras.length > 0 && (
+                              <>
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mt-3 mb-1.5">Extra visits</p>
+                                <ul className="space-y-1">
+                                  {r.extras.map(e => (
+                                    <li key={e.key} className="flex items-center justify-between gap-3 text-sm">
+                                      <span className="text-gray-700 dark:text-gray-300 tabular-nums shrink-0">{fmtDay(e.servicedAt)}</span>
+                                      <span className="text-violet-600 dark:text-violet-400 font-medium">One-off{e.tech ? ` · ${e.tech}` : ''}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </>
+                            )}
+                            <button
+                              onClick={() => navigate(`/pools/${r.poolId}`)}
+                              className="mt-3 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:underline"
+                            >
+                              Open pool →
+                            </button>
+                          </div>
+                        )}
                       </li>
                     )
                   })}
