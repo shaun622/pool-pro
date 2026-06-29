@@ -16,13 +16,14 @@ import { useBusiness } from '../hooks/useBusiness'
 import StaffCard from '../components/ui/StaffCard'
 import LocationField from '../components/ui/LocationField'
 import { supabase } from '../lib/supabase'
-import { monthlyFulfilment, monthStart, monthEnd } from '../lib/fulfilment'
+import { monthlyFulfilment, poolMonthDetail, monthStart, monthEnd } from '../lib/fulfilment'
+import MonthScheduleDetail from '../components/ui/MonthScheduleDetail'
 import { geocodeAddress } from '../lib/mapbox'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import EditPoolModal from '../components/ui/EditPoolModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
 import { useToast } from '../contexts/ToastContext'
-import { Briefcase, Calendar, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
+import { Briefcase, Calendar, ChevronDown, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
 import {
   formatDate,
   getOverdueStatus,
@@ -48,6 +49,8 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true)
   const [recurringProfiles, setRecurringProfiles] = useState([])
   const [monthRecords, setMonthRecords] = useState([]) // this month's completed/unable recurring records
+  const [monthExtras, setMonthExtras] = useState([]) // this month's one-off completions
+  const [openPool, setOpenPool] = useState(null) // expanded pool in the "This month" section
   const [jobTypes, setJobTypes] = useState([])
   // The "Recurring services" cards open the SAME AddRecurringModal /recurring
   // uses (edit mode) — one shared module, no duplicate.
@@ -143,13 +146,22 @@ export default function ClientDetail() {
     const ey = `${me.getFullYear()}-${String(me.getMonth() + 1).padStart(2, '0')}-${String(me.getDate()).padStart(2, '0')}`
     supabase
       .from('service_records')
-      .select('id, pool_id, status, recurring_profile_id, occurrence_date')
+      .select('id, pool_id, status, recurring_profile_id, occurrence_date, serviced_at, technician_name, unable_reason')
       .in('pool_id', poolIds)
       .not('recurring_profile_id', 'is', null)
       .in('status', ['completed', 'unable_to_service'])
       .gte('occurrence_date', sy)
       .lte('occurrence_date', ey)
       .then(({ data }) => setMonthRecords(data || []))
+    supabase
+      .from('service_records')
+      .select('id, pool_id, serviced_at, technician_name')
+      .in('pool_id', poolIds)
+      .is('recurring_profile_id', null)
+      .eq('status', 'completed')
+      .gte('serviced_at', ms.toISOString())
+      .lte('serviced_at', me.toISOString())
+      .then(({ data }) => setMonthExtras(data || []))
   }, [poolIdsKey])
 
   // Job-type templates for the recurring modal's picker.
@@ -175,7 +187,20 @@ export default function ClientDetail() {
   }
 
   // This-month scheduled vs done across all this client's pools.
-  const fulfil = monthlyFulfilment(recurringProfiles, monthRecords)
+  const fulfil = monthlyFulfilment(recurringProfiles, monthRecords, monthExtras)
+
+  // Per-pool month breakdown for the expandable "This month" section (same as the report).
+  const monthRows = pools
+    .map(pool => {
+      const poolProfiles = recurringProfiles.filter(p => p.pool_id === pool.id)
+      const poolRecords = monthRecords.filter(r => r.pool_id === pool.id)
+      const poolExtras = monthExtras.filter(r => r.pool_id === pool.id)
+      const counts = monthlyFulfilment(poolProfiles, poolRecords, poolExtras)
+      const detail = poolMonthDetail(poolProfiles, poolRecords, poolExtras)
+      return { poolId: pool.id, poolName: pool.name, poolAddress: pool.address, ...counts, occurrences: detail.occurrences, extras: detail.extras }
+    })
+    .filter(r => r.scheduled > 0 || r.done > 0 || r.unable > 0 || r.extra > 0)
+    .sort((a, b) => (a.poolName || a.poolAddress || '').localeCompare(b.poolName || b.poolAddress || ''))
 
   // Edit handlers
   const handleEditChange = (e) => {
@@ -429,6 +454,49 @@ export default function ClientDetail() {
             </p>
           )}
         </Card>
+
+        {/* This month — per-pool schedule + history (same drill-down as the report) */}
+        {monthRows.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">This month</h2>
+            <Card className="!p-0 overflow-hidden">
+              <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem_3.5rem] gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
+                <span>Pool</span>
+                <span className="text-right">Sched</span>
+                <span className="text-right">Done</span>
+                <span className="text-right">Short</span>
+                <span className="text-right">Extra</span>
+              </div>
+              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                {monthRows.map(r => {
+                  const open = openPool === r.poolId
+                  return (
+                    <li key={r.poolId}>
+                      <button
+                        onClick={() => setOpenPool(open ? null : r.poolId)}
+                        className="w-full grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem_3.5rem] gap-2 px-4 py-3 text-left items-center hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <ChevronDown className={cn('w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500 transition-transform', open && 'rotate-180')} strokeWidth={2} />
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{r.poolName || r.poolAddress || 'Pool'}</span>
+                        </div>
+                        <span className="text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{r.scheduled}</span>
+                        <span className="text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{r.done}</span>
+                        <span className={cn('text-right text-sm tabular-nums font-bold', r.shortfall > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-300 dark:text-gray-600')}>{r.shortfall > 0 ? r.shortfall : '—'}</span>
+                        <span className={cn('text-right text-sm tabular-nums', r.extra > 0 ? 'text-violet-600 dark:text-violet-400 font-medium' : 'text-gray-300 dark:text-gray-600')}>{r.extra > 0 ? r.extra : '—'}</span>
+                      </button>
+                      {open && (
+                        <div className="px-4 pb-4 pt-2 bg-gray-50/50 dark:bg-gray-900/40 border-t border-gray-100 dark:border-gray-800">
+                          <MonthScheduleDetail occurrences={r.occurrences} extras={r.extras} />
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </Card>
+          </div>
+        )}
 
         {/* Assigned Staff */}
         {assignedStaff && (

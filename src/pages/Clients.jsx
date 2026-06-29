@@ -106,6 +106,7 @@ export default function Clients() {
   const [jobs, setJobs] = useState([])
   const [recurringProfiles, setRecurringProfiles] = useState([])
   const [monthRecords, setMonthRecords] = useState([]) // this month's completed/unable recurring records
+  const [monthExtras, setMonthExtras] = useState([]) // this month's one-off completions
   const [page, setPage] = useState(0)
   // Delete-from-detail-card dialog state. We track the target client
   // separately from selectedClientId so the detail panel keeps its
@@ -158,6 +159,15 @@ export default function Clients() {
       .gte('occurrence_date', sy)
       .lte('occurrence_date', ey)
       .then(({ data }) => setMonthRecords(data || []))
+    supabase
+      .from('service_records')
+      .select('id, pool_id, serviced_at')
+      .eq('business_id', business.id)
+      .is('recurring_profile_id', null)
+      .eq('status', 'completed')
+      .gte('serviced_at', ms.toISOString())
+      .lte('serviced_at', me.toISOString())
+      .then(({ data }) => setMonthExtras(data || []))
   }, [business?.id])
 
   // Recurring services per client (count + the full rows, so the detail panel
@@ -308,8 +318,9 @@ export default function Clients() {
     if (!selectedClient) return null
     const profs = recurringProfiles.filter(p => p.client_id === selectedClient.id)
     const recs = monthRecords.filter(r => poolToClient[r.pool_id] === selectedClient.id)
-    return monthlyFulfilment(profs, recs)
-  }, [selectedClient, recurringProfiles, monthRecords, poolToClient])
+    const exs = monthExtras.filter(r => poolToClient[r.pool_id] === selectedClient.id)
+    return monthlyFulfilment(profs, recs, exs)
+  }, [selectedClient, recurringProfiles, monthRecords, monthExtras, poolToClient])
 
   // ─── Pagination (desktop table only; mobile cards remain unpaged) ──
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -576,23 +587,31 @@ export default function Clients() {
 
                     {selectedFulfil && (
                       <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">This month</p>
-                        <div className="flex items-baseline gap-3 text-sm">
-                          <span className="text-gray-700 dark:text-gray-300">
-                            <span className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100">{selectedFulfil.done}</span>
-                            {' '}/ {selectedFulfil.scheduled} done
-                          </span>
-                          {selectedFulfil.shortfall > 0 ? (
-                            <span className="font-bold text-red-600 dark:text-red-400">{selectedFulfil.shortfall} short</span>
-                          ) : selectedFulfil.scheduled > 0 ? (
-                            <span className="font-medium text-emerald-600 dark:text-emerald-400">On target</span>
-                          ) : (
-                            <span className="text-gray-400 dark:text-gray-500">No schedule</span>
-                          )}
-                          {selectedFulfil.unable > 0 && (
-                            <span className="text-xs text-amber-600 dark:text-amber-400">{selectedFulfil.unable} unable</span>
-                          )}
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">This month</p>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Sched</p>
+                            <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1">{selectedFulfil.scheduled}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Done</p>
+                            <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1">{selectedFulfil.done}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Short</p>
+                            <p className={cn('text-lg font-bold tabular-nums leading-none mt-1', selectedFulfil.shortfall > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-300 dark:text-gray-600')}>{selectedFulfil.shortfall > 0 ? selectedFulfil.shortfall : '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Extra</p>
+                            <p className={cn('text-lg font-bold tabular-nums leading-none mt-1', selectedFulfil.extra > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-gray-300 dark:text-gray-600')}>{selectedFulfil.extra > 0 ? selectedFulfil.extra : '—'}</p>
+                          </div>
                         </div>
+                        {selectedFulfil.scheduled === 0 && selectedFulfil.extra === 0 && (
+                          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">No schedule this month.</p>
+                        )}
+                        {selectedFulfil.unable > 0 && (
+                          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{selectedFulfil.unable} unable (access issue)</p>
+                        )}
                       </div>
                     )}
 
