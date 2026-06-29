@@ -16,6 +16,7 @@ import { useBusiness } from '../hooks/useBusiness'
 import StaffCard from '../components/ui/StaffCard'
 import LocationField from '../components/ui/LocationField'
 import { supabase } from '../lib/supabase'
+import { monthlyFulfilment, monthStart, monthEnd } from '../lib/fulfilment'
 import { geocodeAddress } from '../lib/mapbox'
 import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolFormFields'
 import EditPoolModal from '../components/ui/EditPoolModal'
@@ -46,6 +47,7 @@ export default function ClientDetail() {
   const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
   const [recurringProfiles, setRecurringProfiles] = useState([])
+  const [monthRecords, setMonthRecords] = useState([]) // this month's completed/unable recurring records
   const [jobTypes, setJobTypes] = useState([])
   // The "Recurring services" cards open the SAME AddRecurringModal /recurring
   // uses (edit mode) — one shared module, no duplicate.
@@ -130,6 +132,26 @@ export default function ClientDetail() {
   }, [id])
   useEffect(() => { loadRecurring() }, [loadRecurring])
 
+  // This month's recurring fulfilment records for this client's pools — drives
+  // the "this month: scheduled vs done" overview (same maths as the tech report).
+  const poolIdsKey = pools.map(p => p.id).join(',')
+  useEffect(() => {
+    const poolIds = poolIdsKey ? poolIdsKey.split(',') : []
+    if (!poolIds.length) { setMonthRecords([]); return }
+    const ms = monthStart(), me = monthEnd()
+    const sy = `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(2, '0')}-01`
+    const ey = `${me.getFullYear()}-${String(me.getMonth() + 1).padStart(2, '0')}-${String(me.getDate()).padStart(2, '0')}`
+    supabase
+      .from('service_records')
+      .select('id, pool_id, status, recurring_profile_id, occurrence_date')
+      .in('pool_id', poolIds)
+      .not('recurring_profile_id', 'is', null)
+      .in('status', ['completed', 'unable_to_service'])
+      .gte('occurrence_date', sy)
+      .lte('occurrence_date', ey)
+      .then(({ data }) => setMonthRecords(data || []))
+  }, [poolIdsKey])
+
   // Job-type templates for the recurring modal's picker.
   useEffect(() => {
     if (!business?.id) return
@@ -151,6 +173,9 @@ export default function ClientDetail() {
   for (const rp of recurringProfiles) {
     if (rp.pool_id) profileByPool[rp.pool_id] = rp
   }
+
+  // This-month scheduled vs done across all this client's pools.
+  const fulfil = monthlyFulfilment(recurringProfiles, monthRecords)
 
   // Edit handlers
   const handleEditChange = (e) => {
@@ -374,6 +399,35 @@ export default function ClientDetail() {
               </p>
             )}
           </div>
+        </Card>
+
+        {/* Overview — pools / recurring / this-month scheduled vs done */}
+        <Card className="p-4 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pools</p>
+              <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">{pools.length}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Recurring</p>
+              <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">{recurringProfiles.length}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Scheduled <span className="normal-case text-gray-400 dark:text-gray-500">(mo)</span></p>
+              <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100 leading-none mt-1.5">{fulfil.scheduled}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Done <span className="normal-case text-gray-400 dark:text-gray-500">(mo)</span></p>
+              <p className={cn('text-2xl font-bold tabular-nums leading-none mt-1.5', fulfil.shortfall > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100')}>{fulfil.done}</p>
+            </div>
+          </div>
+          {(fulfil.shortfall > 0 || fulfil.unable > 0) && (
+            <p className="mt-3 text-sm">
+              {fulfil.shortfall > 0 && <span className="font-bold text-red-600 dark:text-red-400">{fulfil.shortfall} short this month</span>}
+              {fulfil.shortfall > 0 && fulfil.unable > 0 && <span className="text-gray-400 dark:text-gray-500"> · </span>}
+              {fulfil.unable > 0 && <span className="text-amber-600 dark:text-amber-400">{fulfil.unable} unable</span>}
+            </p>
+          )}
         </Card>
 
         {/* Assigned Staff */}

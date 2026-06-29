@@ -19,6 +19,7 @@ import { usePools } from '../hooks/usePools'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 import { formatDate, cn } from '../lib/utils'
+import { monthlyFulfilment, monthStart, monthEnd } from '../lib/fulfilment'
 
 // ─── STATUS LOGIC ──────────────────────────────────
 const STATUS = {
@@ -104,6 +105,7 @@ export default function Clients() {
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [jobs, setJobs] = useState([])
   const [recurringProfiles, setRecurringProfiles] = useState([])
+  const [monthRecords, setMonthRecords] = useState([]) // this month's completed/unable recurring records
   const [page, setPage] = useState(0)
   // Delete-from-detail-card dialog state. We track the target client
   // separately from selectedClientId so the detail panel keeps its
@@ -139,6 +141,25 @@ export default function Clients() {
       .then(({ data }) => setJobs(data || []))
   }, [business?.id])
 
+  // This month's recurring fulfilment records (completed / unable), business-wide.
+  // Drives the detail panel's "this month: scheduled vs done" — same maths as the
+  // technician report, matched by occurrence_date so early/late visits land right.
+  useEffect(() => {
+    if (!business?.id) return
+    const ms = monthStart(), me = monthEnd()
+    const sy = `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(2, '0')}-01`
+    const ey = `${me.getFullYear()}-${String(me.getMonth() + 1).padStart(2, '0')}-${String(me.getDate()).padStart(2, '0')}`
+    supabase
+      .from('service_records')
+      .select('id, pool_id, status, recurring_profile_id, occurrence_date')
+      .eq('business_id', business.id)
+      .not('recurring_profile_id', 'is', null)
+      .in('status', ['completed', 'unable_to_service'])
+      .gte('occurrence_date', sy)
+      .lte('occurrence_date', ey)
+      .then(({ data }) => setMonthRecords(data || []))
+  }, [business?.id])
+
   // Recurring services per client (count + the full rows, so the detail panel
   // can open the SAME edit modal /recurring uses). Refetched after a save.
   const loadRecurring = useCallback(() => {
@@ -164,6 +185,12 @@ export default function Clients() {
       map[p.client_id].push(p)
     }
     return map
+  }, [pools])
+
+  const poolToClient = useMemo(() => {
+    const m = {}
+    for (const p of pools) m[p.id] = p.client_id
+    return m
   }, [pools])
 
   // Per-client completed-jobs count this calendar year
@@ -275,6 +302,14 @@ export default function Clients() {
     const found = filtered.find(c => c.id === selectedClientId)
     return found || filtered[0]
   }, [filtered, selectedClientId])
+
+  // This-month scheduled vs done for the selected client only (panel shows one).
+  const selectedFulfil = useMemo(() => {
+    if (!selectedClient) return null
+    const profs = recurringProfiles.filter(p => p.client_id === selectedClient.id)
+    const recs = monthRecords.filter(r => poolToClient[r.pool_id] === selectedClient.id)
+    return monthlyFulfilment(profs, recs)
+  }, [selectedClient, recurringProfiles, monthRecords, poolToClient])
 
   // ─── Pagination (desktop table only; mobile cards remain unpaged) ──
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -538,6 +573,28 @@ export default function Clients() {
                         </p>
                       </div>
                     </div>
+
+                    {selectedFulfil && (
+                      <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">This month</p>
+                        <div className="flex items-baseline gap-3 text-sm">
+                          <span className="text-gray-700 dark:text-gray-300">
+                            <span className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100">{selectedFulfil.done}</span>
+                            {' '}/ {selectedFulfil.scheduled} done
+                          </span>
+                          {selectedFulfil.shortfall > 0 ? (
+                            <span className="font-bold text-red-600 dark:text-red-400">{selectedFulfil.shortfall} short</span>
+                          ) : selectedFulfil.scheduled > 0 ? (
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">On target</span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500">No schedule</span>
+                          )}
+                          {selectedFulfil.unable > 0 && (
+                            <span className="text-xs text-amber-600 dark:text-amber-400">{selectedFulfil.unable} unable</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 inline-flex items-center gap-2 mb-2">
