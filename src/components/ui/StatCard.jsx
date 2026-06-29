@@ -37,8 +37,9 @@ function useAnimatedNumber(target, duration = 600) {
 const TONES = {
   brand: 'bg-pool-50 text-pool-600 dark:bg-pool-950/40 dark:text-pool-400',
   amber: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
-  red:   'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400',
-  gray:  'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+  red:    'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400',
+  violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+  gray:   'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
 }
 
 export default function StatCard({

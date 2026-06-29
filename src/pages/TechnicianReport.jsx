@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, ChevronDown, Download, AlertTriangle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Download, AlertTriangle, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useBusiness } from '../hooks/useBusiness'
 import { occurrencesInRange, isProfileActive, isOccurrenceInRange } from '../lib/recurringScheduling'
@@ -230,6 +230,7 @@ export default function TechnicianReport() {
         sched: techRows.reduce((s, r) => s + r.scheduled, 0),
         done: techRows.reduce((s, r) => s + r.done, 0),
         shortfall: techRows.reduce((s, r) => s + Math.max(0, r.scheduled - r.done), 0),
+        extra: techRows.reduce((s, r) => s + r.extra, 0),
       })
     }
     sections.sort((a, b) => {
@@ -242,6 +243,7 @@ export default function TechnicianReport() {
       scheduled: sections.reduce((s, x) => s + x.sched, 0),
       done: sections.reduce((s, x) => s + x.done, 0),
       shortfall: sections.reduce((s, x) => s + x.shortfall, 0),
+      extra: sections.reduce((s, x) => s + x.extra, 0),
     }
     return { sections, totals }
   }, [data, monthAnchor])
@@ -306,10 +308,11 @@ export default function TechnicianReport() {
       ) : (
         <>
           {/* Month summary */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard label="Scheduled" value={totals.scheduled} />
             <StatCard label="Delivered" value={totals.done} />
             <StatCard label="Shortfall" value={totals.shortfall} iconTone="red" icon={totals.shortfall > 0 ? AlertTriangle : undefined} />
+            <StatCard label="Extra visits" value={totals.extra} iconTone="violet" icon={totals.extra > 0 ? Plus : undefined} />
           </div>
 
           {sections.length === 0 ? (
@@ -338,11 +341,12 @@ export default function TechnicianReport() {
                 </div>
 
                 {/* Column headers */}
-                <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem] gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
+                <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem_3.5rem] gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
                   <span>Client · Pool</span>
                   <span className="text-right">Sched</span>
                   <span className="text-right">Done</span>
                   <span className="text-right">Short</span>
+                  <span className="text-right">Extra</span>
                 </div>
 
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -353,17 +357,16 @@ export default function TechnicianReport() {
                       <li key={r.poolId}>
                         <button
                           onClick={() => setOpenPool(open ? null : r.poolId)}
-                          className="w-full grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem] gap-2 px-4 py-3 text-left items-center hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                          className="w-full grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem_3.5rem] gap-2 px-4 py-3 text-left items-center hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                         >
                           <div className="flex items-start gap-2 min-w-0">
                             <ChevronDown className={cn('w-4 h-4 mt-0.5 shrink-0 text-gray-400 dark:text-gray-500 transition-transform', open && 'rotate-180')} strokeWidth={2} />
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{r.clientName || 'Unknown client'}</p>
                               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{r.poolName || r.poolAddress || 'Pool'}</p>
-                              {(r.unable > 0 || r.extra > 0) && (
+                              {r.unable > 0 && (
                                 <div className="flex items-center gap-1.5 mt-1">
-                                  {r.unable > 0 && <Badge variant="warning" className="text-[10px]">{r.unable} unable</Badge>}
-                                  {r.extra > 0 && <span className="text-[10px] text-gray-400 dark:text-gray-500">+{r.extra} extra</span>}
+                                  <Badge variant="warning" className="text-[10px]">{r.unable} unable</Badge>
                                 </div>
                               )}
                             </div>
@@ -372,6 +375,9 @@ export default function TechnicianReport() {
                           <span className="text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{r.done}</span>
                           <span className={cn('text-right text-sm tabular-nums font-bold', short > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-300 dark:text-gray-600')}>
                             {short > 0 ? short : '—'}
+                          </span>
+                          <span className={cn('text-right text-sm tabular-nums', r.extra > 0 ? 'text-violet-600 dark:text-violet-400 font-medium' : 'text-gray-300 dark:text-gray-600')}>
+                            {r.extra > 0 ? r.extra : '—'}
                           </span>
                         </button>
 
