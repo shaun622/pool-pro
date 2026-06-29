@@ -260,8 +260,20 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
   }
 
   async function handleSubmit() {
-    if (!clientId || !poolId || schedules.length === 0) return
-    if (!schedules.every(s => s.firstDate)) return
+    // Button stays clickable — explain the first blocking reason instead of a
+    // silent no-op so the operator knows what's missing.
+    const problem = (() => {
+      if (!clientId) return 'Please select a client first.'
+      if (!poolId) return 'Please select a pool for this client.'
+      if (schedules.length === 0) return 'Please add a schedule.'
+      for (const s of schedules) {
+        if (!s.firstDate) return 'Please choose a start date for the schedule.'
+        if (s.durationType === 'until_date' && !s.endDate) return 'Please set an end date for the schedule.'
+        if (s.durationType === 'num_visits' && !(Number(s.totalVisits) > 0)) return 'Please set how many visits the schedule should run for.'
+      }
+      return null
+    })()
+    if (problem) { toast.error(problem); return }
     setSaving(true)
     try {
       // ── EDIT ────────────────────────────────────────────────
@@ -582,7 +594,7 @@ export default function AddRecurringModal({ open, onClose, business, staff, onCr
           {/* ── ACTIONS ──────────────────────────────────── */}
           <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
             <Button variant="secondary" onClick={handleClose} disabled={saving} className="flex-1">Cancel</Button>
-            <Button onClick={handleSubmit} loading={saving} disabled={!canSubmit} className="flex-1">
+            <Button onClick={handleSubmit} loading={saving} disabled={saving} className="flex-1">
               {isEdit
                 ? 'Save Changes'
                 : schedules.length === 1
