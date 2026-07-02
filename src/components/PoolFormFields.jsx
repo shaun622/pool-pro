@@ -19,7 +19,7 @@ export const emptyPool = {
   access_notes: '',
   pump_model: '',
   filter_type: '',
-  heater: '',
+  chlorinator: '',
 }
 
 // Convert a poolForm state object into the payload we actually insert into the DB.
@@ -27,7 +27,7 @@ export const emptyPool = {
 export async function buildPoolPayload(poolForm) {
   // schedule_frequency / next_due_at are intentionally NOT set — a pool carries
   // no schedule. Scheduling is created separately as a recurring service.
-  const { pump_model, filter_type, heater, volume_litres, sameAsClient, schedule_frequency, next_due_at, latitude, longitude, ...rest } = poolForm
+  const { pump_model, filter_type, chlorinator, volume_litres, sameAsClient, schedule_frequency, next_due_at, latitude, longitude, ...rest } = poolForm
   let lat = latitude
   let lng = longitude
   if ((lat == null || lng == null) && rest.address) {
@@ -39,7 +39,7 @@ export async function buildPoolPayload(poolForm) {
     ...rest,
     name: rest.name?.trim() || null,
     volume_litres: volume_litres ? Number(volume_litres) : null,
-    equipment: { pump_model, filter_type, heater },
+    equipment: { pump_model, filter_type, chlorinator },
     access_notes: rest.access_notes || null,
     latitude: lat,
     longitude: lng,
@@ -53,7 +53,7 @@ export async function buildPoolPayload(poolForm) {
 // (create) unconditionally rewrites next_due_at from first_service_date,
 // which would wipe a live schedule on every pool edit. Used by EditPoolModal.
 export async function buildPoolUpdatePayload(poolForm) {
-  const { pump_model, filter_type, heater, volume_litres, sameAsClient, first_service_date, regular_service, schedule_frequency, next_due_at, latitude, longitude, ...rest } = poolForm
+  const { pump_model, filter_type, chlorinator, volume_litres, sameAsClient, first_service_date, regular_service, schedule_frequency, next_due_at, latitude, longitude, ...rest } = poolForm
   let lat = latitude
   let lng = longitude
   if ((lat == null || lng == null) && rest.address) {
@@ -67,7 +67,7 @@ export async function buildPoolUpdatePayload(poolForm) {
     type: rest.type,
     shape: rest.shape,
     volume_litres: volume_litres ? Number(volume_litres) : null,
-    equipment: { pump_model, filter_type, heater },
+    equipment: { pump_model, filter_type, chlorinator },
     access_notes: rest.access_notes || null,
     latitude: lat,
     longitude: lng,
@@ -158,7 +158,7 @@ export default function PoolFormFields({ poolForm, setPoolForm, clientAddress, s
         <div className="space-y-3">
           <Input label="Pump Model" name="pump_model" value={poolForm.pump_model} onChange={handlePoolChange} placeholder="e.g. Astral CTX 280" />
           <Input label="Filter Type" name="filter_type" value={poolForm.filter_type} onChange={handlePoolChange} placeholder="e.g. Sand / Cartridge" />
-          <Input label="Heater" name="heater" value={poolForm.heater} onChange={handlePoolChange} placeholder="e.g. Raypak 266A" />
+          <Input label="Chlorinator" name="chlorinator" value={poolForm.chlorinator} onChange={handlePoolChange} placeholder="e.g. Zodiac eXO, Astral VX" />
         </div>
       </div>
     </>

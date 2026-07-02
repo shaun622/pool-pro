@@ -207,15 +207,15 @@ export default function PoolDetail() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-500 dark:text-gray-400">Pump</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.pump_model || '--'}</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.equipment?.pump_model || '--'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-gray-500 dark:text-gray-400">Filter</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.filter_type || '--'}</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.equipment?.filter_type || '--'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500 dark:text-gray-400">Heater</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.heater || '--'}</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">Chlorinator</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{pool.equipment?.chlorinator || '--'}</span>
               </div>
             </div>
           </Card>

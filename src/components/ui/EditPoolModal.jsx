@@ -26,7 +26,7 @@ export default function EditPoolModal({ open, onClose, pool, onSaved, zLayer = 6
 
   // Hydrate the form from the pool whenever the modal opens (or the target
   // pool changes). equipment is jsonb → flatten back to the form's
-  // pump_model / filter_type / heater fields.
+  // pump_model / filter_type / chlorinator fields.
   useEffect(() => {
     if (!open || !pool) return
     const eq = pool.equipment || {}
@@ -43,7 +43,7 @@ export default function EditPoolModal({ open, onClose, pool, onSaved, zLayer = 6
       access_notes: pool.access_notes || '',
       pump_model: eq.pump_model || '',
       filter_type: eq.filter_type || '',
-      heater: eq.heater || '',
+      chlorinator: eq.chlorinator || '',
     })
   }, [open, pool?.id])
 
