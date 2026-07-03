@@ -562,7 +562,7 @@ export default function NewService() {
   // advance to Chemicals Added. Optional tasks are tracked but don't
   // block progression.
   const allRequiredDone = tasks.filter(t => t.required).every(t => t.completed)
-  const isSaltPool = pool?.pool_type === 'salt'
+  const isSaltPool = pool?.type === 'salt'
 
   // Name baked into every watermarked photo — the service technician
   // (selected on the Chemicals step), falling back to the logged-in tech

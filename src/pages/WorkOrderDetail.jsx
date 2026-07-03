@@ -96,7 +96,7 @@ export default function JobDetail() {
       }
       if (jobData.pool_id) {
         promises.push(
-          supabase.from('pools').select('id, address, pool_type, type, latitude, longitude')
+          supabase.from('pools').select('id, address, type, latitude, longitude')
             .eq('id', jobData.pool_id).single().then(r => ({ pools: r.data }))
         )
       }
@@ -517,8 +517,8 @@ export default function JobDetail() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{job.pools.address}</p>
-                {job.pools.pool_type && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{job.pools.pool_type}</p>
+                {job.pools.type && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{job.pools.type}</p>
                 )}
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" strokeWidth={2} />

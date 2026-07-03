@@ -35,9 +35,14 @@ export function monthlyFulfilment(profiles, records, extras = [], monthDate = ne
   const startYmd = ymd(mStart)
   const endYmd = ymd(mEnd)
 
+  // Only ACTIVE profiles contribute to the month. Tie done/unable to the same
+  // active set so a paused/cancelled/exhausted profile's stray completions can't
+  // inflate done past scheduled (which would hide a real shortfall).
+  const activeIds = new Set()
   let scheduled = 0
   for (const p of (profiles || [])) {
     if (!isProfileActive(p)) continue
+    activeIds.add(p.id)
     const occ = occurrencesInRange(p, mStart, mEnd).filter((d, i) => isOccurrenceInRange(p, d, i))
     scheduled += occ.length
     const skips = Array.isArray(p.skipped_dates) ? p.skipped_dates : []
@@ -50,6 +55,8 @@ export function monthlyFulfilment(profiles, records, extras = [], monthDate = ne
   let done = 0
   let unable = 0
   for (const r of (records || [])) {
+    // A record carrying an occurrence identity for a non-active profile doesn't count.
+    if (r.recurring_profile_id && !activeIds.has(r.recurring_profile_id)) continue
     if (r.status === 'completed') done++
     else if (r.status === 'unable_to_service') unable++
   }
@@ -94,9 +101,13 @@ export function poolMonthDetail(profiles, records, extras, monthDate = new Date(
       if (sy >= startYmd && sy <= endYmd) occurrences.push({ key: `${p.id}-skip-${sy}`, date: sy, status: 'skipped', rec: null })
     }
   }
-  // Records whose occurrence wasn't enumerated (rule changed) — show so the list reconciles.
+  // Records whose occurrence wasn't enumerated (rule changed) — show so the list
+  // reconciles. Skip records belonging to non-active profiles (paused/cancelled/
+  // exhausted) so they don't appear as phantom "done" rows the counts exclude.
+  const activeIds = new Set(profs.map(p => p.id))
   for (const r of recs) {
     if (used.has(r.id)) continue
+    if (r.recurring_profile_id && !activeIds.has(r.recurring_profile_id)) continue
     const dy = String(r.occurrence_date).split('T')[0]
     occurrences.push({ key: `off-${r.id}`, date: dy, status: r.status === 'completed' ? 'done' : 'unable', rec: r })
   }

@@ -57,7 +57,7 @@ export default function ServiceDetail() {
       if (data.pool_id) {
         const { data: poolData } = await supabase
           .from('pools')
-          .select('target_ranges, pool_type, name, address, clients(name, email, phone, address)')
+          .select('target_ranges, type, name, address, clients(name, email, phone, address)')
           .eq('id', data.pool_id)
           .single()
         setPool(poolData)

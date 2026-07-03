@@ -320,13 +320,27 @@ export function occurrencesInRange(profile, rangeStart, rangeEnd) {
   return out
 }
 
+// End-of-day-INCLUSIVE until_date check: an until_date profile stays active
+// through the whole of end_date and is only "ended" once end_date has fully
+// passed. Shared by isProfileActive, isOccurrenceInRange, and
+// recomputePoolNextDue's profileEnded so every surface agrees on the boundary
+// (previously isProfileActive flipped inactive at 00:00 on end_date while the
+// others held until 23:59:59, so the Schedule and next_due_at disagreed on the
+// end-date day). end_date is a date column ('YYYY-MM-DD'); parse as local.
+export function endDatePassed(endDate, now = new Date()) {
+  if (!endDate) return false
+  const s = String(endDate)
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T23:59:59' : s)
+  return d < now
+}
+
 // Is this profile still generating occurrences? False once it's paused /
 // cancelled / completed, or its num_visits / until_date bound is exhausted.
 // (Shared by the Schedule projector and the technician fulfilment report.)
 export function isProfileActive(profile) {
   if (profile.status === 'completed' || profile.status === 'cancelled' || profile.status === 'paused') return false
   if (profile.duration_type === 'num_visits' && profile.total_visits && (profile.completed_visits || 0) >= profile.total_visits) return false
-  if (profile.duration_type === 'until_date' && profile.end_date && new Date(profile.end_date) < new Date()) return false
+  if (profile.duration_type === 'until_date' && endDatePassed(profile.end_date)) return false
   return true
 }
 

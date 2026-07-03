@@ -290,6 +290,10 @@ serve(async (req) => {
             const product = findChemProduct(c.product_name)
             const cat = product?.category || 'other'
             const catStyle = CATEGORY_EMAIL_COLORS[cat] || CATEGORY_EMAIL_COLORS.other
+            // Prefer the free-text dose the tech typed (e.g. "100g"); fall back to
+            // the legacy structured quantity+unit for rows that predate dose_text.
+            const dose = (c.dose_text && String(c.dose_text).trim())
+              || [c.quantity, c.unit].filter((v: any) => v != null && v !== '').join(' ')
             return `
           <div style="background:#F9FAFB;border-radius:10px;padding:14px 16px;margin-bottom:8px;border-left:4px solid ${catStyle.text};">
             <table style="width:100%;"><tr>
@@ -299,8 +303,7 @@ serve(async (req) => {
                 <span style="display:inline-block;background:${catStyle.bg};color:${catStyle.text};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin-top:2px;">${catStyle.label}</span>
               </td>
               <td style="text-align:right;vertical-align:top;white-space:nowrap;">
-                <span style="font-size:18px;font-weight:700;color:${brandColour};">${c.quantity}</span>
-                <span style="font-size:13px;color:#6B7280;margin-left:2px;">${c.unit}</span>
+                <span style="font-size:18px;font-weight:700;color:${brandColour};">${dose || '--'}</span>
               </td>
             </tr></table>
             ${product?.suggested_dose ? `<p style="margin:6px 0 0;font-size:12px;color:#6B7280;">Recommended dose: ${product.suggested_dose}</p>` : ''}

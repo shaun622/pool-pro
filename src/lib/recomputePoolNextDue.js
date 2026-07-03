@@ -9,7 +9,7 @@
 // calls recomputePoolNextDue(poolId); nothing else writes these columns. A
 // build-time guard (scripts/check-single-writer.mjs) enforces that.
 import { supabase } from './supabase'
-import { occurrencesInRange } from './recurringScheduling'
+import { occurrencesInRange, endDatePassed } from './recurringScheduling'
 
 function startOfDay(d) {
   const x = new Date(d)
@@ -24,7 +24,7 @@ function ymdLocal(d) {
 // Has this profile's configured duration ended as of `now`?
 function profileEnded(profile, now) {
   if (profile.duration_type === 'until_date' && profile.end_date) {
-    if (new Date(profile.end_date + 'T23:59:59') < now) return true
+    if (endDatePassed(profile.end_date, now)) return true
   }
   if (profile.duration_type === 'num_visits' && profile.total_visits) {
     if ((profile.completed_visits || 0) >= profile.total_visits) return true

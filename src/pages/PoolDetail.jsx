@@ -180,8 +180,8 @@ export default function PoolDetail() {
               )}
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Type</p>
-                <Badge variant={pool.pool_type || 'default'} className="mt-1">
-                  {pool.pool_type || 'Unknown'}
+                <Badge variant="default" className="mt-1 capitalize">
+                  {pool.type || 'Unknown'}
                 </Badge>
               </div>
               <div>

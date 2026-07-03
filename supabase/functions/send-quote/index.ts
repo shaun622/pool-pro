@@ -72,7 +72,7 @@ serve(async (req) => {
 
           <div style="margin-top:16px;text-align:right;font-size:14px;">
             <p style="margin:4px 0;">Subtotal: $${Number(quote.subtotal).toFixed(2)}</p>
-            <p style="margin:4px 0;">GST (10%): $${Number(quote.gst).toFixed(2)}</p>
+            ${Number(quote.gst) > 0 ? `<p style="margin:4px 0;">GST${Number(quote.subtotal) > 0 ? ` (${Math.round((Number(quote.gst) / Number(quote.subtotal)) * 100)}%)` : ''}: $${Number(quote.gst).toFixed(2)}</p>` : ''}
             <p style="margin:4px 0;font-size:18px;font-weight:bold;color:${brandColour};">Total: $${Number(quote.total).toFixed(2)}</p>
           </div>
 

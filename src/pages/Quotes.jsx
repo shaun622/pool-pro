@@ -51,6 +51,10 @@ function getQuoteStage(q) {
 }
 
 function getQuoteTotal(q) {
+  // Prefer the stored total (GST-inclusive) so the pipeline value + row totals
+  // match the quote the customer sees. Fall back to the line-item sum for legacy
+  // rows that predate persisted totals.
+  if (q.total != null && q.total !== '') return Number(q.total)
   return (q.line_items || []).reduce((s, i) => s + (i.amount || (i.quantity * i.unit_price) || 0), 0)
 }
 
