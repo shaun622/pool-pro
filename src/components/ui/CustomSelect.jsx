@@ -8,6 +8,7 @@ import { cn } from '../../lib/utils'
  */
 export default function CustomSelect({
   label,
+  name,
   options = [],
   value,
   onChange,
@@ -44,8 +45,10 @@ export default function CustomSelect({
   }, [open])
 
   function handleSelect(opt) {
-    // Mimic native onChange event shape
-    onChange?.({ target: { value: opt.value } })
+    // Mimic native onChange event shape — MUST include `name` so name-based
+    // handlers (`setForm(p => ({ ...p, [e.target.name]: e.target.value }))`)
+    // update the right field. Without it they wrote a `poolForm[undefined]` key.
+    onChange?.({ target: { name, value: opt.value } })
     setOpen(false)
   }
 

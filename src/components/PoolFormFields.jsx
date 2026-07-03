@@ -28,6 +28,10 @@ export async function buildPoolPayload(poolForm) {
   // schedule_frequency / next_due_at are intentionally NOT set — a pool carries
   // no schedule. Scheduling is created separately as a recurring service.
   const { pump_model, filter_type, chlorinator, volume_litres, sameAsClient, schedule_frequency, next_due_at, latitude, longitude, ...rest } = poolForm
+  // Guard: never let a stray `undefined`-named key (from a malformed change event)
+  // reach the insert as a bogus column — Postgres would reject the whole row with
+  // "Could not find the 'undefined' column of 'pools'".
+  delete rest.undefined
   let lat = latitude
   let lng = longitude
   if ((lat == null || lng == null) && rest.address) {
