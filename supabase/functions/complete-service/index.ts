@@ -179,9 +179,12 @@ serve(async (req) => {
 
     // Tech's free-text Notes & Issues — escaped for safe HTML embedding and
     // surfaced prominently to the owner (red callout in the summary email).
-    const notesEscaped = record.notes
-      ? String(record.notes).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      : ''
+    // HTML-escape every user-controlled value interpolated into the email body
+    // (client/business names, addresses, chemical names, doses, notes) so a
+    // stray "<" or a crafted name can't inject markup into the customer/owner email.
+    const esc = (s: any): string =>
+      s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const notesEscaped = record.notes ? esc(record.notes) : ''
 
     const html = `
     <!DOCTYPE html>
@@ -191,16 +194,16 @@ serve(async (req) => {
         <!-- Header -->
         <div style="background:${brandColour};padding:32px 24px;text-align:center;border-radius:0 0 0 0;">
           ${business?.logo_url ? `<img src="${business.logo_url}" alt="" style="height:48px;margin-bottom:12px;" />` : ''}
-          <h1 style="margin:0;color:white;font-size:22px;font-weight:700;">${business?.name || 'PoolPro'}</h1>
+          <h1 style="margin:0;color:white;font-size:22px;font-weight:700;">${esc(business?.name) || 'PoolPro'}</h1>
         </div>
 
         <!-- Greeting -->
         <div style="background:white;padding:28px 24px 20px;">
-          <p style="margin:0 0 4px;font-size:16px;color:#111827;">Hi ${client.name},</p>
+          <p style="margin:0 0 4px;font-size:16px;color:#111827;">Hi ${esc(client.name)},</p>
           <p style="margin:0 0 16px;font-size:15px;color:#6B7280;line-height:1.5;">
             ${isOneOff
-              ? `We made an extra one-off visit to your pool at <strong>${pool.address}</strong>. Here's a summary of what we did.`
-              : `Your pool at <strong>${pool.address}</strong> has been serviced. Here's a summary of everything we did today.`}
+              ? `We made an extra one-off visit to your pool at <strong>${esc(pool.address)}</strong>. Here's a summary of what we did.`
+              : `Your pool at <strong>${esc(pool.address)}</strong> has been serviced. Here's a summary of everything we did today.`}
           </p>
 
           ${pool.portal_token ? `
@@ -298,12 +301,12 @@ serve(async (req) => {
           <div style="background:#F9FAFB;border-radius:10px;padding:14px 16px;margin-bottom:8px;border-left:4px solid ${catStyle.text};">
             <table style="width:100%;"><tr>
               <td style="vertical-align:top;">
-                <span style="display:inline-block;font-size:14px;font-weight:600;color:#111827;margin-bottom:4px;">${c.product_name}</span>
+                <span style="display:inline-block;font-size:14px;font-weight:600;color:#111827;margin-bottom:4px;">${esc(c.product_name)}</span>
                 <br/>
                 <span style="display:inline-block;background:${catStyle.bg};color:${catStyle.text};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin-top:2px;">${catStyle.label}</span>
               </td>
               <td style="text-align:right;vertical-align:top;white-space:nowrap;">
-                <span style="font-size:18px;font-weight:700;color:${brandColour};">${dose || '--'}</span>
+                <span style="font-size:18px;font-weight:700;color:${brandColour};">${esc(dose) || '--'}</span>
               </td>
             </tr></table>
             ${product?.suggested_dose ? `<p style="margin:6px 0 0;font-size:12px;color:#6B7280;">Recommended dose: ${product.suggested_dose}</p>` : ''}
@@ -340,7 +343,7 @@ serve(async (req) => {
 
         <!-- Footer -->
         <div style="padding:20px 24px;text-align:center;font-size:12px;color:#9CA3AF;">
-          <p style="margin:0 0 4px;">${business?.name || 'PoolPro'}</p>
+          <p style="margin:0 0 4px;">${esc(business?.name) || 'PoolPro'}</p>
           <p style="margin:0;">${business?.phone ? business.phone + ' &bull; ' : ''}${business?.email || ''}</p>
         </div>
       </div>
@@ -419,7 +422,7 @@ serve(async (req) => {
           </div>
           <div style="background:white;padding:24px;">
             <p style="margin:0 0 16px;font-size:15px;color:#374151;">
-              <strong>${techName}</strong> just completed a service at <strong>${pool.address}</strong> for ${client.name}.
+              <strong>${esc(techName)}</strong> just completed a service at <strong>${esc(pool.address)}</strong> for ${esc(client.name)}.
             </p>
 
             ${record.notes ? `
@@ -451,8 +454,8 @@ serve(async (req) => {
             <!-- Service summary -->
             <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-bottom:16px;">
               <table style="width:100%;font-size:13px;color:#374151;">
-                <tr><td style="padding:3px 0;color:#6B7280;">Client</td><td style="padding:3px 0;text-align:right;font-weight:600;">${client.name}</td></tr>
-                <tr><td style="padding:3px 0;color:#6B7280;">Pool</td><td style="padding:3px 0;text-align:right;font-weight:600;">${pool.address}</td></tr>
+                <tr><td style="padding:3px 0;color:#6B7280;">Client</td><td style="padding:3px 0;text-align:right;font-weight:600;">${esc(client.name)}</td></tr>
+                <tr><td style="padding:3px 0;color:#6B7280;">Pool</td><td style="padding:3px 0;text-align:right;font-weight:600;">${esc(pool.address)}</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Technician</td><td style="padding:3px 0;text-align:right;font-weight:600;">${techName}</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Tasks</td><td style="padding:3px 0;text-align:right;font-weight:600;">${completedTaskCount}/${tasks.length} completed</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Chemicals added</td><td style="padding:3px 0;text-align:right;font-weight:600;">${chemicalsAdded.length}</td></tr>
@@ -479,7 +482,7 @@ serve(async (req) => {
             ` : ''}
           </div>
           <div style="padding:16px 24px;text-align:center;font-size:11px;color:#9CA3AF;">
-            ${business?.name || 'PoolPro'} — Service notification
+            ${esc(business?.name) || 'PoolPro'} — Service notification
           </div>
         </div>
       </body>

@@ -99,7 +99,7 @@ export async function submitOne(draft, currentBusinessId) {
       const { error: upErr } = await supabase.storage
         .from('service-photos')
         .upload(path, p.blob, { upsert: true, contentType: 'image/jpeg' })
-      if (upErr) return 'pending'
+      if (upErr) return isFatalAuthError(upErr) ? 'auth' : 'pending'
       const { data: urlData } = supabase.storage.from('service-photos').getPublicUrl(path)
       photoRows.push({
         clientPhotoId: p.clientPhotoId,
@@ -118,7 +118,7 @@ export async function submitOne(draft, currentBusinessId) {
       p_id: draft.serviceRecordId,
       p_payload: buildPayload(draft, photoRows),
     })
-    if (error) return 'pending'
+    if (error) return isFatalAuthError(error) ? 'auth' : 'pending'
 
     // 3. Delete the draft — only now that both upload + RPC returned.
     await deleteDraft(draft.serviceRecordId)
@@ -146,6 +146,19 @@ export async function submitOne(draft, currentBusinessId) {
   }
 }
 
+// A submit failure that WON'T resolve by simply retrying — the caller's session
+// is expired/revoked or lacks permission (e.g. business changed under them). The
+// draft is kept (no data loss), but the UI must tell the tech to sign in again
+// rather than the misleading "will send when you reconnect".
+function isFatalAuthError(err) {
+  if (!err) return false
+  const code = String(err.code || err.statusCode || err.status || '')
+  const msg = String(err.message || '').toLowerCase()
+  return code === '401' || code === '403' || code === '42501' || code === 'PGRST301'
+    || msg.includes('jwt') || msg.includes('permission denied')
+    || msg.includes('not authorized') || msg.includes('unauthorized')
+}
+
 // Submit all pending drafts sequentially (never parallel), continue-on-failure.
 // Returns a single summary for one toast — no per-draft noise, no retry counters.
 export async function submitAll(currentBusinessId) {
@@ -153,11 +166,13 @@ export async function submitAll(currentBusinessId) {
   let sent = 0
   let pending = 0
   let wrongOrg = 0
+  let auth = 0
   for (const d of drafts) {
     const status = await submitOne(d, currentBusinessId)
     if (status === 'sent' || status === 'conflict') sent++
     else if (status === 'wrong-org') wrongOrg++
+    else if (status === 'auth') auth++
     else pending++
   }
-  return { sent, pending, wrongOrg, total: drafts.length }
+  return { sent, pending, wrongOrg, auth, total: drafts.length }
 }

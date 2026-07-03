@@ -12,15 +12,39 @@ const IMPORT_TYPES = [
   { value: 'pools', label: 'Pools', columns: ['client_name', 'address', 'type', 'volume_litres', 'schedule_frequency'], required: ['client_name', 'address'] },
 ]
 
+// RFC-4180-ish CSV parser: a character state machine that correctly handles
+// quoted fields with embedded commas, escaped quotes ("") and embedded newlines
+// — the previous regex/split approach mangled all three (e.g. a name like
+// 'John ""JB"" Doe' or an address with a comma).
 function parseCSV(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l)
-  if (lines.length < 2) return { headers: [], rows: [] }
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"/, '').replace(/"$/, ''))
-  const rows = lines.slice(1).map(line => {
-    const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || []
-    return values.map(v => v.trim().replace(/^"/, '').replace(/"$/, ''))
-  })
-  return { headers, rows }
+  const t = String(text || '').replace(/\r\n?/g, '\n')
+  const rows = []
+  let field = '', row = [], inQuotes = false
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (t[i + 1] === '"') { field += '"'; i++ } // escaped quote -> literal "
+        else inQuotes = false
+      } else field += ch
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ',') {
+      row.push(field); field = ''
+    } else if (ch === '\n') {
+      row.push(field); rows.push(row); field = ''; row = []
+    } else {
+      field += ch
+    }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row) }
+  // Drop blank rows (all-empty fields).
+  const clean = rows.filter(r => r.some(c => c.trim() !== ''))
+  if (clean.length < 2) return { headers: [], rows: [] }
+  return {
+    headers: clean[0].map(h => h.trim()),
+    rows: clean.slice(1).map(r => r.map(v => v.trim())),
+  }
 }
 
 export default function ImportData() {
@@ -83,14 +107,23 @@ export default function ImportData() {
       } else if (importType === 'pools') {
         // Need to look up client by name first
         const { data: existingClients } = await supabase.from('clients').select('id, name').eq('business_id', business.id)
+        // Map client name -> id, but track names shared by MORE THAN ONE client so
+        // we never silently assign a pool to the wrong same-named client.
         const clientMap = {}
-        for (const c of (existingClients || [])) clientMap[c.name.toLowerCase()] = c.id
+        const ambiguous = new Set()
+        for (const c of (existingClients || [])) {
+          const key = (c.name || '').toLowerCase()
+          if (clientMap[key] !== undefined) ambiguous.add(key)
+          else clientMap[key] = c.id
+        }
 
         for (const row of parsed.rows) {
           const clientName = row[columnMap.client_name]
           const address = row[columnMap.address]
           if (!clientName || !address) { skipped++; continue }
-          const clientId = clientMap[clientName.toLowerCase()]
+          const key = clientName.toLowerCase()
+          if (ambiguous.has(key)) { errors.push(`Client "${clientName}" is ambiguous — more than one client has this name; assign this pool manually`); continue }
+          const clientId = clientMap[key]
           if (!clientId) { errors.push(`Client "${clientName}" not found`); continue }
           try {
             await supabase.from('pools').insert({

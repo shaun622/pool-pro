@@ -137,9 +137,13 @@ export default function ManualPinPicker({ address, lat, lng, onPick, countryCode
       if (!address?.trim()) {
         const coordsStr = `${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}`
         onPick({ lat: tempLat, lng: tempLng, address: coordsStr })
-        reverseGeocode(tempLat, tempLng).then((addr) => {
-          if (addr) onPick({ lat: tempLat, lng: tempLng, address: addr })
-        })
+        // Upgrade to a real street address if the reverse geocode lands. If it
+        // fails (offline / service down) we keep the coords string — a usable,
+        // map-able fallback the operator can overtype — and swallow the rejection
+        // so it doesn't surface as an unhandled promise error.
+        reverseGeocode(tempLat, tempLng)
+          .then((addr) => { if (addr) onPick({ lat: tempLat, lng: tempLng, address: addr }) })
+          .catch(() => {})
       } else {
         onPick({ lat: tempLat, lng: tempLng })
       }

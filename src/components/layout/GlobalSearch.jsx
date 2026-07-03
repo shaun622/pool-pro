@@ -51,8 +51,13 @@ export default function GlobalSearch({ className }) {
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  // Monotonic search sequence — only the latest query's response is applied, so a
+  // slow earlier request can't land after and overwrite fresher results.
+  const searchSeqRef = useRef(0)
+
   // Run search (debounced)
   const runSearch = useCallback(async (q) => {
+    const seq = ++searchSeqRef.current
     if (!business?.id || !q || q.length < 2) {
       setResults({ pools: [], clients: [], jobs: [], quotes: [], invoices: [] })
       setLoading(false)
@@ -95,6 +100,7 @@ export default function GlobalSearch({ className }) {
           .limit(5),
       ])
 
+      if (seq !== searchSeqRef.current) return // superseded by a newer query
       setResults({
         pools: poolsRes.data || [],
         clients: clientsRes.data || [],
@@ -105,7 +111,7 @@ export default function GlobalSearch({ className }) {
     } catch (err) {
       console.error('Search error:', err)
     } finally {
-      setLoading(false)
+      if (seq === searchSeqRef.current) setLoading(false)
     }
   }, [business?.id])
 

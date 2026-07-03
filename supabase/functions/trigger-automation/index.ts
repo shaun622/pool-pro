@@ -107,6 +107,13 @@ serve(async (req) => {
       return template.replace(/\{(\w+)\}/g, (match, key) => vars[key] || match)
     }
 
+    // HTML-escape a value before embedding it in the email markup. Templates are
+    // plain text, so escaping whole rendered lines is safe and blocks HTML
+    // injection via substituted client/business fields (e.g. a client name
+    // containing markup).
+    const esc = (s: any): string =>
+      s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
     const resendKey = Deno.env.get('RESEND_API_KEY')
     const results: any[] = []
 
@@ -134,14 +141,14 @@ serve(async (req) => {
 <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F3F4F6;">
   <div style="max-width:560px;margin:0 auto;">
     <div style="background:${brandColour};padding:24px;text-align:center;">
-      ${business?.logo_url ? `<img src="${business.logo_url}" alt="" style="height:40px;margin-bottom:8px;" />` : ''}
-      <h1 style="margin:0;color:white;font-size:18px;">${business?.name || 'PoolPro'}</h1>
+      ${business?.logo_url ? `<img src="${esc(business.logo_url)}" alt="" style="height:40px;margin-bottom:8px;" />` : ''}
+      <h1 style="margin:0;color:white;font-size:18px;">${esc(business?.name) || 'PoolPro'}</h1>
     </div>
     <div style="background:white;padding:28px 24px;">
-      ${renderedBody.split('\n').map(line => `<p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">${line || '&nbsp;'}</p>`).join('')}
+      ${renderedBody.split('\n').map(line => `<p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">${esc(line) || '&nbsp;'}</p>`).join('')}
     </div>
     <div style="padding:16px 24px;text-align:center;font-size:12px;color:#9CA3AF;">
-      ${business?.name || 'PoolPro'}${business?.phone ? ' • ' + business.phone : ''}
+      ${esc(business?.name) || 'PoolPro'}${business?.phone ? ' • ' + esc(business.phone) : ''}
     </div>
   </div>
 </body>

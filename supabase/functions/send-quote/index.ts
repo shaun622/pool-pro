@@ -31,9 +31,14 @@ serve(async (req) => {
     const brandColour = business?.brand_colour || '#0EA5E9'
     const siteUrl = Deno.env.get('SITE_URL') || ''
 
+    // HTML-escape user-controlled fields (client/business name, scope, terms, line
+    // item descriptions) so a crafted value can't inject markup into the email.
+    const esc = (s: any): string =>
+      s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
     const itemsHtml = lineItems.map((item: any) => `
       <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;">${item.description}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;">${esc(item.description)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;text-align:center;">${item.quantity}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;text-align:right;">$${Number(item.unit_price).toFixed(2)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;text-align:right;">$${(item.quantity * item.unit_price).toFixed(2)}</td>
@@ -47,16 +52,16 @@ serve(async (req) => {
       <div style="max-width:600px;margin:0 auto;background:white;">
         <div style="background:${brandColour};padding:24px;text-align:center;">
           ${business?.logo_url ? `<img src="${business.logo_url}" alt="" style="height:48px;margin-bottom:8px;" />` : ''}
-          <h1 style="margin:0;color:white;font-size:20px;">${business?.name || 'PoolPro'}</h1>
+          <h1 style="margin:0;color:white;font-size:20px;">${esc(business?.name) || 'PoolPro'}</h1>
         </div>
         <div style="padding:24px;">
-          <h2 style="margin:0 0 4px;font-size:18px;">Quote for ${client.name}</h2>
+          <h2 style="margin:0 0 4px;font-size:18px;">Quote for ${esc(client.name)}</h2>
           <p style="margin:0 0 20px;color:#6B7280;font-size:14px;">
             Date: ${new Date(quote.created_at).toLocaleDateString('en-AU')}
             ${business?.abn ? ` &bull; ABN: ${business.abn}` : ''}
           </p>
 
-          ${quote.scope ? `<div style="margin-bottom:20px;"><h3 style="font-size:14px;margin:0 0 4px;">Scope of Work</h3><p style="font-size:14px;color:#374151;margin:0;">${quote.scope}</p></div>` : ''}
+          ${quote.scope ? `<div style="margin-bottom:20px;"><h3 style="font-size:14px;margin:0 0 4px;">Scope of Work</h3><p style="font-size:14px;color:#374151;margin:0;">${esc(quote.scope)}</p></div>` : ''}
 
           <table style="width:100%;border-collapse:collapse;font-size:14px;">
             <thead>
@@ -76,7 +81,7 @@ serve(async (req) => {
             <p style="margin:4px 0;font-size:18px;font-weight:bold;color:${brandColour};">Total: $${Number(quote.total).toFixed(2)}</p>
           </div>
 
-          ${quote.terms ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;"><h3 style="font-size:14px;margin:0 0 4px;">Terms & Conditions</h3><p style="font-size:12px;color:#6B7280;margin:0;">${quote.terms}</p></div>` : ''}
+          ${quote.terms ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #E5E7EB;"><h3 style="font-size:14px;margin:0 0 4px;">Terms & Conditions</h3><p style="font-size:12px;color:#6B7280;margin:0;">${esc(quote.terms)}</p></div>` : ''}
 
           <div style="margin-top:24px;text-align:center;">
             <a href="${siteUrl}/quote/${quote.public_token}" style="display:inline-block;padding:12px 32px;background:${brandColour};color:white;text-decoration:none;border-radius:8px;font-weight:600;">View & Respond to Quote</a>
