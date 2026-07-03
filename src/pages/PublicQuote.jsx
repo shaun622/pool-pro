@@ -59,28 +59,20 @@ export default function PublicQuote() {
       setLoading(true)
       setError(null)
 
-      const { data: quoteData, error: quoteError } = await supabase
-        .from('quotes')
-        .select('*, client:clients(*)')
-        .eq('public_token', token)
-        .single()
+      // Token-scoped, security-definer RPC — returns only the matched quote plus
+      // its client + business branding (see 20260703001000_quote_survey_token_rpcs).
+      const { data, error: quoteError } = await supabase
+        .rpc('get_quote_by_token', { p_token: token })
 
-      if (quoteError || !quoteData) {
+      if (quoteError || !data || !data.quote) {
         setError('This quote link is invalid or has expired.')
         setLoading(false)
         return
       }
 
-      setQuote(quoteData)
-      setClient(quoteData.client)
-
-      const { data: bizData } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', quoteData.business_id)
-        .single()
-
-      setBusiness(bizData)
+      setQuote(data.quote)
+      setClient(data.client)
+      setBusiness(data.business)
     } catch (err) {
       setError('Something went wrong loading the quote.')
     } finally {
@@ -92,15 +84,10 @@ export default function PublicQuote() {
     try {
       setSubmitting(true)
 
-      const { error: updateError } = await supabase
-        .from('quotes')
-        .update({
-          status: newStatus,
-          responded_at: new Date().toISOString(),
-        })
-        .eq('id', quote.id)
+      const { data, error: updateError } = await supabase
+        .rpc('respond_to_quote', { p_token: token, p_status: newStatus })
 
-      if (updateError) throw updateError
+      if (updateError || !data?.ok) throw updateError || new Error('Could not submit response')
 
       setQuote(prev => ({ ...prev, status: newStatus }))
       setResponded(true)

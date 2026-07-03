@@ -64,33 +64,21 @@ export default function PublicSurvey() {
       setLoading(true)
       setError(null)
 
-      const { data: surveyData, error: surveyError } = await supabase
-        .from('surveys')
-        .select('*')
-        .eq('token', token)
-        .single()
+      // Token-scoped, security-definer RPC — returns only the matched survey plus
+      // its business branding (see 20260703001000_quote_survey_token_rpcs).
+      const { data, error: surveyError } = await supabase
+        .rpc('get_survey_by_token', { p_token: token })
 
-      if (surveyError || !surveyData) {
+      if (surveyError || !data || !data.survey) {
         setError('This survey link is invalid or has expired.')
         setLoading(false)
         return
       }
 
-      // Already submitted
-      if (surveyData.submitted_at) {
-        setSurvey(surveyData)
-        setSubmitted(true)
-      } else {
-        setSurvey(surveyData)
-      }
-
-      const { data: bizData } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', surveyData.business_id)
-        .single()
-
-      setBusiness(bizData)
+      const surveyData = data.survey
+      setSurvey(surveyData)
+      if (surveyData.submitted_at) setSubmitted(true)
+      setBusiness(data.business)
     } catch (err) {
       setError('Something went wrong loading the survey.')
     } finally {
