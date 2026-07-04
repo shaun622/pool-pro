@@ -6,17 +6,36 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import StatCard from '../components/ui/StatCard'
 import { useBusiness } from '../hooks/useBusiness'
+import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../lib/supabase'
 import { formatDate, cn } from '../lib/utils'
 import {
   Calendar, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronRight,
-  Sparkles, AlertTriangle, Briefcase, Activity, ArrowRight, Phone, Mail,
+  Sparkles, AlertTriangle, Briefcase, Activity, ArrowRight, Phone, Mail, X,
 } from 'lucide-react'
 
 export default function Dashboard() {
   const { business, loading: bizLoading } = useBusiness()
+  const toast = useToast()
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Clear ONE stale follow-up from the dashboard without deleting the record.
+  // Persists a dismissal timestamp so it stays gone across reloads/devices; the
+  // record is untouched (still openable + reopenable) and every other surface
+  // keeps counting it as unable. A NEW unable-to-service (null timestamp) still shows.
+  async function dismissFollowup(id) {
+    const prev = unableFollowups
+    setUnableFollowups(list => list.filter(x => x.id !== id))
+    const { error } = await supabase
+      .from('service_records')
+      .update({ followup_dismissed_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) {
+      setUnableFollowups(prev) // roll back the optimistic removal
+      toast.error('Could not dismiss — please try again.')
+    }
+  }
 
   const [stats, setStats] = useState({
     scheduledThisWeek: 0,
@@ -159,6 +178,7 @@ export default function Dashboard() {
           .select('id, serviced_at, technician_name, unable_reason, pools(name, address, clients(name, phone, email))')
           .eq('business_id', business.id)
           .eq('status', 'unable_to_service')
+          .is('followup_dismissed_at', null)
           .order('serviced_at', { ascending: false })
           .limit(10),
       ])
@@ -385,6 +405,14 @@ export default function Dashboard() {
                           <Mail className="w-4 h-4" strokeWidth={2} />
                         </a>
                       )}
+                      <button
+                        onClick={() => dismissFollowup(r.id)}
+                        aria-label="Dismiss follow-up"
+                        title="Dismiss — I've dealt with this"
+                        className="w-8 h-8 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:border-red-300 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-4 h-4" strokeWidth={2} />
+                      </button>
                     </div>
                   </li>
                 )
