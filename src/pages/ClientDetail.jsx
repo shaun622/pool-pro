@@ -23,7 +23,7 @@ import PoolFormFields, { emptyPool, buildPoolPayload } from '../components/PoolF
 import EditPoolModal from '../components/ui/EditPoolModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
 import { useToast } from '../contexts/ToastContext'
-import { Briefcase, Calendar, ChevronDown, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
+import { Briefcase, Calendar, ChevronDown, ChevronLeft, ChevronRight, FileText, Mail, MapPin, Pencil, Phone, Plus, RotateCw, Trash2 } from 'lucide-react'
 import {
   formatDate,
   getOverdueStatus,
@@ -51,6 +51,7 @@ export default function ClientDetail() {
   const [monthRecords, setMonthRecords] = useState([]) // this month's completed/unable recurring records
   const [monthExtras, setMonthExtras] = useState([]) // this month's one-off completions
   const [openPool, setOpenPool] = useState(null) // expanded pool in the "This month" section
+  const [monthAnchor, setMonthAnchor] = useState(() => new Date()) // which month the fulfilment view shows
   const [jobTypes, setJobTypes] = useState([])
   // The "Recurring services" cards open the SAME AddRecurringModal /recurring
   // uses (edit mode) — one shared module, no duplicate.
@@ -141,7 +142,7 @@ export default function ClientDetail() {
   useEffect(() => {
     const poolIds = poolIdsKey ? poolIdsKey.split(',') : []
     if (!poolIds.length) { setMonthRecords([]); return }
-    const ms = monthStart(), me = monthEnd()
+    const ms = monthStart(monthAnchor), me = monthEnd(monthAnchor)
     const sy = `${ms.getFullYear()}-${String(ms.getMonth() + 1).padStart(2, '0')}-01`
     const ey = `${me.getFullYear()}-${String(me.getMonth() + 1).padStart(2, '0')}-${String(me.getDate()).padStart(2, '0')}`
     supabase
@@ -162,7 +163,7 @@ export default function ClientDetail() {
       .gte('serviced_at', ms.toISOString())
       .lte('serviced_at', me.toISOString())
       .then(({ data }) => setMonthExtras(data || []))
-  }, [poolIdsKey])
+  }, [poolIdsKey, monthAnchor])
 
   // Job-type templates for the recurring modal's picker.
   useEffect(() => {
@@ -186,17 +187,20 @@ export default function ClientDetail() {
     if (rp.pool_id) profileByPool[rp.pool_id] = rp
   }
 
-  // This-month scheduled vs done across all this client's pools.
-  const fulfil = monthlyFulfilment(recurringProfiles, monthRecords, monthExtras)
+  // Selected-month scheduled vs done across all this client's pools.
+  const fulfil = monthlyFulfilment(recurringProfiles, monthRecords, monthExtras, monthAnchor)
+  const monthLabel = monthAnchor.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+  const now = new Date()
+  const isCurrentMonthView = monthAnchor.getFullYear() === now.getFullYear() && monthAnchor.getMonth() === now.getMonth()
 
-  // Per-pool month breakdown for the expandable "This month" section (same as the report).
+  // Per-pool month breakdown for the expandable section (same as the report).
   const monthRows = pools
     .map(pool => {
       const poolProfiles = recurringProfiles.filter(p => p.pool_id === pool.id)
       const poolRecords = monthRecords.filter(r => r.pool_id === pool.id)
       const poolExtras = monthExtras.filter(r => r.pool_id === pool.id)
-      const counts = monthlyFulfilment(poolProfiles, poolRecords, poolExtras)
-      const detail = poolMonthDetail(poolProfiles, poolRecords, poolExtras)
+      const counts = monthlyFulfilment(poolProfiles, poolRecords, poolExtras, monthAnchor)
+      const detail = poolMonthDetail(poolProfiles, poolRecords, poolExtras, monthAnchor)
       return { poolId: pool.id, poolName: pool.name, poolAddress: pool.address, ...counts, occurrences: detail.occurrences, extras: detail.extras }
     })
     .filter(r => r.scheduled > 0 || r.done > 0 || r.unable > 0 || r.extra > 0)
@@ -448,17 +452,46 @@ export default function ClientDetail() {
           </div>
           {(fulfil.shortfall > 0 || fulfil.unable > 0) && (
             <p className="mt-3 text-sm">
-              {fulfil.shortfall > 0 && <span className="font-bold text-red-600 dark:text-red-400">{fulfil.shortfall} short this month</span>}
+              {fulfil.shortfall > 0 && <span className="font-bold text-red-600 dark:text-red-400">{fulfil.shortfall} short{isCurrentMonthView ? ' this month' : ''}</span>}
               {fulfil.shortfall > 0 && fulfil.unable > 0 && <span className="text-gray-400 dark:text-gray-500"> · </span>}
               {fulfil.unable > 0 && <span className="text-amber-600 dark:text-amber-400">{fulfil.unable} unable</span>}
             </p>
           )}
         </Card>
 
-        {/* This month — per-pool schedule + history (same drill-down as the report) */}
-        {monthRows.length > 0 && (
+        {/* Monthly fulfilment — per-pool schedule + history with a month filter
+            (same drill-down + month nav as the technician report). */}
+        {pools.length > 0 && (
           <div className="mb-6">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">This month</h2>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{monthLabel}</h2>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setMonthAnchor(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                  aria-label="Previous month"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+                </button>
+                <button
+                  onClick={() => setMonthAnchor(new Date())}
+                  className={cn('px-3 h-8 rounded-lg border text-xs font-medium transition-colors',
+                    isCurrentMonthView
+                      ? 'bg-pool-50 dark:bg-pool-950/40 border-pool-200/70 dark:border-pool-800/40 text-pool-700 dark:text-pool-300'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800')}
+                >
+                  This month
+                </button>
+                <button
+                  onClick={() => setMonthAnchor(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                  aria-label="Next month"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" strokeWidth={2} />
+                </button>
+              </div>
+            </div>
+            {monthRows.length > 0 ? (
             <Card className="!p-0 overflow-hidden">
               <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4.5rem_3.5rem] gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
                 <span>Pool</span>
@@ -495,6 +528,11 @@ export default function ClientDetail() {
                 })}
               </ul>
             </Card>
+            ) : (
+              <Card className="p-6">
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center">No scheduled or completed services for {monthLabel}.</p>
+              </Card>
+            )}
           </div>
         )}
 
