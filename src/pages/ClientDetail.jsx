@@ -35,9 +35,56 @@ import {
   cn,
 } from '../lib/utils'
 
-export default function ClientDetail() {
+// Matches a bare client UUID so old /clients/<uuid> links (bookmarks, id-only
+// call sites) keep resolving.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Route wrapper: resolves /clients/:slug (or a legacy :uuid) to the client id,
+// then renders the id-based ClientDetail below. Keeps ClientDetail's internals
+// (which assume a real UUID, e.g. usePools(id)) unchanged.
+export function ClientRoute() {
+  const { slug } = useParams()
+  const { business } = useBusiness()
+  const navigate = useNavigate()
+  const [clientId, setClientId] = useState(() => (UUID_RE.test(slug || '') ? slug : null))
+  const [notFound, setNotFound] = useState(false)
+
+  useEffect(() => {
+    if (UUID_RE.test(slug || '')) { setClientId(slug); setNotFound(false); return }
+    if (!business?.id) return
+    let cancelled = false
+    setClientId(null); setNotFound(false)
+    supabase
+      .from('clients')
+      .select('id')
+      .eq('business_id', business.id)
+      .eq('slug', slug)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        if (data?.id) setClientId(data.id)
+        else setNotFound(true)
+      })
+    return () => { cancelled = true }
+  }, [slug, business?.id])
+
+  useEffect(() => {
+    if (notFound) navigate('/clients', { replace: true })
+  }, [notFound, navigate])
+
+  if (!clientId) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-8 h-8 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+  return <ClientDetail clientId={clientId} />
+}
+
+export default function ClientDetail({ clientId }) {
   const toast = useToast()
-  const { id } = useParams()
+  const id = clientId
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { updateClient, deleteClient } = useClients()
@@ -233,8 +280,12 @@ export default function ClientDetail() {
         geocoded_at: editForm.lat != null ? new Date().toISOString() : null,
       }
       const updated = await updateClient(id, updates)
+      // A rename regenerates the slug (DB trigger) — keep the URL in sync so a
+      // refresh still resolves this client.
+      const slugChanged = updated?.slug && updated.slug !== client?.slug
       setClient(updated)
       setEditOpen(false)
+      if (slugChanged) navigate(`/clients/${updated.slug}`, { replace: true })
     } catch (err) {
       console.error('Error updating client:', err)
       toast.error(err?.message || 'Failed to save changes')

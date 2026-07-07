@@ -90,7 +90,7 @@ export default function JobDetail() {
 
       if (jobData.client_id) {
         promises.push(
-          supabase.from('clients').select('id, name, email, phone, address')
+          supabase.from('clients').select('id, slug, name, email, phone, address')
             .eq('id', jobData.client_id).single().then(r => ({ clients: r.data }))
         )
       }
@@ -473,7 +473,7 @@ export default function JobDetail() {
 
         {/* Client Card */}
         {job.clients && (
-          <Card className="mb-3" onClick={() => navigate(`/clients/${job.clients.id}`)}>
+          <Card className="mb-3" onClick={() => navigate(`/clients/${job.clients.slug || job.clients.id}`)}>
             <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Client</h3>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-brand flex items-center justify-center shrink-0">

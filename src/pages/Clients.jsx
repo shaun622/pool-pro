@@ -445,7 +445,7 @@ export default function Clients() {
                   client={client}
                   clientPools={client._pools}
                   status={client._status}
-                  onClick={() => navigate(`/clients/${client.id}`)}
+                  onClick={() => navigate(`/clients/${client.slug || client.id}`)}
                 />
               ))}
             </div>
@@ -481,7 +481,7 @@ export default function Clients() {
                       <li key={client.id}>
                         <button
                           onClick={() => setSelectedClientId(client.id)}
-                          onDoubleClick={() => navigate(`/clients/${client.id}`)}
+                          onDoubleClick={() => navigate(`/clients/${client.slug || client.id}`)}
                           className={cn(
                             'w-full grid grid-cols-[minmax(0,1fr)_9rem_5rem_7rem] gap-3 px-4 py-3 text-left transition-colors items-center',
                             isSelected
@@ -638,7 +638,7 @@ export default function Clients() {
 
                     {(recurringByClient[selectedClient.id] || []).length > 0 && (
                       <button
-                        onClick={() => navigate(`/clients/${selectedClient.id}`)}
+                        onClick={() => navigate(`/clients/${selectedClient.slug || selectedClient.id}`)}
                         className="mt-4 w-full inline-flex items-center justify-center gap-2 h-10 rounded-lg border border-pool-200 dark:border-pool-800/60 bg-pool-50/60 dark:bg-pool-950/30 text-sm font-semibold text-pool-700 dark:text-pool-300 hover:bg-pool-100 dark:hover:bg-pool-900/40 transition-colors"
                       >
                         <RotateCw className="w-4 h-4" strokeWidth={2} />
@@ -648,7 +648,7 @@ export default function Clients() {
 
                     <div className="mt-5 flex flex-wrap items-center gap-2">
                       <button
-                        onClick={() => navigate(`/clients/${selectedClient.id}`)}
+                        onClick={() => navigate(`/clients/${selectedClient.slug || selectedClient.id}`)}
                         className="inline-flex items-center gap-1 text-sm font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700 dark:hover:text-pool-300 transition-colors group"
                       >
                         Open profile
@@ -713,7 +713,7 @@ export default function Clients() {
         onClose={() => setModalOpen(false)}
         onCreated={(client) => {
           // Preserve the previous "go straight to add a pool" flow.
-          navigate(`/clients/${client.id}?addPool=1`)
+          navigate(`/clients/${client.slug || client.id}?addPool=1`)
         }}
         zLayer={50}
       />

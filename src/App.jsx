@@ -16,7 +16,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Schedule = lazy(() => import('./pages/Schedule'))
 const TechnicianReport = lazy(() => import('./pages/TechnicianReport'))
 const Clients = lazy(() => import('./pages/Clients'))
-const ClientDetail = lazy(() => import('./pages/ClientDetail'))
+const ClientDetail = lazy(() => import('./pages/ClientDetail').then(m => ({ default: m.ClientRoute })))
 const PoolDetail = lazy(() => import('./pages/PoolDetail'))
 const NewService = lazy(() => import('./pages/NewService'))
 const ServiceDetail = lazy(() => import('./pages/ServiceDetail'))
@@ -145,7 +145,7 @@ export default function App() {
                   <Route path="/schedule" element={<Schedule />} />
                   <Route path="/route" element={<Navigate to="/schedule" replace />} />
                   <Route path="/clients" element={<Clients />} />
-                  <Route path="/clients/:id" element={<ClientDetail />} />
+                  <Route path="/clients/:slug" element={<ClientDetail />} />
                   <Route path="/pools/:id" element={<PoolDetail />} />
                   <Route path="/work-orders" element={<WorkOrders />} />
                   <Route path="/recurring-jobs" element={<RecurringJobs />} />

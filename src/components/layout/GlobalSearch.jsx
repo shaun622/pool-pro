@@ -76,7 +76,7 @@ export default function GlobalSearch({ className }) {
           .limit(5),
         supabase
           .from('clients')
-          .select('id, name, email, phone, address')
+          .select('id, slug, name, email, phone, address')
           .eq('business_id', business.id)
           .or(`name.ilike.${term},email.ilike.${term},phone.ilike.${term},address.ilike.${term}`)
           .limit(5),
@@ -197,7 +197,7 @@ export default function GlobalSearch({ className }) {
                       iconBg="bg-violet-50 dark:bg-violet-950/40"
                       title={c.name}
                       subtitle={c.email || c.phone || c.address}
-                      onClick={() => handleSelect(`/clients/${c.id}`)}
+                      onClick={() => handleSelect(`/clients/${c.slug || c.id}`)}
                     />
                   ))}
                 </Group>
