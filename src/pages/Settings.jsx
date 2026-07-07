@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import Header from '../components/layout/Header'
+import { APP_VERSION } from '../version'
 import PageHero from '../components/layout/PageHero'
 import { ThemeToggleFull } from '../components/layout/ThemeToggle'
 import Card from '../components/ui/Card'
@@ -223,7 +224,7 @@ export default function Settings() {
           </button>
         </div>
 
-        <p className="text-center text-xs text-gray-400 dark:text-gray-500 pb-2">PoolPro v1.0.0</p>
+        <p className="text-center text-xs text-gray-400 dark:text-gray-500 pb-2">PoolPro {APP_VERSION}</p>
       </div>
 
       {/* DESKTOP: sidebar + pane */}
@@ -266,7 +267,7 @@ export default function Settings() {
               <LogOut className="w-3.5 h-3.5" strokeWidth={2} />
               Sign out
             </button>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-3">PoolPro v1.0.0 · Signed in as {user?.email}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-3">PoolPro {APP_VERSION} · Signed in as {user?.email}</p>
           </div>
         </div>
       </div>

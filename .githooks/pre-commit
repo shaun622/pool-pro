@@ -1,0 +1,6 @@
+#!/bin/sh
+# Auto-bump the app build number on every commit (v1.0.NN in the footer).
+# Best-effort — never block a commit if node/the bump fails.
+node scripts/bump-version.mjs >/dev/null 2>&1 || exit 0
+git add src/version.js >/dev/null 2>&1 || true
+exit 0

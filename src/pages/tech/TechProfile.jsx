@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
+import { APP_VERSION } from '../../version'
 
 export default function TechProfile() {
   const { user, signOut } = useAuth()
@@ -149,7 +150,7 @@ export default function TechProfile() {
         {t('profile.logout')}
       </button>
 
-      <p className="text-center text-xs text-gray-300 dark:text-gray-600">PoolPro v1.0</p>
+      <p className="text-center text-xs text-gray-300 dark:text-gray-600">PoolPro {APP_VERSION}</p>
     </div>
   )
 }
