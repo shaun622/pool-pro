@@ -59,7 +59,7 @@ const STATUS_VARIANTS = {
   overdue: 'danger',
 }
 
-export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated, staffList = [] }) {
+export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated, staffList = [], onEditRecurring }) {
   const toast = useToast()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
@@ -1340,6 +1340,16 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 className="w-full min-h-[44px] rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-semibold text-sm hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
               >
                 Unable to Service
+              </button>
+            )}
+            {onEditRecurring && (stop?.recurring_profile_id || form.recurring_profile_id || loadedProfile?.id) && (
+              <button
+                type="button"
+                onClick={() => onEditRecurring(stop?.recurring_profile_id || form.recurring_profile_id || loadedProfile?.id)}
+                className="w-full min-h-[44px] rounded-xl border border-pool-300 dark:border-pool-800 text-pool-700 dark:text-pool-300 font-semibold text-sm hover:bg-pool-50 dark:hover:bg-pool-950/30 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                Edit Recurring Service
               </button>
             )}
             <Button variant="danger" onClick={handleDeleteClick} className="w-full">

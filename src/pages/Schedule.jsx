@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
+import AddRecurringModal from '../components/ui/AddRecurringModal'
 import OneOffVisitPicker from '../components/ui/OneOffVisitPicker'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
@@ -220,6 +221,9 @@ function Schedule({ business }) {
   const [serviceRecords, setServiceRecords] = useState([])  // {pool_id, serviced_at}
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
+  const [recurEditProfile, setRecurEditProfile] = useState(null) // recurring profile being edited from a stop
+  const [recurModalOpen, setRecurModalOpen] = useState(false)
+  const [jobTypes, setJobTypes] = useState([])
   // The desktop week grid caps each day column at MAX_VISIBLE_STOPS_PER_DAY
   // rows. Clicking a day header or the "+N more" link sets this state,
   // which flips the bottom "Today" section into a "selected day"
@@ -251,6 +255,32 @@ function Schedule({ business }) {
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
   })
+
+  // Job-type templates for the recurring edit modal's picker (same source as
+  // the client profile's edit flow).
+  useEffect(() => {
+    if (!business?.id) return
+    supabase
+      .from('job_type_templates')
+      .select('id, name, color, default_tasks, estimated_duration_minutes, default_price')
+      .eq('business_id', business.id).eq('is_active', true)
+      .then(({ data }) => setJobTypes(data || []))
+  }, [business?.id])
+
+  // Open the SAME recurring-edit modal the client profile uses, in place over
+  // the Schedule. Close the Job Details popup, fetch the full profile row, open.
+  async function handleEditRecurring(profileId) {
+    if (!profileId) return
+    setSelectedStop(null)
+    const { data, error } = await supabase
+      .from('recurring_job_profiles')
+      .select('*, pools(name, address)')
+      .eq('id', profileId)
+      .single()
+    if (error || !data) return
+    setRecurEditProfile(data)
+    setRecurModalOpen(true)
+  }
 
   async function fetchData() {
     if (!business?.id) return
@@ -741,6 +771,17 @@ function Schedule({ business }) {
         stopNumber={1}
         onUpdated={() => { fetchData(); setSelectedStop(null) }}
         staffList={allStaff}
+        onEditRecurring={handleEditRecurring}
+      />
+
+      <AddRecurringModal
+        open={recurModalOpen}
+        onClose={() => { setRecurModalOpen(false); setRecurEditProfile(null) }}
+        business={business}
+        staff={allStaff}
+        jobTypes={jobTypes}
+        editProfile={recurEditProfile}
+        onCreated={() => { setRecurModalOpen(false); setRecurEditProfile(null); fetchData() }}
       />
     </PageWrapper>
   )
