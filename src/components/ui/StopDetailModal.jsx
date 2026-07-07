@@ -887,21 +887,23 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
             {stop.pool_name && (
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-0.5">{stop.pool_name}</p>
             )}
-            {/* Linkage label — when this stop belongs to a recurring
-                schedule, show "Tri-weekly Mon, Tue, Wed" so the
-                operator never edits/deletes a stop without seeing
-                what other stops are tied to it. The chip jumps to the
-                Recurring page where the whole schedule is editable. */}
+            {/* Recurrence chip — shows the schedule ("Weekly") AND is the entry
+                point to edit it: clicking opens the same AddRecurringModal the
+                client profile uses, in place over the Schedule. */}
             {loadedProfile && (
               <button
-                onClick={() => { onClose(); navigate('/recurring-jobs') }}
+                onClick={() => {
+                  const pid = stop?.recurring_profile_id || form.recurring_profile_id || loadedProfile?.id
+                  if (onEditRecurring && pid) onEditRecurring(pid)
+                  else { onClose(); navigate('/recurring-jobs') }
+                }}
                 className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-pool-50 dark:bg-pool-950/40 border border-pool-200/60 dark:border-pool-800/40 text-[11px] font-semibold text-pool-700 dark:text-pool-300 hover:bg-pool-100 dark:hover:bg-pool-950/60 transition-colors"
-                title="Open recurring services"
+                title="Edit recurring service"
               >
                 <RepeatIcon />
                 <span>{describeSchedule(loadedProfile)}</span>
                 <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zM19.5 7.125L16.875 4.5" />
                 </svg>
               </button>
             )}
@@ -1340,16 +1342,6 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                 className="w-full min-h-[44px] rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 font-semibold text-sm hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
               >
                 Unable to Service
-              </button>
-            )}
-            {onEditRecurring && (stop?.recurring_profile_id || form.recurring_profile_id || loadedProfile?.id) && (
-              <button
-                type="button"
-                onClick={() => onEditRecurring(stop?.recurring_profile_id || form.recurring_profile_id || loadedProfile?.id)}
-                className="w-full min-h-[44px] rounded-xl border border-pool-300 dark:border-pool-800 text-pool-700 dark:text-pool-300 font-semibold text-sm hover:bg-pool-50 dark:hover:bg-pool-950/30 transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
-                Edit Recurring Service
               </button>
             )}
             <Button variant="danger" onClick={handleDeleteClick} className="w-full">
