@@ -67,6 +67,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   const [saving, setSaving] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [pendingStaffId, setPendingStaffId] = useState(null)
+  const [coverPick, setCoverPick] = useState(false) // "Cover this visit" one-off substitute picker
+  const [coverStaffId, setCoverStaffId] = useState('')
+  const [covering, setCovering] = useState(false)
   const [form, setForm] = useState({})
   // Cache the recurring_job_profile row if this stop is part of one.
   // Used to render the linkage label in the modal header
@@ -623,6 +626,73 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
+  // One-off substitute: reassign JUST this occurrence to a cover tech (e.g. the
+  // regular tech is off sick) WITHOUT touching the recurring schedule. Uses the
+  // replaces_recurring_date override — the profile's regular tech + recurrence are
+  // never written, so next week still goes to the original tech. Reversible by
+  // deleting the cover job.
+  async function handleCoverVisit(staffId) {
+    const value = staffId || null
+    setCovering(true)
+    try {
+      const isProjected = !!stop.projected || (typeof stop.id === 'string' && stop.id.startsWith('profile-'))
+      let profileId = stop.recurring_profile_id || form.recurring_profile_id
+      if (!profileId && typeof stop.id === 'string' && stop.id.startsWith('profile-')) {
+        profileId = stop.id.replace(/^profile-/, '').replace(/-\d{4}-\d{2}-\d{2}$/, '')
+      }
+      const occDate = stop.scheduled_date
+        || (typeof stop.id === 'string' && stop.id.startsWith('profile-') ? stop.id.match(/-(\d{4}-\d{2}-\d{2})$/)?.[1] : null)
+
+      if (!isProjected && stop.id) {
+        // Already a real job for this occurrence — just reassign it (profile untouched).
+        const { error } = await supabase.from('jobs').update({ assigned_staff_id: value }).eq('id', stop.id)
+        if (error) throw error
+      } else {
+        if (!profileId || !occDate) throw new Error('Could not resolve which visit to cover.')
+        const { data: profileRow } = await supabase
+          .from('recurring_job_profiles').select('business_id, pool_id').eq('id', profileId).single()
+        const businessId = profileRow?.business_id
+        const poolId = stop.pool_id || profileRow?.pool_id
+        if (!businessId) throw new Error('Could not determine the business for the cover job.')
+        // Upsert: reuse an existing override for this profile+date so we never
+        // leave two jobs on the same day.
+        const { data: existingRows } = await supabase
+          .from('jobs').select('id')
+          .eq('recurring_profile_id', profileId)
+          .or(`scheduled_date.eq.${occDate},replaces_recurring_date.eq.${occDate}`)
+          .limit(1)
+        const existing = existingRows?.[0]
+        if (existing) {
+          const { error } = await supabase.from('jobs').update({ assigned_staff_id: value }).eq('id', existing.id)
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('jobs').insert({
+            business_id: businessId,
+            client_id: stop.client_id,
+            pool_id: poolId,
+            recurring_profile_id: profileId,
+            replaces_recurring_date: occDate,
+            scheduled_date: occDate,
+            scheduled_time: stop.scheduled_time || null,
+            title: stop.title || 'Pool Service',
+            status: 'scheduled',
+            assigned_staff_id: value,
+            notes: stop.notes || null,
+          })
+          if (error) throw error
+          if (poolId) { try { await recomputePoolNextDue(poolId) } catch (e) { /* non-critical */ } }
+        }
+      }
+      toast.success('Cover assigned for this visit only.')
+      onUpdated?.()
+    } catch (err) {
+      console.error('Cover visit error:', err)
+      toast.error(err?.message || 'Could not assign a cover for this visit.')
+    } finally {
+      setCovering(false)
+    }
+  }
+
   async function handleAssign(staffId) {
     setAssigning(true)
     try {
@@ -1104,6 +1174,9 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                       options={[{ value: '', label: 'Unassigned' }, ...staffList.map(s => ({ value: s.id, label: s.name }))]}
                       className="mt-1"
                     />
+                    {(stop?.recurring_profile_id || form.recurring_profile_id || (typeof stop?.id === 'string' && stop.id.startsWith('profile-'))) && (
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Regular tech — applies to the whole schedule.</p>
+                    )}
                   </div>
                   {assigning && (
                     <div className="w-4 h-4 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
@@ -1130,6 +1203,49 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
                       </svg>
                       Confirm
                     </button>
+                  </div>
+                )}
+                {/* Cover this visit — one-off substitute (recurring stops only); leaves
+                    the schedule's regular tech alone via the replaces_recurring_date override. */}
+                {(stop?.recurring_profile_id || form.recurring_profile_id || (typeof stop?.id === 'string' && stop.id.startsWith('profile-'))) && (
+                  <div className="mt-3 ml-12">
+                    {!coverPick ? (
+                      <button
+                        type="button"
+                        onClick={() => { setCoverStaffId(''); setCoverPick(true) }}
+                        className="text-xs font-semibold text-pool-600 dark:text-pool-400 hover:underline"
+                      >
+                        Cover this visit only →
+                      </button>
+                    ) : (
+                      <div className="animate-scale-in">
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Assign a substitute for this date only — the recurring schedule stays unchanged.</p>
+                        <CustomSelect
+                          inline
+                          value={coverStaffId}
+                          onChange={e => setCoverStaffId(e.target.value)}
+                          disabled={covering}
+                          placeholder="Choose a substitute"
+                          options={staffList.map(s => ({ value: s.id, label: s.name }))}
+                        />
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            onClick={() => setCoverPick(false)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-h-[32px]"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={async () => { if (coverStaffId) { await handleCoverVisit(coverStaffId); setCoverPick(false) } }}
+                            disabled={covering || !coverStaffId}
+                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-pool-600 hover:bg-pool-700 disabled:opacity-50 transition-colors min-h-[32px] flex items-center gap-1.5"
+                          >
+                            {covering && <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                            Assign cover
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
