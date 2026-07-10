@@ -188,7 +188,8 @@ export default function ServiceDetail() {
 
             {photos.length > 0 && (
               <Card>
-                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Photos</h2>
+                <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Photos</h2>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3">Kept for 60 days after the service, then removed to save storage.</p>
                 <div className="grid grid-cols-2 gap-2">
                   {photos.map((photo, i) => (
                     <div key={i} className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 self-start">
@@ -368,7 +369,8 @@ export default function ServiceDetail() {
           {/* Photos */}
           {photos.length > 0 && (
             <Card>
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Photos</h2>
+              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Photos</h2>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3">Kept for 60 days after the service, then removed to save storage.</p>
               <div className="grid grid-cols-2 gap-2">
                 {photos.map((photo, i) => (
                   <div key={i} className="relative rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 self-start">
