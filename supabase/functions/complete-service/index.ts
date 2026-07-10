@@ -192,9 +192,9 @@ serve(async (req) => {
     <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F3F4F6;">
       <div style="max-width:600px;margin:0 auto;">
         <!-- Header -->
-        <div style="background:${brandColour};padding:32px 24px;text-align:center;border-radius:0 0 0 0;">
-          ${business?.logo_url ? `<img src="${business.logo_url}" alt="" style="height:48px;margin-bottom:12px;" />` : ''}
-          <h1 style="margin:0;color:white;font-size:22px;font-weight:700;">${esc(business?.name) || 'PoolPro'}</h1>
+        <div style="background:white;padding:28px 24px 16px;text-align:center;border-bottom:3px solid ${brandColour};">
+          ${business?.logo_url ? `<img src="${business.logo_url}" alt="${esc(business?.name)}" style="max-height:56px;max-width:220px;margin-bottom:10px;" />` : ''}
+          <h1 style="margin:0;color:#111827;font-size:20px;font-weight:700;">${esc(business?.name) || 'PoolPro'}</h1>
         </div>
 
         <!-- Greeting -->
@@ -478,6 +478,22 @@ serve(async (req) => {
                 <th style="padding:6px 10px;text-align:center;border-bottom:1px solid #E5E7EB;">Range</th>
               </tr></thead>
               <tbody>${chemicalRows}</tbody>
+            </table>
+            ` : ''}
+
+            ${chemicalsAdded.length > 0 ? `
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Chemicals Added</p>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:16px;">
+              <tbody>
+                ${chemicalsAdded.map((c: any) => {
+                  const dose = (c.dose_text && String(c.dose_text).trim())
+                    || [c.quantity, c.unit].filter((v: any) => v != null && v !== '').join(' ')
+                  return `<tr>
+                    <td style="padding:6px 10px;border-bottom:1px solid #F3F4F6;color:#374151;">${esc(c.product_name)}</td>
+                    <td style="padding:6px 10px;border-bottom:1px solid #F3F4F6;text-align:right;font-weight:600;color:#111827;">${esc(dose) || '--'}</td>
+                  </tr>`
+                }).join('')}
+              </tbody>
             </table>
             ` : ''}
           </div>
