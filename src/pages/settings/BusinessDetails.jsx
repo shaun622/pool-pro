@@ -3,6 +3,7 @@ import { Building2, Check, Image as ImageIcon, Palette, Receipt, Trash2, Upload 
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input, { Select } from '../../components/ui/Input'
+import StorageCard from './StorageCard'
 import { useBusiness } from '../../hooks/useBusiness'
 import { supabase } from '../../lib/supabase'
 import { cn } from '../../lib/utils'
@@ -419,6 +420,9 @@ export default function BusinessDetails() {
           </span>
         </div>
       </section>
+
+      {/* ── STORAGE ── */}
+      <StorageCard />
 
       {/* ── SAVE ── */}
       <div className="pt-2">
