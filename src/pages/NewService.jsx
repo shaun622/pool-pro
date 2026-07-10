@@ -410,8 +410,9 @@ export default function NewService() {
         }
       }
 
-      // Success screen survives reload either way.
-      navigate(`/pools/${poolId}/service?done=1`, { replace: true })
+      // Success screen survives reload either way. Carry the new record id so the
+      // success screen can offer "View service details".
+      navigate(`/pools/${poolId}/service?done=1&serviceId=${serviceRecordId}`, { replace: true })
       setCompleted(true)
       findNextStop()
       if (status === 'pending') {
@@ -1818,6 +1819,15 @@ export default function NewService() {
                   </span>
                 </div>
               </Card>
+            )}
+            {searchParams.get('serviceId') && (
+              <Button
+                variant="secondary"
+                className="w-full min-h-[48px] mb-3"
+                onClick={() => navigate(`/services/${searchParams.get('serviceId')}`)}
+              >
+                View service details
+              </Button>
             )}
             <div className="flex gap-3 w-full">
               {isTech && nextStop ? (

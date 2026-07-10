@@ -97,6 +97,7 @@ export default function ClientDetail({ clientId }) {
   const [recurringProfiles, setRecurringProfiles] = useState([])
   const [monthRecords, setMonthRecords] = useState([]) // this month's completed/unable recurring records
   const [monthExtras, setMonthExtras] = useState([]) // this month's one-off completions
+  const [recentServices, setRecentServices] = useState([]) // recent completed/unable services (all pools)
   const [openPool, setOpenPool] = useState(null) // expanded pool in the "This month" section
   const [monthAnchor, setMonthAnchor] = useState(() => new Date()) // which month the fulfilment view shows
   const [jobTypes, setJobTypes] = useState([])
@@ -211,6 +212,21 @@ export default function ClientDetail({ clientId }) {
       .lte('serviced_at', me.toISOString())
       .then(({ data }) => setMonthExtras(data || []))
   }, [poolIdsKey, monthAnchor])
+
+  // Recent services log across all this client's pools — each row opens the
+  // Service Details summary. Month-independent; bounded to the latest 15.
+  useEffect(() => {
+    const poolIds = poolIdsKey ? poolIdsKey.split(',') : []
+    if (!poolIds.length) { setRecentServices([]); return }
+    supabase
+      .from('service_records')
+      .select('id, pool_id, serviced_at, status, technician_name, pools(name, address)')
+      .in('pool_id', poolIds)
+      .in('status', ['completed', 'unable_to_service'])
+      .order('serviced_at', { ascending: false })
+      .limit(15)
+      .then(({ data }) => setRecentServices(data || []))
+  }, [poolIdsKey])
 
   // Job-type templates for the recurring modal's picker.
   useEffect(() => {
@@ -584,6 +600,39 @@ export default function ClientDetail({ clientId }) {
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center">No scheduled or completed services for {monthLabel}.</p>
               </Card>
             )}
+          </div>
+        )}
+
+        {/* Recent services — full log across this client's pools; each row opens
+            the Service Details summary (same as the dashboard Recent Activity). */}
+        {recentServices.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Recent services</h2>
+            <Card className="!p-0 overflow-hidden">
+              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                {recentServices.map(r => (
+                  <li key={r.id}>
+                    <button
+                      onClick={() => navigate(`/services/${r.id}`)}
+                      className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
+                    >
+                      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', r.status === 'unable_to_service' ? 'bg-amber-500' : 'bg-pool-500')} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate group-hover:text-pool-700 dark:group-hover:text-pool-300 transition-colors">
+                          {r.pools?.name || r.pools?.address || 'Pool'}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                          {r.technician_name ? `${r.technician_name} · ` : ''}{new Date(r.serviced_at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <Badge variant={r.status === 'unable_to_service' ? 'warning' : 'success'} className="shrink-0">
+                        {r.status === 'unable_to_service' ? 'Unable' : 'Service'}
+                      </Badge>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
           </div>
         )}
 
