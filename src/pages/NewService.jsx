@@ -1916,14 +1916,14 @@ function watermarkPhoto(file, meta) {
       if (meta.address) leftLines.push({ text: meta.address, size: Math.round(11 * scale), bold: false, alpha: 0.9 })
       if (meta.lat && meta.lng) leftLines.push({ text: `${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)}`, size: Math.round(9 * scale), bold: false, alpha: 0.6 })
 
-      // Right column — technician above the (bottom-most) business name.
+      // Right column (technician + business) — rendered TOP-right (drawn below).
       const rightLines = []
       if (meta.technicianName) rightLines.push({ text: meta.technicianName, size: Math.round(10 * scale), bold: false, alpha: 0.85 })
       if (meta.businessName) rightLines.push({ text: meta.businessName, size: Math.round(12 * scale), bold: true, alpha: 0.9 })
 
-      // Bar tall enough to contain the taller column + top & bottom padding.
+      // Bottom bar sized to the LEFT column only (the right column now lives top-right).
       const colHeight = (lines) => lines.reduce((s, l) => s + l.size, 0) + gap * Math.max(0, lines.length - 1)
-      const barH = Math.max(colHeight(leftLines), colHeight(rightLines)) + pad * 2
+      const barH = colHeight(leftLines) + pad * 2
 
       const grad = ctx.createLinearGradient(0, height - barH, 0, height)
       grad.addColorStop(0, 'rgba(0,0,0,0)')
@@ -1945,17 +1945,28 @@ function watermarkPhoto(file, meta) {
         ly -= l.size + gap
       }
 
-      // Right column, drawn bottom → top.
-      ctx.textAlign = 'right'
-      let ry = height - pad
-      for (let i = rightLines.length - 1; i >= 0; i--) {
-        const l = rightLines[i]
-        ctx.font = fontFor(l)
-        ctx.fillStyle = `rgba(255,255,255,${l.alpha})`
-        ctx.fillText(l.text, width - pad, ry)
-        ry -= l.size + gap
+      // Right column (technician + business) — TOP-right, drawn top → down, with
+      // its own top gradient so it stays legible over bright skies.
+      if (rightLines.length) {
+        const topBarH = colHeight(rightLines) + pad * 2
+        const topGrad = ctx.createLinearGradient(0, 0, 0, topBarH)
+        topGrad.addColorStop(0, 'rgba(0,0,0,0.85)')
+        topGrad.addColorStop(0.7, 'rgba(0,0,0,0.55)')
+        topGrad.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = topGrad
+        ctx.fillRect(0, 0, width, topBarH)
+
+        ctx.textAlign = 'right'
+        let ry = pad + rightLines[0].size
+        for (let i = 0; i < rightLines.length; i++) {
+          const l = rightLines[i]
+          ctx.font = fontFor(l)
+          ctx.fillStyle = `rgba(255,255,255,${l.alpha})`
+          ctx.fillText(l.text, width - pad, ry)
+          ry += l.size + gap
+        }
+        ctx.textAlign = 'left'
       }
-      ctx.textAlign = 'left'
 
       canvas.toBlob(
         (blob) => {
