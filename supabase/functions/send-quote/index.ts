@@ -29,7 +29,7 @@ serve(async (req) => {
     const business = quote.businesses
     const lineItems = quote.line_items || []
     const brandColour = business?.brand_colour || '#0EA5E9'
-    const siteUrl = Deno.env.get('SITE_URL') || ''
+    const siteUrl = Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'
 
     // HTML-escape user-controlled fields (client/business name, scope, terms, line
     // item descriptions) so a crafted value can't inject markup into the email.

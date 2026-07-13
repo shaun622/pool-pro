@@ -18,8 +18,8 @@ export const PLACEHOLDERS = [
   { key: '{business_name}', label: 'Business Name', example: 'Crystal Clear Pools' },
   { key: '{business_phone}', label: 'Business Phone', example: '1300 123 456' },
   { key: '{business_email}', label: 'Business Email', example: 'info@poolco.com.au' },
-  { key: '{portal_link}', label: 'Customer Portal Link', example: 'https://poolmateapp.online/portal/abc123' },
-  { key: '{survey_link}', label: 'Survey Link', example: 'https://poolmateapp.online/survey/abc123' },
+  { key: '{portal_link}', label: 'Customer Portal Link', example: 'https://pool-pro-2jk.pages.dev/portal/abc123' },
+  { key: '{survey_link}', label: 'Survey Link', example: 'https://pool-pro-2jk.pages.dev/survey/abc123' },
   { key: '{next_service_date}', label: 'Next Service Date', example: 'Wednesday 22 April 2026' },
   { key: '{invoice_number}', label: 'Invoice Number', example: 'INV-001' },
   { key: '{invoice_total}', label: 'Invoice Total', example: '$150.00' },
@@ -40,6 +40,11 @@ export function renderTemplate(template, variables = {}) {
   })
 }
 
+// Base URL for customer-facing links (portal / survey). Uses the CURRENT app
+// origin so links always point at wherever the app is actually served (no stale
+// hardcoded domain), with a fallback for non-browser contexts.
+const SITE_ORIGIN = (typeof window !== 'undefined' && window.location?.origin) || 'https://pool-pro-2jk.pages.dev'
+
 /**
  * Build variables object from service/job context data
  */
@@ -57,7 +62,7 @@ export function buildTemplateVariables({ client, pool, job, staff, business, sur
     vars.pool_address = pool.address || ''
     vars.pool_type = pool.type || ''
     if (pool.portal_token) {
-      vars.portal_link = `https://poolmateapp.online/portal/${pool.portal_token}`
+      vars.portal_link = `${SITE_ORIGIN}/portal/${pool.portal_token}`
     }
     if (pool.next_due_at) {
       vars.next_service_date = new Date(pool.next_due_at).toLocaleDateString('en-AU', {
@@ -87,7 +92,7 @@ export function buildTemplateVariables({ client, pool, job, staff, business, sur
   }
 
   if (survey?.token) {
-    vars.survey_link = `https://poolmateapp.online/survey/${survey.token}`
+    vars.survey_link = `${SITE_ORIGIN}/survey/${survey.token}`
   }
 
   if (invoice) {

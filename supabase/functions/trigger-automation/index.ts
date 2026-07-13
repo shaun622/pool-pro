@@ -94,7 +94,7 @@ serve(async (req) => {
     }
 
     if (pool?.portal_token) {
-      vars.portal_link = `${Deno.env.get('SITE_URL') || 'https://poolmateapp.online'}/portal/${pool.portal_token}`
+      vars.portal_link = `${Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'}/portal/${pool.portal_token}`
     }
     if (pool?.next_due_at) {
       vars.next_service_date = new Date(pool.next_due_at).toLocaleDateString('en-AU', {

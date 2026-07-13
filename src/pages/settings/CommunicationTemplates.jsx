@@ -160,7 +160,7 @@ export default function CommunicationTemplates() {
     job_date: 'Wednesday 15 April 2026', job_time: '9:00 AM', job_type: 'Regular Maintenance',
     technician_name: 'Mike Wilson', business_name: business?.name || 'Pool Co',
     business_phone: business?.phone || '1300 123 456', business_email: business?.email || 'info@poolco.com.au',
-    portal_link: 'https://poolmateapp.online/portal/abc123', survey_link: 'https://poolmateapp.online/survey/abc123',
+    portal_link: 'https://pool-pro-2jk.pages.dev/portal/abc123', survey_link: 'https://pool-pro-2jk.pages.dev/survey/abc123',
     next_service_date: 'Wednesday 22 April 2026', eta_minutes: '15',
     invoice_number: 'INV-001', invoice_total: '$150.00', quote_total: '$250.00',
   }

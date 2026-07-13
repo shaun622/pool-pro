@@ -209,7 +209,7 @@ serve(async (req) => {
           ${pool.portal_token ? `
           <!-- Portal button top -->
           <div style="margin-bottom:20px;text-align:center;">
-            <a href="${Deno.env.get('SITE_URL') || ''}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;">Customer Portal</a>
+            <a href="${Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;">Customer Portal</a>
           </div>
           ` : ''}
 
@@ -337,7 +337,7 @@ serve(async (req) => {
         <!-- Portal link -->
         ${pool.portal_token ? `
         <div style="background:white;padding:0 24px 24px;text-align:center;">
-          <a href="${Deno.env.get('SITE_URL') || ''}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">View Service History</a>
+          <a href="${Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">View Service History</a>
         </div>
         ` : ''}
 
