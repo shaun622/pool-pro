@@ -68,7 +68,7 @@ export default function TechProfile() {
 
   async function handlePasswordChange(e) {
     e.preventDefault()
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 10) {
       setPwError(true)
       setPwMessage(t('profile.pwTooShort'))
       return

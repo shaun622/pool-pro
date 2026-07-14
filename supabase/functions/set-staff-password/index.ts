@@ -29,6 +29,22 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
+// Best-effort security audit trail (see security_events). Never let a logging
+// failure fail the password operation.
+async function logSecurityEvent(admin: any, businessId: string, caller: any, staffId: string, kind: string) {
+  try {
+    await admin.from('security_events').insert({
+      business_id: businessId,
+      actor_user_id: caller?.id ?? null,
+      actor_email: caller?.email ?? null,
+      action: 'staff.password_set',
+      target_type: 'staff_member',
+      target_id: staffId,
+      metadata: { kind },
+    })
+  } catch { /* ignore */ }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
@@ -102,6 +118,7 @@ serve(async (req) => {
         password: newPassword,
       })
       if (updErr) return jsonResponse({ error: updErr.message }, 500)
+      await logSecurityEvent(adminClient, staff.business_id, caller, staff.id, 'updated')
       return jsonResponse({ success: true, action: 'updated', user_id: staff.user_id })
     } else {
       // No user_id → must have an email to bootstrap a new auth user
@@ -146,6 +163,7 @@ serve(async (req) => {
         .eq('id', staff.id)
       if (linkErr) return jsonResponse({ error: linkErr.message }, 500)
 
+      await logSecurityEvent(adminClient, staff.business_id, caller, staff.id, 'created')
       return jsonResponse({ success: true, action: 'created', user_id: newUserId })
     }
   } catch (e) {

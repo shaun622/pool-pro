@@ -47,7 +47,7 @@ export const translations = {
     'profile.saveChanges': 'Save Changes',
     'profile.newPasswordLabel': 'New Password',
     'profile.passwordHint': 'At least 6 characters',
-    'profile.pwTooShort': 'Password must be at least 6 characters.',
+    'profile.pwTooShort': 'Password must be at least 10 characters.',
     'profile.pwUpdated': 'Password updated successfully.',
     'profile.pwFailed': 'Failed to update password.',
 
@@ -225,7 +225,7 @@ export const translations = {
     'profile.saveChanges': 'Simpan Perubahan',
     'profile.newPasswordLabel': 'Kata Sandi Baru',
     'profile.passwordHint': 'Minimal 6 karakter',
-    'profile.pwTooShort': 'Kata sandi minimal 6 karakter.',
+    'profile.pwTooShort': 'Kata sandi minimal 10 karakter.',
     'profile.pwUpdated': 'Kata sandi berhasil diperbarui.',
     'profile.pwFailed': 'Gagal memperbarui kata sandi.',
 

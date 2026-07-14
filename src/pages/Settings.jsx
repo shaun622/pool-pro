@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Building2, Users, Beaker, Briefcase, Mail, Zap, Star,
   Plug, Upload, CreditCard, LogOut, ChevronRight, BarChart3,
-  ClipboardList, Settings as SettingsIcon,
+  ClipboardList, Settings as SettingsIcon, ShieldCheck,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import Header from '../components/layout/Header'
@@ -41,6 +41,7 @@ const SIDEBAR = [
   { to: '/settings/analytics',      label: 'Analytics',        Icon: BarChart3 },
   { to: '/settings/reports',        label: 'Technician report', Icon: ClipboardList },
   { to: '/settings/staff',          label: 'Team & roles',     Icon: Users },
+  { to: '/settings/security',       label: 'Security',         Icon: ShieldCheck },
   { to: '/settings/chemicals',      label: 'Chemical library', Icon: Beaker },
   { to: '/settings/job-types',      label: 'Job types',        Icon: Briefcase },
   { to: '/settings/templates',      label: 'Templates',        Icon: Mail },

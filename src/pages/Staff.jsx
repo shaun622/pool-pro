@@ -193,8 +193,8 @@ export default function Staff() {
   async function handleSave() {
     if (!form.name.trim()) return
     const needsAuthSetup = form.email && form.password && (!editing || !editing.user_id)
-    if (needsAuthSetup && form.password.length < 6) {
-      toast.error('Password must be at least 6 characters.')
+    if (needsAuthSetup && form.password.length < 10) {
+      toast.error('Password must be at least 10 characters.')
       return
     }
     setSaving(true)
@@ -284,8 +284,8 @@ export default function Staff() {
 
   async function handleSetPasswordDirectly() {
     if (!editing) return
-    if (!newDirectPassword || newDirectPassword.length < 6) {
-      toast.error('Password must be at least 6 characters.')
+    if (!newDirectPassword || newDirectPassword.length < 10) {
+      toast.error('Password must be at least 10 characters.')
       return
     }
     setSettingPassword(true)
@@ -530,7 +530,7 @@ export default function Staff() {
                     <button
                       type="button"
                       onClick={handleSetPasswordDirectly}
-                      disabled={settingPassword || newDirectPassword.length < 6}
+                      disabled={settingPassword || newDirectPassword.length < 10}
                       className="h-8 px-3 rounded-lg bg-emerald-500 text-white text-[11px] font-semibold hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {settingPassword ? 'Updating…' : 'Update password'}

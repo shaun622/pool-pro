@@ -7,6 +7,7 @@ import { LanguageProvider } from './contexts/LanguageContext'
 import { ToastProvider } from './contexts/ToastContext'
 import AppShell from './components/layout/AppShell'
 import TechShell from './components/layout/TechShell'
+import MfaGate from './components/auth/MfaGate'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
@@ -35,6 +36,7 @@ const SurveyResults = lazy(() => import('./pages/settings/SurveyResults'))
 const Integrations = lazy(() => import('./pages/settings/Integrations'))
 const ImportData = lazy(() => import('./pages/settings/ImportData'))
 const BusinessDetails = lazy(() => import('./pages/settings/BusinessDetails'))
+const Security = lazy(() => import('./pages/settings/Security'))
 const PublicSurvey = lazy(() => import('./pages/PublicSurvey'))
 const Invoices = lazy(() => import('./pages/Invoices'))
 const InvoiceBuilder = lazy(() => import('./pages/InvoiceBuilder'))
@@ -61,7 +63,9 @@ function ProtectedRoute() {
   const { user, loading } = useAuth()
   if (loading) return <Loading />
   if (!user) return <Navigate to="/login" replace />
-  return <Outlet />
+  // Force the TOTP step-up for anyone who has enrolled a factor (fails open for
+  // everyone else — see MfaGate).
+  return <MfaGate><Outlet /></MfaGate>
 }
 
 // Admin guard: requires business ownership or admin staff role
@@ -158,6 +162,7 @@ export default function App() {
                     <Route path="analytics"    element={<Reports />} />
                     <Route path="reports"      element={<TechnicianReport />} />
                     <Route path="staff"        element={<Staff />} />
+                    <Route path="security"     element={<Security />} />
                     <Route path="chemicals"    element={<ChemicalLibrary />} />
                     <Route path="templates"    element={<CommunicationTemplates />} />
                     <Route path="job-types"    element={<JobTypeTemplates />} />
