@@ -10,6 +10,17 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
+    // Internal-only: this endpoint does privileged (service-role) work driven by
+    // a business_id in the body, so it must never be publicly callable. The sole
+    // caller is complete-service, which forwards the service-role key as its
+    // bearer — require that here. No app or anon caller exists.
+    const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+    if (!bearer || bearer !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

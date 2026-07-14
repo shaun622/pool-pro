@@ -18,17 +18,10 @@ export default function PortalLogin() {
     setLoading(true)
 
     try {
-      // Verify this email has a portal account (uses service role, bypasses RLS)
-      const { data, error: checkError } = await supabase.functions.invoke('portal-auth', {
-        body: { action: 'sign-in', email, password },
-      })
-      if (checkError) throw checkError
-      if (data?.error) {
-        setError(data.error)
-        return
-      }
-
-      // Now sign in client-side
+      // Sign in directly. signInWithPassword verifies the password server-side;
+      // we deliberately don't pre-check whether the email exists (that would be an
+      // account-enumeration oracle). A wrong email OR password both surface as the
+      // same generic error below.
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
       if (signInError) throw signInError
 

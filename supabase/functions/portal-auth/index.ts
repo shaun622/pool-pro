@@ -70,42 +70,35 @@ serve(async (req) => {
         })
       }
 
-      // Check if this email already exists in auth (business owner or another client)
-      const { data: existingUsers } = await supabase.auth.admin.listUsers()
-      const existingUser = existingUsers?.users?.find(u => u.email === client.email)
-
-      let userId: string
-
-      if (existingUser) {
-        // Link existing auth user to this client
-        userId = existingUser.id
-      } else {
-        // Create new auth user
-        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-          email: client.email,
-          password,
-          email_confirm: true,
-          user_metadata: { role: 'customer', name: client.name },
+      // Never silently link an EXISTING auth account (a staff/owner login, a
+      // client of another business, a prior signup) to this client record — that
+      // would bind someone else's identity to this portal without their consent.
+      // Only bootstrap a brand-new user; if the email is already registered,
+      // refuse and send them to the login page (mirrors set-staff-password).
+      const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        email: client.email,
+        password,
+        email_confirm: true,
+        user_metadata: { role: 'customer', name: client.name },
+      })
+      if (createError) {
+        const msg = createError.message || ''
+        const isDup = /already/i.test(msg) || /registered/i.test(msg)
+        return new Response(JSON.stringify({
+          error: isDup
+            ? 'An account already exists for this email. Please go to the login page and sign in.'
+            : (msg || 'Failed to create account'),
+        }), {
+          status: isDup ? 409 : 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
-        if (createError) {
-          return new Response(JSON.stringify({ error: createError.message }), {
-            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
-        }
-        userId = newUser.user.id
       }
+      const userId = newUser.user.id
 
-      // Link auth user to client record
+      // Link the new auth user to this client record.
       await supabase
         .from('clients')
         .update({ auth_user_id: userId })
         .eq('id', client.id)
-
-      // Sign them in and return session
-      const { data: session, error: signInError } = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email: client.email,
-      })
 
       // Return success - client will sign in with credentials
       return new Response(JSON.stringify({
@@ -116,32 +109,9 @@ serve(async (req) => {
       })
     }
 
-    // ── Sign in a customer ───────────────────────────────────────
-    if (action === 'sign-in') {
-      if (!email || !password) {
-        return new Response(JSON.stringify({ error: 'Email and password required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
-      // Verify this email belongs to a client
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('id, auth_user_id')
-        .eq('email', email)
-        .not('auth_user_id', 'is', null)
-        .limit(1)
-
-      if (!clients || clients.length === 0) {
-        return new Response(JSON.stringify({ error: 'No customer account found for this email' }), {
-          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
-      return new Response(JSON.stringify({ valid: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    // Sign-in is handled entirely client-side via supabase.auth.signInWithPassword
+    // (which verifies the password). We intentionally expose NO endpoint that
+    // confirms whether an email has an account — that was an enumeration oracle.
 
     return new Response(JSON.stringify({ error: 'Invalid action' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -97,9 +97,12 @@ export default function DocumentUploader({ clientId, poolId, jobId, documents = 
     }
   }
 
-  function getFileUrl(path) {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path)
-    return data?.publicUrl
+  // The documents bucket is private (tenant-scoped RLS), so links are minted as
+  // short-lived signed URLs on demand rather than permanent public URLs.
+  async function openDocument(path) {
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(path, 300)
+    if (error || !data?.signedUrl) return
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
   function formatSize(bytes) {
@@ -155,14 +158,13 @@ export default function DocumentUploader({ clientId, poolId, jobId, documents = 
             <div key={doc.id} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
               <span className="text-lg shrink-0">{icon(doc.file_type)}</span>
               <div className="flex-1 min-w-0">
-                <a
-                  href={getFileUrl(doc.storage_path)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate block hover:text-pool-600 dark:hover:text-pool-400"
+                <button
+                  type="button"
+                  onClick={() => openDocument(doc.storage_path)}
+                  className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate block text-left hover:text-pool-600 dark:hover:text-pool-400"
                 >
                   {doc.name}
-                </a>
+                </button>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Badge variant={CATEGORY_COLORS[doc.category] || 'default'} className="text-[10px]">
                     {CATEGORY_LABELS[doc.category] || 'Other'}

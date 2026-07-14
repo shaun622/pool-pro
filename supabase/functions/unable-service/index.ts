@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Caller is a member of the business if they own it or are an active staff row.
+async function isBusinessMember(admin: any, userId: string, businessId: string) {
+  const { data: biz } = await admin.from('businesses').select('owner_id').eq('id', businessId).maybeSingle()
+  if (biz?.owner_id === userId) return true
+  const { data: st } = await admin.from('staff_members')
+    .select('id').eq('user_id', userId).eq('business_id', businessId).eq('is_active', true).maybeSingle()
+  return !!st
+}
+
 // Sent when a technician marks a pool "unable to service" (locked gate, no
 // access, dog in yard, etc.). UNLIKE complete-service this emails ONLY the
 // business owner — there is no customer report. The point is to hand the
@@ -22,6 +31,19 @@ serve(async (req) => {
 
     const { service_record_id } = await req.json()
 
+    // Authorize: reject anon / customers / outsiders before any service-role work.
+    const callerClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } },
+    )
+    const { data: { user: caller } } = await callerClient.auth.getUser()
+    if (!caller) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { data: record, error: recordError } = await supabase
       .from('service_records')
       .select(`
@@ -33,6 +55,13 @@ serve(async (req) => {
       .single()
 
     if (recordError) throw recordError
+
+    // The caller must own or be active staff of THIS record's business.
+    if (!(await isBusinessMember(supabase, caller.id, record.business_id))) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
     if (record.status !== 'unable_to_service') {
       return new Response(JSON.stringify({ skipped: true, reason: 'not an unable_to_service record' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

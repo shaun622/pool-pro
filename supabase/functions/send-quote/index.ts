@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Caller is a member of the business if they own it or are an active staff row.
+async function isBusinessMember(admin: any, userId: string, businessId: string) {
+  const { data: biz } = await admin.from('businesses').select('owner_id').eq('id', businessId).maybeSingle()
+  if (biz?.owner_id === userId) return true
+  const { data: st } = await admin.from('staff_members')
+    .select('id').eq('user_id', userId).eq('business_id', businessId).eq('is_active', true).maybeSingle()
+  return !!st
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -17,6 +26,21 @@ serve(async (req) => {
 
     const { quote_id } = await req.json()
 
+    // Authorize: reject anon / customers / outsiders. Otherwise anyone with a
+    // known quote_id could email it and flip it to "sent" (which unlocks the
+    // public accept/decline → auto-job path).
+    const callerClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } },
+    )
+    const { data: { user: caller } } = await callerClient.auth.getUser()
+    if (!caller) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { data: quote, error } = await supabase
       .from('quotes')
       .select('*, clients!inner(name, email), businesses!inner(*)')
@@ -24,6 +48,13 @@ serve(async (req) => {
       .single()
 
     if (error) throw error
+
+    // The caller must own or be active staff of THIS quote's business.
+    if (!(await isBusinessMember(supabase, caller.id, quote.business_id))) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     const client = quote.clients
     const business = quote.businesses

@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Caller is a member of the business if they own it or are an active staff row.
+async function isBusinessMember(admin: any, userId: string, businessId: string) {
+  const { data: biz } = await admin.from('businesses').select('owner_id').eq('id', businessId).maybeSingle()
+  if (biz?.owner_id === userId) return true
+  const { data: st } = await admin.from('staff_members')
+    .select('id').eq('user_id', userId).eq('business_id', businessId).eq('is_active', true).maybeSingle()
+  return !!st
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -16,6 +25,22 @@ serve(async (req) => {
     )
 
     const { service_record_id } = await req.json()
+
+    // Authorize: the app invokes this with the tech's access token. Reject anon,
+    // customers, and outsiders before doing any privileged (service-role) work —
+    // otherwise anyone with a known service_record_id could fire (and, via
+    // report_sent_at, permanently suppress) a customer's service report.
+    const callerClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } },
+    )
+    const { data: { user: caller } } = await callerClient.auth.getUser()
+    if (!caller) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Fetch full service record with related data
     const { data: record, error: recordError } = await supabase
@@ -32,6 +57,13 @@ serve(async (req) => {
       .single()
 
     if (recordError) throw recordError
+
+    // The caller must own or be active staff of THIS record's business.
+    if (!(await isBusinessMember(supabase, caller.id, record.business_id))) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     // Idempotent: if the report already went out, don't re-send. A retried
     // offline submit (lost response, then re-Submit) can invoke this twice.
