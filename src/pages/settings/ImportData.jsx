@@ -47,6 +47,12 @@ function parseCSV(text) {
   }
 }
 
+// Normalisers for duplicate detection — mirror the live check in NewClientModal
+// (email compared case-insensitively, phone compared digits-only).
+const normEmail = (s) => (s || '').trim().toLowerCase()
+const normPhone = (s) => (s || '').replace(/\D/g, '')
+const normName = (s) => (s || '').trim().toLowerCase()
+
 export default function ImportData() {
   const { business } = useBusiness()
   const fileRef = useRef(null)
@@ -83,25 +89,54 @@ export default function ImportData() {
     setImporting(true)
     setResult(null)
 
-    let imported = 0, skipped = 0, errors = []
+    // NOTE: supabase-js v2 does NOT throw on a DB error — it resolves with an
+    // { error } object. So we branch on `error` explicitly; the old try/catch
+    // never fired, which meant failed rows were silently counted as imported.
+    let imported = 0, skipped = 0, duplicates = 0, errors = []
 
     try {
       if (importType === 'clients') {
-        for (const row of parsed.rows) {
-          const name = row[columnMap.name]
+        // Pull existing customers once so we can skip duplicates — there is no DB
+        // unique constraint on email/phone, so dedupe is enforced here.
+        const { data: existing } = await supabase
+          .from('clients').select('name, email, phone').eq('business_id', business.id)
+        const seenEmails = new Set()
+        const seenPhones = new Set()
+        const seenNames = new Set()
+        for (const c of (existing || [])) {
+          if (c.email) seenEmails.add(normEmail(c.email))
+          if (c.phone) seenPhones.add(normPhone(c.phone))
+          if (!c.email && !c.phone && c.name) seenNames.add(normName(c.name))
+        }
+
+        for (let i = 0; i < parsed.rows.length; i++) {
+          const row = parsed.rows[i]
+          const name = (row[columnMap.name] || '').trim()
           if (!name) { skipped++; continue }
-          try {
-            await supabase.from('clients').insert({
-              business_id: business.id,
-              name,
-              email: row[columnMap.email] || null,
-              phone: row[columnMap.phone] || null,
-              address: row[columnMap.address] || null,
-            })
+          const email = row[columnMap.email] || null
+          const phone = row[columnMap.phone] || null
+          const e = normEmail(email), p = normPhone(phone), n = normName(name)
+
+          // Duplicate of an existing customer OR of a row already imported from
+          // this same file. Fall back to name only when there's no email/phone.
+          const isDup = (e && seenEmails.has(e)) || (p && seenPhones.has(p)) || (!e && !p && seenNames.has(n))
+          if (isDup) { duplicates++; continue }
+
+          const { error } = await supabase.from('clients').insert({
+            business_id: business.id,
+            name,
+            email,
+            phone,
+            address: row[columnMap.address] || null,
+          })
+          if (error) {
+            if (error.code === '23505') duplicates++
+            else errors.push(`Row ${i + 2}: ${error.message}`) // +2: header row + 1-based
+          } else {
             imported++
-          } catch (err) {
-            if (err.code === '23505') skipped++ // duplicate
-            else { errors.push(`Row ${imported + skipped + errors.length + 1}: ${err.message}`); }
+            if (e) seenEmails.add(e)
+            if (p) seenPhones.add(p)
+            if (!e && !p) seenNames.add(n)
           }
         }
       } else if (importType === 'pools') {
@@ -125,27 +160,36 @@ export default function ImportData() {
           if (ambiguous.has(key)) { errors.push(`Client "${clientName}" is ambiguous — more than one client has this name; assign this pool manually`); continue }
           const clientId = clientMap[key]
           if (!clientId) { errors.push(`Client "${clientName}" not found`); continue }
-          try {
-            await supabase.from('pools').insert({
-              business_id: business.id,
-              client_id: clientId,
-              address,
-              type: row[columnMap.type] || null,
-              volume_litres: row[columnMap.volume_litres] ? Number(row[columnMap.volume_litres]) : null,
-              schedule_frequency: row[columnMap.schedule_frequency] || 'weekly',
-            })
-            imported++
-          } catch (err) {
-            errors.push(`"${address}": ${err.message}`)
-          }
+          const { error } = await supabase.from('pools').insert({
+            business_id: business.id,
+            client_id: clientId,
+            address,
+            // type is NOT NULL — default to 'chlorine' (matches emptyPool) so a
+            // blank column can't silently fail the insert.
+            type: row[columnMap.type] || 'chlorine',
+            volume_litres: row[columnMap.volume_litres] ? Number(row[columnMap.volume_litres]) : null,
+            schedule_frequency: row[columnMap.schedule_frequency] || 'weekly',
+          })
+          if (error) errors.push(`"${address}": ${error.message}`)
+          else imported++
         }
       }
     } catch (err) {
       errors.push(err.message)
     }
 
-    setResult({ imported, skipped, errors })
+    setResult({ imported, skipped, duplicates, errors })
     setImporting(false)
+  }
+
+  function downloadTemplate() {
+    const csv = typeDef.columns.join(',') + '\n'
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${importType}-template.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -167,7 +211,12 @@ export default function ImportData() {
 
           {/* Upload area */}
           <Card>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">Upload CSV File</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Upload CSV File</h3>
+              <button onClick={downloadTemplate} className="text-xs font-semibold text-pool-600 dark:text-pool-400 hover:text-pool-700">
+                Download template
+              </button>
+            </div>
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
               Expected columns: {typeDef.columns.map(c => (
                 <span key={c} className={cn('font-semibold uppercase tracking-wider text-[11px]', typeDef.required.includes(c) && 'font-bold text-gray-600 dark:text-gray-400')}>
@@ -259,6 +308,9 @@ export default function ImportData() {
               <div className="flex gap-4 text-sm">
                 <div><span className="font-bold text-green-600 dark:text-green-400">{result.imported}</span> imported</div>
                 <div><span className="font-bold text-gray-400 dark:text-gray-500">{result.skipped}</span> skipped</div>
+                {result.duplicates > 0 && (
+                  <div><span className="font-bold text-amber-500">{result.duplicates}</span> already existed</div>
+                )}
                 {result.errors.length > 0 && (
                   <div><span className="font-bold text-red-500">{result.errors.length}</span> errors</div>
                 )}
