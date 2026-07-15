@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Building2, Users, Beaker, Briefcase,
+  Building2, Users, Beaker,
   Upload, CreditCard, LogOut, ChevronRight, BarChart3,
   ClipboardList, Settings as SettingsIcon, ShieldCheck, GitBranch, Bell,
 } from 'lucide-react'
@@ -45,7 +45,6 @@ const SIDEBAR = [
   { to: '/settings/notifications',  label: 'Notifications',    Icon: Bell },
   { to: '/settings/security',       label: 'Security',         Icon: ShieldCheck },
   { to: '/settings/chemicals',      label: 'Chemical library', Icon: Beaker },
-  { to: '/settings/job-types',      label: 'Job types',        Icon: Briefcase },
   { to: '/settings/import',         label: 'Import data',      Icon: Upload },
   { to: '/settings/billing',        label: 'Billing',          Icon: CreditCard },
 ]
@@ -59,7 +58,6 @@ const MOBILE_ROW_COLORS = {
   Branches:           'teal',
   Notifications:      'amber',
   'Chemical library': 'emerald',
-  'Job types':        'cyan',
   'Import data':      'indigo',
   Billing:            'amber',
 }
