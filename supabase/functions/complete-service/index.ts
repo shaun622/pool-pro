@@ -47,7 +47,7 @@ serve(async (req) => {
       .from('service_records')
       .select(`
         *,
-        pools!inner(*, clients!inner(name, email)),
+        pools!inner(*, clients!inner(name, email, branch_id, branches(email, notify_enabled))),
         chemical_logs(*),
         service_tasks(*),
         chemicals_added(*),
@@ -419,8 +419,14 @@ serve(async (req) => {
       )
     }
 
-    // 2. Business owner email — daily summary
-    if (business?.email) {
+    // 2. Office summary — head office + the assigned client's branch (if enabled).
+    // The branch (a to-one embed) may be null; each office recipient gets a copy.
+    const branch = (client as any).branches || null
+    const officeRecipients = [...new Set([
+      business?.email,
+      (branch?.notify_enabled && branch?.email) ? branch.email : null,
+    ].filter(Boolean))]
+    if (officeRecipients.length > 0) {
       const techName = staffMember?.name || record.technician_name || 'Technician'
       const today = new Date()
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
@@ -536,9 +542,11 @@ serve(async (req) => {
       </body>
       </html>`
 
-      emailResults.push(
-        await sendEmail(business.email, `✅ ${techName} completed ${pool.address}`, ownerHtml)
-      )
+      for (const to of officeRecipients) {
+        emailResults.push(
+          await sendEmail(to, `✅ ${techName} completed ${pool.address}`, ownerHtml)
+        )
+      }
     }
 
     // Update report_sent_at

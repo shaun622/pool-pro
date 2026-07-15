@@ -48,7 +48,7 @@ serve(async (req) => {
       .from('service_records')
       .select(`
         *,
-        pools!inner(*, clients(name, email, phone, address)),
+        pools!inner(*, clients(name, email, phone, address, branch_id, branches(email, notify_enabled))),
         service_photos(*)
       `)
       .eq('id', service_record_id)
@@ -206,23 +206,29 @@ serve(async (req) => {
       })
     }
 
+    // Office notification → head office + the assigned client's branch (if enabled).
+    const branch = (client as any).branches || null
+    const officeRecipients = [...new Set([
+      business?.email,
+      (branch?.notify_enabled && branch?.email) ? branch.email : null,
+    ].filter(Boolean))]
     const emailResults: any[] = []
-    if (business?.email) {
+    if (officeRecipients.length > 0) {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
-          to: [business.email],
+          to: officeRecipients,
           subject: `⚠ Unable to service — ${pool.address} — ${serviceDateShort}`,
           html,
         }),
       })
       const result = await res.json()
       if (!res.ok) console.error('Resend error:', JSON.stringify(result))
-      emailResults.push({ to: business.email, status: res.status })
+      emailResults.push({ to: officeRecipients, status: res.status })
     } else {
-      console.warn('No business email — admin notification not sent')
+      console.warn('No office email — notification not sent')
     }
 
     // Mark the notification as sent (reuses report_sent_at — same column the
