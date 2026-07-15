@@ -6,7 +6,7 @@
 -- table. New-table template per CLAUDE.md (table + grants + RLS + policy).
 
 -- 1. Table
-create table public.branches (
+create table if not exists public.branches (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null references businesses(id),
   name text not null,
@@ -24,6 +24,7 @@ grant select, insert, update, delete on public.branches to service_role;
 alter table public.branches enable row level security;
 
 -- 4. Policy — standard business-scoped single policy.
+drop policy if exists "Business can manage branches" on public.branches;
 create policy "Business can manage branches" on public.branches
   for all
   using (business_id = current_business_id())

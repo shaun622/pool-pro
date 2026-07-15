@@ -197,7 +197,6 @@ function FitBounds({ stops }) {
 // ─── Top-level page ────────────────────────────
 export default function Route() {
   const { business, loading: bizLoading } = useBusiness()
-  const { branches } = useBranches()
   if (bizLoading) return <LoadingPage />
   return <Schedule business={business} />
 }
@@ -205,6 +204,7 @@ export default function Route() {
 function Schedule({ business }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { branches } = useBranches()
   const [view, setView] = useState('month') // 'month' | 'week' | 'day' | 'map'
   const [oneOffOpen, setOneOffOpen] = useState(false) // "Service a one-off visit" picker
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date()))
