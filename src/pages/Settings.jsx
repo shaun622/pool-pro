@@ -1,8 +1,8 @@
 import { Suspense } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Building2, Users, Beaker, Briefcase, Mail, Zap, Star,
-  Plug, Upload, CreditCard, LogOut, ChevronRight, BarChart3,
+  Building2, Users, Beaker, Briefcase,
+  Upload, CreditCard, LogOut, ChevronRight, BarChart3,
   ClipboardList, Settings as SettingsIcon, ShieldCheck, GitBranch, Bell,
 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
@@ -46,10 +46,6 @@ const SIDEBAR = [
   { to: '/settings/security',       label: 'Security',         Icon: ShieldCheck },
   { to: '/settings/chemicals',      label: 'Chemical library', Icon: Beaker },
   { to: '/settings/job-types',      label: 'Job types',        Icon: Briefcase },
-  { to: '/settings/templates',      label: 'Templates',        Icon: Mail },
-  { to: '/settings/automations',    label: 'Automations',      Icon: Zap },
-  { to: '/settings/surveys',        label: 'Survey results',   Icon: Star },
-  { to: '/settings/integrations',   label: 'Integrations',     Icon: Plug },
   { to: '/settings/import',         label: 'Import data',      Icon: Upload },
   { to: '/settings/billing',        label: 'Billing',          Icon: CreditCard },
 ]
@@ -64,10 +60,6 @@ const MOBILE_ROW_COLORS = {
   Notifications:      'amber',
   'Chemical library': 'emerald',
   'Job types':        'cyan',
-  Templates:          'blue',
-  Automations:        'amber',
-  'Survey results':   'pink',
-  Integrations:       'teal',
   'Import data':      'indigo',
   Billing:            'amber',
 }
