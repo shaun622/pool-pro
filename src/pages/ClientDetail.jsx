@@ -12,6 +12,7 @@ import EmptyState from '../components/ui/EmptyState'
 import { useClients } from '../hooks/useClients'
 import { usePools } from '../hooks/usePools'
 import { useStaff } from '../hooks/useStaff'
+import { useBranches } from '../hooks/useBranches'
 import { useBusiness } from '../hooks/useBusiness'
 import StaffCard from '../components/ui/StaffCard'
 import LocationField from '../components/ui/LocationField'
@@ -90,6 +91,7 @@ export default function ClientDetail({ clientId }) {
   const { updateClient, deleteClient } = useClients()
   const { pools, loading: poolsLoading, createPool, updatePool, deletePool, refetch: refetchPools } = usePools(id)
   const { staff: staffList, loading: staffLoading } = useStaff()
+  const { branches } = useBranches()
   const { business } = useBusiness()
 
   const [client, setClient] = useState(null)
@@ -108,7 +110,7 @@ export default function ClientDetail({ clientId }) {
 
   // Edit client modal
   const [editOpen, setEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', service_rate: '', assigned_staff_id: '', lat: null, lng: null })
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', address: '', notes: '', service_rate: '', assigned_staff_id: '', branch_id: '', lat: null, lng: null })
   const [editSaving, setEditSaving] = useState(false)
 
   // Delete confirmation
@@ -163,6 +165,7 @@ export default function ClientDetail({ clientId }) {
           notes: data.notes || '',
           service_rate: data.service_rate || '',
           assigned_staff_id: data.assigned_staff_id || '',
+          branch_id: data.branch_id || '',
           lat: data.latitude ?? null,
           lng: data.longitude ?? null,
         })
@@ -291,6 +294,7 @@ export default function ClientDetail({ clientId }) {
           ? null
           : Number(editForm.service_rate),
         assigned_staff_id: editForm.assigned_staff_id || null,
+        branch_id: editForm.branch_id || null,
         latitude: editForm.lat ?? null,
         longitude: editForm.lng ?? null,
         geocoded_at: editForm.lat != null ? new Date().toISOString() : null,
@@ -916,6 +920,23 @@ export default function ClientDetail({ clientId }) {
                 options={[
                   { value: '', label: 'Not assigned' },
                   ...staffList.filter(s => s.is_active).map(s => ({ value: s.id, label: s.name })),
+                ]}
+              />
+            </div>
+          )}
+
+          {/* Branch — routes this client's calendar + report notifications */}
+          {branches.length > 0 && (
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Branch</h3>
+              <Select
+                label="Branch"
+                name="branch_id"
+                value={editForm.branch_id}
+                onChange={handleEditChange}
+                options={[
+                  { value: '', label: 'No branch' },
+                  ...branches.map(b => ({ value: b.id, label: b.name })),
                 ]}
               />
             </div>

@@ -14,6 +14,7 @@ import OneOffVisitPicker from '../components/ui/OneOffVisitPicker'
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
 import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, Phone, Plus, Users, X } from 'lucide-react'
 import { useBusiness } from '../hooks/useBusiness'
+import { useBranches } from '../hooks/useBranches'
 import { supabase } from '../lib/supabase'
 import { cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
@@ -196,6 +197,7 @@ function FitBounds({ stops }) {
 // ─── Top-level page ────────────────────────────
 export default function Route() {
   const { business, loading: bizLoading } = useBusiness()
+  const { branches } = useBranches()
   if (bizLoading) return <LoadingPage />
   return <Schedule business={business} />
 }
@@ -255,6 +257,15 @@ function Schedule({ business }) {
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
   })
+  // Branch multi-select — same shape as the crew filter above. A Set of branch
+  // ids ('none' = no branch) that are hidden. Empty = all branches shown.
+  const [hiddenBranches, setHiddenBranches] = useState(() => new Set())
+  const toggleBranch = (id) => setHiddenBranches(prev => {
+    if (id === '__all__') return new Set()
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
 
   // Job-type templates for the recurring edit modal's picker (same source as
   // the client profile's edit flow).
@@ -291,7 +302,7 @@ function Schedule({ business }) {
     const [jobsRes, poolsRes, profilesRes, staffRes, servicesRes] = await Promise.all([
       supabase
         .from('jobs')
-        .select('*, clients(name, email, phone), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
+        .select('*, clients(name, email, phone, branch_id), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
         .gte('scheduled_date', ymd(from))
         .lte('scheduled_date', ymd(to))
@@ -299,11 +310,11 @@ function Schedule({ business }) {
         .order('scheduled_time'),
       supabase
         .from('pools')
-        .select('*, clients(name, email, phone), staff:staff_members!assigned_staff_id(id, name, photo_url)')
+        .select('*, clients(name, email, phone, branch_id), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id),
       supabase
         .from('recurring_job_profiles')
-        .select('*, clients(name, email, phone), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
+        .select('*, clients(name, email, phone, branch_id), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
         .eq('is_active', true),
       supabase
@@ -613,20 +624,22 @@ function Schedule({ business }) {
   // Apply the crew checkboxes to the grid + today list. The crew card always
   // sees the unfiltered set so every crew stays toggleable.
   // A stop is hidden when its crew's checkbox is unchecked.
-  const stopMatchesFilter = (s) => !hiddenCrews.has(s.assigned_staff_id || 'unassigned')
+  const stopMatchesFilter = (s) =>
+    !hiddenCrews.has(s.assigned_staff_id || 'unassigned') &&
+    !hiddenBranches.has(s.branch_id || 'none')
   const filteredStopsByDay = useMemo(() => {
-    if (hiddenCrews.size === 0) return stopsByDay
+    if (hiddenCrews.size === 0 && hiddenBranches.size === 0) return stopsByDay
     const filtered = new Map()
     for (const [k, stops] of stopsByDay.entries()) {
       filtered.set(k, stops.filter(stopMatchesFilter))
     }
     return filtered
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopsByDay, hiddenCrews])
+  }, [stopsByDay, hiddenCrews, hiddenBranches])
   const filteredTodayStops = useMemo(
     () => todayStops.filter(stopMatchesFilter),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todayStops, hiddenCrews],
+    [todayStops, hiddenCrews, hiddenBranches],
   )
 
   const weekEnd = addDays(weekStart, 6)
@@ -703,6 +716,9 @@ function Schedule({ business }) {
           {todayStops.length > 0 && (
             <TechsOnService stops={todayStops} allStaff={allStaff} scope="day" hiddenCrews={hiddenCrews} onToggle={toggleCrew} />
           )}
+          {todayStops.length > 0 && branches.length > 0 && (
+            <BranchFilter stops={todayStops} branches={branches} scope="day" hiddenBranches={hiddenBranches} onToggle={toggleBranch} />
+          )}
           <TodayList stops={filteredTodayStops} onStopSelect={handleStopSelect} variant="standalone" />
         </>
       ) : view === 'month' ? (
@@ -717,6 +733,9 @@ function Schedule({ business }) {
           {allWeekStops.length > 0 && (
             <TechsOnService stops={allWeekStops} allStaff={allStaff} scope="month" hiddenCrews={hiddenCrews} onToggle={toggleCrew} />
           )}
+          {allWeekStops.length > 0 && branches.length > 0 && (
+            <BranchFilter stops={allWeekStops} branches={branches} scope="month" hiddenBranches={hiddenBranches} onToggle={toggleBranch} />
+          )}
         </>
       ) : (
         <>
@@ -730,6 +749,9 @@ function Schedule({ business }) {
           </div>
           {allWeekStops.length > 0 && (
             <TechsOnService stops={allWeekStops} allStaff={allStaff} scope="week" hiddenCrews={hiddenCrews} onToggle={toggleCrew} />
+          )}
+          {allWeekStops.length > 0 && branches.length > 0 && (
+            <BranchFilter stops={allWeekStops} branches={branches} scope="week" hiddenBranches={hiddenBranches} onToggle={toggleBranch} />
           )}
           {/* Selected-day list. Default = today; clicking a day header
               or "+N more" in the week grid flips this section to that
@@ -1263,6 +1285,78 @@ function TechsOnService({ stops, allStaff = [], scope = 'day', hiddenCrews, onTo
   )
 }
 
+// ─── Branch filter (multi-select checkboxes) ──
+// Mirrors TechsOnService: one row per branch + a "No branch" row, each with a
+// checkbox + stop count for the active period. Unchecking hides that branch's
+// stops. Only shown when the business has at least one branch.
+function BranchFilter({ stops, branches = [], scope = 'day', hiddenBranches, onToggle }) {
+  const counts = new Map()
+  let none = 0
+  for (const stop of stops) {
+    if (stop.branch_id) counts.set(stop.branch_id, (counts.get(stop.branch_id) || 0) + 1)
+    else none += 1
+  }
+  const rows = branches
+    .map(b => ({ id: b.id, name: b.name || 'Branch', count: counts.get(b.id) || 0 }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  if (rows.length === 0) return null
+
+  const totalStops = stops.length
+  const eyebrowLabel = scope === 'week' ? 'Branches this week' : scope === 'month' ? 'Branches this month' : 'Branches today'
+
+  function BranchItem({ id, name, count }) {
+    const checked = !hiddenBranches.has(id)
+    return (
+      <label className={cn(
+        'inline-flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border cursor-pointer transition-colors select-none',
+        checked
+          ? 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
+          : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-55',
+      )}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggle(id)}
+          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-pool-500 focus:ring-pool-500/30"
+        />
+        <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-pool-400" />
+        <span className="text-sm font-semibold leading-none text-gray-900 dark:text-gray-100">{name}</span>
+        <span className="text-xs tabular-nums leading-none text-gray-500 dark:text-gray-400">· {count}</span>
+      </label>
+    )
+  }
+
+  return (
+    <Card className="!p-0 overflow-hidden mb-4">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400 inline-flex items-center gap-2">
+          <MapIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
+          {eyebrowLabel}
+        </p>
+        <div className="flex items-center gap-2">
+          {hiddenBranches.size > 0 && (
+            <button
+              onClick={() => onToggle('__all__')}
+              className="px-2 h-6 rounded-full bg-pool-50 dark:bg-pool-950/40 text-pool-700 dark:text-pool-300 text-[10.5px] font-semibold uppercase tracking-wider hover:bg-pool-100 transition-colors"
+            >
+              Show all
+            </button>
+          )}
+          <span className="inline-flex items-center justify-center min-w-[24px] px-2 h-6 rounded-full bg-gray-100 dark:bg-gray-800 text-xs font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+            {totalStops}
+          </span>
+        </div>
+      </div>
+      <div className="px-4 py-3 flex flex-wrap gap-2">
+        {rows.map(r => (
+          <BranchItem key={r.id} id={r.id} name={r.name} count={r.count} />
+        ))}
+        <BranchItem id="none" name="No branch" count={none} />
+      </div>
+    </Card>
+  )
+}
+
 function TechAvatar({ photo, name }) {
   const initials = (name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
   if (photo) {
@@ -1572,6 +1666,7 @@ function jobToStop(j) {
     tech_name: j.staff?.name || null,
     tech_photo: j.staff?.photo_url || null,
     assigned_staff_id: j.assigned_staff_id || null,
+    branch_id: j.clients?.branch_id ?? null,
   }
 }
 
@@ -1606,6 +1701,7 @@ function profileToStop(profile, occurrenceDate) {
     tech_name: profile.staff?.name || null,
     tech_photo: profile.staff?.photo_url || null,
     assigned_staff_id: profile.assigned_staff_id || null,
+    branch_id: profile.clients?.branch_id ?? null,
   }
 }
 
@@ -1656,6 +1752,7 @@ function poolToStop(p, { isOverdue = false, daysOverdue = 0, isCompleted = false
     tech_name: p.staff?.name || null,
     tech_photo: p.staff?.photo_url || null,
     assigned_staff_id: p.assigned_staff_id || null,
+    branch_id: p.clients?.branch_id ?? null,
   }
 }
 

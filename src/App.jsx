@@ -37,6 +37,8 @@ const Integrations = lazy(() => import('./pages/settings/Integrations'))
 const ImportData = lazy(() => import('./pages/settings/ImportData'))
 const BusinessDetails = lazy(() => import('./pages/settings/BusinessDetails'))
 const Security = lazy(() => import('./pages/settings/Security'))
+const Branches = lazy(() => import('./pages/settings/Branches'))
+const Notifications = lazy(() => import('./pages/settings/Notifications'))
 const PublicSurvey = lazy(() => import('./pages/PublicSurvey'))
 const Invoices = lazy(() => import('./pages/Invoices'))
 const InvoiceBuilder = lazy(() => import('./pages/InvoiceBuilder'))
@@ -163,6 +165,8 @@ export default function App() {
                     <Route path="reports"      element={<TechnicianReport />} />
                     <Route path="staff"        element={<Staff />} />
                     <Route path="security"     element={<Security />} />
+                    <Route path="branches"     element={<Branches />} />
+                    <Route path="notifications" element={<Notifications />} />
                     <Route path="chemicals"    element={<ChemicalLibrary />} />
                     <Route path="templates"    element={<CommunicationTemplates />} />
                     <Route path="job-types"    element={<JobTypeTemplates />} />
