@@ -793,6 +793,7 @@ function Schedule({ business }) {
         stopNumber={1}
         onUpdated={() => { fetchData(); setSelectedStop(null) }}
         staffList={allStaff}
+        branches={branches}
         onEditRecurring={handleEditRecurring}
       />
 

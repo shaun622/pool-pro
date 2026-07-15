@@ -59,7 +59,7 @@ const STATUS_VARIANTS = {
   overdue: 'danger',
 }
 
-export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated, staffList = [], onEditRecurring }) {
+export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpdated, staffList = [], branches = [], onEditRecurring }) {
   const toast = useToast()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
@@ -67,6 +67,8 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
   const [saving, setSaving] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [pendingStaffId, setPendingStaffId] = useState(null)
+  const [assigningBranch, setAssigningBranch] = useState(false)
+  const [pendingBranchId, setPendingBranchId] = useState(null)
   const [coverPick, setCoverPick] = useState(false) // "Cover this visit" one-off substitute picker
   const [coverStaffId, setCoverStaffId] = useState('')
   const [covering, setCovering] = useState(false)
@@ -720,6 +722,25 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
     }
   }
 
+  // Branch is stored on the CLIENT (clients.branch_id), so this writes clients
+  // keyed on stop.client_id — NOT the pool/job like handleAssign. Mirrors
+  // handleSaveClient's target.
+  async function handleAssignBranch(branchId) {
+    if (!stop.client_id) { toast.error('No client linked to this stop'); return }
+    setAssigningBranch(true)
+    try {
+      const { error } = await supabase.from('clients').update({ branch_id: branchId || null }).eq('id', stop.client_id)
+      if (error) throw error
+      toast.success('Branch updated')
+      onUpdated?.()
+    } catch (err) {
+      console.error('Branch assign error:', err)
+      toast.error(err.message || 'Failed to update branch')
+    } finally {
+      setAssigningBranch(false)
+    }
+  }
+
   function handleDeleteClick() {
     if (!stop) return
     const isProjected = !!stop.projected || (typeof stop.id === 'string' && String(stop.id).startsWith('profile-'))
@@ -1251,6 +1272,62 @@ export default function StopDetailModal({ open, onClose, stop, stopNumber, onUpd
               </div>
             )}
 
+            {/* Branch assign — writes clients.branch_id (client-level; no per-visit override) */}
+            {branches.length > 0 && (
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0 text-pool-600 dark:text-pool-400">
+                    <BranchIcon />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Assigned Branch</p>
+                    <CustomSelect
+                      inline
+                      value={pendingBranchId !== null ? pendingBranchId : (stop.branch_id || '')}
+                      onChange={e => {
+                        const newVal = e.target.value
+                        if (newVal === (stop.branch_id || '')) {
+                          setPendingBranchId(null)
+                        } else {
+                          setPendingBranchId(newVal)
+                        }
+                      }}
+                      disabled={assigningBranch}
+                      placeholder="No branch"
+                      options={[{ value: '', label: 'No branch' }, ...branches.map(b => ({ value: b.id, label: b.name }))]}
+                      className="mt-1"
+                    />
+                  </div>
+                  {assigningBranch && (
+                    <div className="w-4 h-4 border-2 border-pool-500 border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+                {pendingBranchId !== null && (
+                  <div className="flex items-center gap-2 mt-2 ml-12 animate-scale-in">
+                    <button
+                      onClick={() => setPendingBranchId(null)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors min-h-[32px]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await handleAssignBranch(pendingBranchId)
+                        setPendingBranchId(null)
+                      }}
+                      disabled={assigningBranch}
+                      className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-pool-600 hover:bg-pool-700 transition-colors min-h-[32px] flex items-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Confirm
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Quick edit save/cancel bar */}
             {quickEdit && (
               <div className="px-4 py-3 flex gap-2">
@@ -1657,5 +1734,10 @@ const NoteIcon = () => (
 const UserIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+  </svg>
+)
+const BranchIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
   </svg>
 )
