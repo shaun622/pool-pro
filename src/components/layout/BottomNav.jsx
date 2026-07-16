@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Home, Calendar, ClipboardList, Users, Settings as SettingsIcon,
-  FileText, Receipt, Repeat, MoreHorizontal,
+  Repeat, MoreHorizontal,
 } from 'lucide-react'
 import MoreSheet from './MoreSheet'
 import { cn } from '../../lib/utils'
@@ -18,8 +18,6 @@ const primaryTabs = [
 // Items shown in the "More" sheet. Analytics moved into Settings, so
 // it's reachable via /settings/analytics — no longer a separate row.
 const moreItems = [
-  { path: '/quotes',         label: 'Quotes',     Icon: FileText,   color: 'amber'  },
-  { path: '/invoices',       label: 'Invoices',   Icon: Receipt,    color: 'blue'   },
   { path: '/recurring-jobs', label: 'Recurring',  Icon: Repeat,     color: 'cyan'   },
   { path: '/settings',       label: 'Settings',   Icon: SettingsIcon, color: 'gray' },
 ]
