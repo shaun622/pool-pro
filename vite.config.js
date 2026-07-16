@@ -55,18 +55,15 @@ export default defineConfig({
               expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 7 },
               cacheableResponse: { statuses: [0, 200] }
             }
-          },
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24
-              }
-            }
           }
+          // NOTE: a general `*.supabase.co/*` NetworkFirst rule was removed here.
+          // It intercepted the REST data API AND the Auth API and, with no
+          // networkTimeoutSeconds, NetworkFirst waits for the network forever —
+          // so a single stalled request (flaky network / tab waking from idle)
+          // left the awaited supabase query hanging and pages stuck on an
+          // infinite spinner (a reload "fixed" it). API + auth calls now go
+          // straight to the network; offline DATA is served by the IndexedDB
+          // layer (src/lib/offlineStore.js), which is independent of the SW.
         ]
       }
     })
