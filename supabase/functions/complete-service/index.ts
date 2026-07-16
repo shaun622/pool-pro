@@ -218,6 +218,39 @@ serve(async (req) => {
       s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const notesEscaped = record.notes ? esc(record.notes) : ''
 
+    // ── Customisable email copy (Settings → Notifications) ──────────────────
+    // business.report_email_config = { customer: {subject,intro,signoff},
+    // admin: {subject,intro,signoff} }. Blank fields fall back to defaults below.
+    const emailCfg: any = (business as any)?.report_email_config || {}
+    const cfgCustomer = emailCfg.customer || {}
+    const cfgAdmin = emailCfg.admin || {}
+    const techNameShared = staffMember?.name || record.technician_name || 'Technician'
+    const tmplVars: Record<string, string> = {
+      client_name: client.name || '',
+      pool_address: pool.address || '',
+      business_name: business?.name || '',
+      technician_name: techNameShared,
+      service_date: serviceDate,
+      next_service_date: nextServiceDate || '',
+    }
+    // Custom copy is treated as PLAIN TEXT: substitute {tokens}, then HTML-escape
+    // the whole thing (so a stray "<" can't break the layout) and turn newlines
+    // into <br>. Returns '' for a blank template so callers fall back to default.
+    const renderCopy = (t: any): string => {
+      if (!t || !String(t).trim()) return ''
+      const sub = String(t).replace(/\{(\w+)\}/g, (m, k) => (tmplVars[k] ?? m))
+      return esc(sub).replace(/\n/g, '<br>')
+    }
+    // Subjects are plain text — substitute only (no HTML escaping); blank → fallback.
+    const renderSubject = (t: any, fallback: string): string => {
+      if (!t || !String(t).trim()) return fallback
+      return String(t).replace(/\{(\w+)\}/g, (m, k) => (tmplVars[k] ?? m))
+    }
+    const customerIntroHtml = renderCopy(cfgCustomer.intro)
+    const customerSignoffHtml = renderCopy(cfgCustomer.signoff)
+    const adminIntroHtml = renderCopy(cfgAdmin.intro)
+    const adminSignoffHtml = renderCopy(cfgAdmin.signoff)
+
     const html = `
     <!DOCTYPE html>
     <html>
@@ -233,9 +266,9 @@ serve(async (req) => {
         <div style="background:white;padding:28px 24px 20px;">
           <p style="margin:0 0 4px;font-size:16px;color:#111827;">Hi ${esc(client.name)},</p>
           <p style="margin:0 0 16px;font-size:15px;color:#6B7280;line-height:1.5;">
-            ${isOneOff
+            ${customerIntroHtml || (isOneOff
               ? `We made an extra one-off visit to your pool at <strong>${esc(pool.address)}</strong>. Here's a summary of what we did.`
-              : `Your pool at <strong>${esc(pool.address)}</strong> has been serviced. Here's a summary of everything we did today.`}
+              : `Your pool at <strong>${esc(pool.address)}</strong> has been serviced. Here's a summary of everything we did today.`)}
           </p>
 
           ${pool.portal_token ? `
@@ -373,6 +406,13 @@ serve(async (req) => {
         </div>
         ` : ''}
 
+        ${customerSignoffHtml ? `
+        <!-- Custom sign-off -->
+        <div style="background:white;padding:0 24px 24px;">
+          <p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">${customerSignoffHtml}</p>
+        </div>
+        ` : ''}
+
         <!-- Footer -->
         <div style="padding:20px 24px;text-align:center;font-size:12px;color:#9CA3AF;">
           <p style="margin:0 0 4px;">${esc(business?.name) || 'PoolPro'}</p>
@@ -415,7 +455,7 @@ serve(async (req) => {
     // 1. Client email — service report
     if (client.email) {
       emailResults.push(
-        await sendEmail(client.email, `Pool Service Complete — ${pool.address} — ${serviceDateShort}`, html)
+        await sendEmail(client.email, renderSubject(cfgCustomer.subject, `Pool Service Complete — ${pool.address} — ${serviceDateShort}`), html)
       )
     }
 
@@ -460,7 +500,7 @@ serve(async (req) => {
           </div>
           <div style="background:white;padding:24px;">
             <p style="margin:0 0 16px;font-size:15px;color:#374151;">
-              <strong>${esc(techName)}</strong> just completed a service at <strong>${esc(pool.address)}</strong> for ${esc(client.name)}.
+              ${adminIntroHtml || `<strong>${esc(techName)}</strong> just completed a service at <strong>${esc(pool.address)}</strong> for ${esc(client.name)}.`}
             </p>
 
             ${record.notes ? `
@@ -535,6 +575,7 @@ serve(async (req) => {
             </table>
             ` : ''}
           </div>
+          ${adminSignoffHtml ? `<div style="padding:0 24px 16px;"><p style="margin:0;font-size:13px;color:#374151;line-height:1.5;">${adminSignoffHtml}</p></div>` : ''}
           <div style="padding:16px 24px;text-align:center;font-size:11px;color:#9CA3AF;">
             ${esc(business?.name) || 'PoolPro'} — Service notification
           </div>
@@ -544,7 +585,7 @@ serve(async (req) => {
 
       for (const to of officeRecipients) {
         emailResults.push(
-          await sendEmail(to, `✅ ${techName} completed ${pool.address}`, ownerHtml)
+          await sendEmail(to, renderSubject(cfgAdmin.subject, `✅ ${techName} completed ${pool.address}`), ownerHtml)
         )
       }
     }
