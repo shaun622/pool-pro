@@ -1,6 +1,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// ⚠️  The two report-email templates below (customer `html`, admin `ownerHtml`)
+// are mirrored in src/lib/serviceReportEmail.js, which renders the LIVE PREVIEW
+// in Settings → Notifications. If you change the markup, wording defaults, or the
+// section show/hide flags here, mirror it there (and vice-versa).
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -231,8 +236,15 @@ serve(async (req) => {
       business_name: business?.name || '',
       technician_name: techNameShared,
       service_date: serviceDate,
+      service_date_short: serviceDateShort,
       next_service_date: nextServiceDate || '',
     }
+    // Section show/hide flags + button labels (Settings → Notifications; mirrors
+    // src/lib/serviceReportEmail.js). A flag of `false` hides that section.
+    const showC = (k: string) => cfgCustomer.show?.[k] !== false
+    const showA = (k: string) => cfgAdmin.show?.[k] !== false
+    const portalLabel = esc((cfgCustomer.portalButtonLabel && String(cfgCustomer.portalButtonLabel).trim()) || 'Customer Portal')
+    const historyLabel = esc((cfgCustomer.historyButtonLabel && String(cfgCustomer.historyButtonLabel).trim()) || 'View Service History')
     // Custom copy is treated as PLAIN TEXT: substitute {tokens}, then HTML-escape
     // the whole thing (so a stray "<" can't break the layout) and turn newlines
     // into <br>. Returns '' for a blank template so callers fall back to default.
@@ -271,15 +283,15 @@ serve(async (req) => {
               : `Your pool at <strong>${esc(pool.address)}</strong> has been serviced. Here's a summary of everything we did today.`)}
           </p>
 
-          ${pool.portal_token ? `
+          ${pool.portal_token && showC('portalButton') ? `
           <!-- Portal button top -->
           <div style="margin-bottom:20px;text-align:center;">
-            <a href="${Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;">Customer Portal</a>
+            <a href="${Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;">${portalLabel}</a>
           </div>
           ` : ''}
 
           <!-- Staff Card -->
-          ${staffMember ? `
+          ${staffMember && showC('staffCard') ? `
           <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-bottom:16px;">
             <table style="width:100%;">
               <tr>
@@ -300,6 +312,7 @@ serve(async (req) => {
           ` : ''}
 
           <!-- Service info bar -->
+          ${showC('infoBar') ? `
           <div style="background:#F9FAFB;border-radius:8px;padding:12px 16px;display:flex;">
             <table style="width:100%;font-size:13px;color:#6B7280;">
               <tr>
@@ -311,10 +324,11 @@ serve(async (req) => {
               ${pool.type ? `<tr><td style="padding:2px 0;"><strong style="color:#374151;">Pool type:</strong> ${pool.type}</td></tr>` : ''}
             </table>
           </div>
+          ` : ''}
         </div>
 
         <!-- Pool Photo -->
-        ${photoUrl ? `
+        ${photoUrl && showC('photo') ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Pool & Test Kit Photo</h3>
           <img src="${photoUrl}" alt="Pool and test kit" width="520" style="width:100%;max-width:520px;height:auto;display:block;border-radius:8px;border:1px solid #E5E7EB;" />
@@ -322,7 +336,7 @@ serve(async (req) => {
         ` : ''}
 
         <!-- Chemical Readings -->
-        ${chemicalRows ? `
+        ${chemicalRows && showC('readings') ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Chemical Readings</h3>
           <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #E5E7EB;border-radius:8px;">
@@ -339,7 +353,7 @@ serve(async (req) => {
         ` : ''}
 
         <!-- Tasks (completed only) -->
-        ${completedTaskCount > 0 ? `
+        ${completedTaskCount > 0 && showC('tasks') ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Tasks Completed <span style="font-weight:400;color:#9CA3AF;font-size:13px;">(${completedTaskCount})</span></h3>
           <div style="background:#F9FAFB;border-radius:8px;padding:12px 16px;">
@@ -351,7 +365,7 @@ serve(async (req) => {
         ` : ''}
 
         <!-- Chemicals Added -->
-        ${chemicalsAdded.length > 0 ? `
+        ${chemicalsAdded.length > 0 && showC('chemicals') ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Chemicals Added</h3>
           ${chemicalsAdded.map((c: any) => {
@@ -382,7 +396,7 @@ serve(async (req) => {
         ` : ''}
 
         <!-- Notes -->
-        ${record.notes ? `
+        ${record.notes && showC('notes') ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 8px;font-size:15px;font-weight:600;color:#111827;">Notes & Recommendations</h3>
           <p style="font-size:14px;color:#374151;line-height:1.5;margin:0;background:#F9FAFB;border-radius:8px;padding:12px 16px;">${notesEscaped}</p>
@@ -390,7 +404,7 @@ serve(async (req) => {
         ` : ''}
 
         <!-- Next Service (suppressed for one-off visits — not part of the schedule) -->
-        ${nextServiceDate && !isOneOff ? `
+        ${nextServiceDate && !isOneOff && showC('nextService') ? `
         <div style="background:white;padding:0 24px 24px;">
           <div style="background:${brandColour}10;border:1px solid ${brandColour}30;border-radius:8px;padding:16px;text-align:center;">
             <p style="margin:0 0 4px;font-size:13px;color:#6B7280;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Next Service${scheduleLabel ? ` (${scheduleLabel})` : ''}</p>
@@ -400,9 +414,9 @@ serve(async (req) => {
         ` : ''}
 
         <!-- Portal link -->
-        ${pool.portal_token ? `
+        ${pool.portal_token && showC('historyLink') ? `
         <div style="background:white;padding:0 24px 24px;text-align:center;">
-          <a href="${Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">View Service History</a>
+          <a href="${Deno.env.get('SITE_URL') || 'https://pool-pro-2jk.pages.dev'}/portal/${pool.portal_token}" style="display:inline-block;background:${brandColour};color:white;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">${historyLabel}</a>
         </div>
         ` : ''}
 
@@ -503,7 +517,7 @@ serve(async (req) => {
               ${adminIntroHtml || `<strong>${esc(techName)}</strong> just completed a service at <strong>${esc(pool.address)}</strong> for ${esc(client.name)}.`}
             </p>
 
-            ${record.notes ? `
+            ${record.notes && showA('notesCallout') ? `
             <!-- Tech Notes & Issues — red callout so the office sees flagged issues immediately -->
             <div style="background:#FEF2F2;border:1px solid #FECACA;border-left:4px solid #DC2626;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
               <p style="margin:0 0 5px;font-size:12px;color:#991B1B;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">&#9888;&#65039; Notes &amp; issues from ${techName}</p>
@@ -512,6 +526,7 @@ serve(async (req) => {
             ` : ''}
 
             <!-- Quick stats -->
+            ${showA('stats') ? `
             <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
               <tr>
                 <td style="padding:12px;text-align:center;background:#F0FDF4;border-radius:8px 0 0 8px;">
@@ -528,8 +543,10 @@ serve(async (req) => {
                 </td>
               </tr>
             </table>
+            ` : ''}
 
             <!-- Service summary -->
+            ${showA('summary') ? `
             <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin-bottom:16px;">
               <table style="width:100%;font-size:13px;color:#374151;">
                 <tr><td style="padding:3px 0;color:#6B7280;">Client</td><td style="padding:3px 0;text-align:right;font-weight:600;">${esc(client.name)}</td></tr>
@@ -539,15 +556,16 @@ serve(async (req) => {
                 <tr><td style="padding:3px 0;color:#6B7280;">Chemicals added</td><td style="padding:3px 0;text-align:right;font-weight:600;">${chemicalsAdded.length}</td></tr>
               </table>
             </div>
+            ` : ''}
 
-            ${photoUrl ? `
+            ${photoUrl && showA('photo') ? `
             <div style="margin-bottom:16px;">
               <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Pool Photo</p>
               <img src="${photoUrl}" alt="Pool and test kit" width="512" style="width:100%;max-width:512px;height:auto;display:block;border-radius:6px;border:1px solid #E5E7EB;" />
             </div>
             ` : ''}
 
-            ${chemicalRows ? `
+            ${chemicalRows && showA('readings') ? `
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Readings</p>
             <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:16px;">
               <thead><tr style="background:#F9FAFB;">
@@ -559,7 +577,7 @@ serve(async (req) => {
             </table>
             ` : ''}
 
-            ${chemicalsAdded.length > 0 ? `
+            ${chemicalsAdded.length > 0 && showA('chemicals') ? `
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Chemicals Added</p>
             <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #E5E7EB;border-radius:6px;margin-bottom:16px;">
               <tbody>
