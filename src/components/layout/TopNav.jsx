@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, Calendar, ClipboardList, Users, Settings as SettingsIcon, FileText, Receipt, Repeat } from 'lucide-react'
+import { Home, Calendar, ClipboardList, Users, Settings as SettingsIcon, Repeat } from 'lucide-react'
 import { ThemeToggleCompact } from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
 import { cn } from '../../lib/utils'
@@ -13,8 +13,6 @@ const tabs = [
   { path: '/recurring-jobs',  label: 'Recurring',   Icon: Repeat },
   { path: '/work-orders',     label: 'Work Orders', Icon: ClipboardList },
   { path: '/clients',         label: 'Clients',     Icon: Users },
-  { path: '/quotes',          label: 'Quotes',      Icon: FileText },
-  { path: '/invoices',        label: 'Invoices',    Icon: Receipt },
 ]
 
 export default function TopNav() {
