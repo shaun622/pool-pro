@@ -9,6 +9,7 @@ import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
 import StopDetailModal from '../components/ui/StopDetailModal'
 import AddRecurringModal from '../components/ui/AddRecurringModal'
+import Modal from '../components/ui/Modal'
 import OneOffVisitPicker from '../components/ui/OneOffVisitPicker'
 // `Map` is aliased to MapIcon — lucide's Map icon clashes with the global
 // Map constructor we use in the day-bucket useMemo (`new Map()`).
@@ -223,6 +224,7 @@ function Schedule({ business }) {
   const [serviceRecords, setServiceRecords] = useState([])  // {pool_id, serviced_at}
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
+  const [overdueListOpen, setOverdueListOpen] = useState(false)
   const [recurEditProfile, setRecurEditProfile] = useState(null) // recurring profile being edited from a stop
   const [recurModalOpen, setRecurModalOpen] = useState(false)
   const [jobTypes, setJobTypes] = useState([])
@@ -619,9 +621,12 @@ function Schedule({ business }) {
   // the next_due_at cache — same signal the tech run sheet's OVERDUE list uses).
   // Grid-independent, so a pool missed BEFORE the visible month/week still shows
   // as a persistent badge now that Month/Week no longer stack overdue onto today.
-  const overdueCount = useMemo(() => {
+  const overduePools = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    return allPools.filter(p => p.next_due_at && new Date(p.next_due_at) < today).length
+    return allPools
+      .filter(p => p.next_due_at && new Date(p.next_due_at) < today)
+      .map(p => ({ pool: p, daysOverdue: Math.max(Math.round((today - new Date(p.next_due_at)) / 86400000), 1) }))
+      .sort((a, b) => b.daysOverdue - a.daysOverdue)
   }, [allPools])
 
   // Days in the active range (7 for week/day, ~42 for the month grid).
@@ -726,15 +731,15 @@ function Schedule({ business }) {
         <Button variant="primary" size="md" leftIcon={Plus} onClick={() => setOneOffOpen(true)} className="w-full sm:w-auto">
           Service a one-off visit
         </Button>
-        {(view === 'month' || view === 'week') && overdueCount > 0 && (
+        {(view === 'month' || view === 'week') && overduePools.length > 0 && (
           <button
             type="button"
-            onClick={() => setView('day')}
-            title="View overdue visits"
+            onClick={() => setOverdueListOpen(true)}
+            title="View overdue pools"
             className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/50 px-3 py-1.5 text-sm font-semibold hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
           >
             <span className="w-2 h-2 rounded-full bg-red-500" />
-            {overdueCount} overdue visit{overdueCount > 1 ? 's' : ''}
+            {overduePools.length} overdue pool{overduePools.length > 1 ? 's' : ''}
           </button>
         )}
       </div>
@@ -828,6 +833,27 @@ function Schedule({ business }) {
         branches={branches}
         onEditRecurring={handleEditRecurring}
       />
+
+      <Modal open={overdueListOpen} onClose={() => setOverdueListOpen(false)} title="Overdue pools" size="sm">
+        <div className="space-y-2">
+          {overduePools.map(({ pool, daysOverdue }) => (
+            <button
+              key={pool.id}
+              type="button"
+              onClick={() => { setOverdueListOpen(false); handleStopSelect(poolToStop(pool, { isOverdue: true, daysOverdue })) }}
+              className="w-full text-left rounded-xl border border-gray-100 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex items-center justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{pool.clients?.name || 'Client'}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{pool.name || 'Pool'}</p>
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-full px-2.5 py-1">
+                {daysOverdue}d overdue
+              </span>
+            </button>
+          ))}
+        </div>
+      </Modal>
 
       <AddRecurringModal
         open={recurModalOpen}
