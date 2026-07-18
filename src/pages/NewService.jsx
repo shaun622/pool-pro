@@ -490,6 +490,7 @@ export default function NewService() {
         lat, lng, timestamp: now.toISOString(),
         address: gpsAddress || pool?.address || '',
         clientName: client?.name || '',
+        poolName: pool?.name || '',
         businessName: business?.name || '',
         technicianName,
       }
@@ -906,6 +907,7 @@ export default function NewService() {
                       lat, lng, timestamp: now.toISOString(),
                       address: gpsAddress || pool?.address || '',
                       clientName: client?.name || '',
+                      poolName: pool?.name || '',
                       businessName: business?.name || '',
                       technicianName,
                     }
@@ -1357,6 +1359,7 @@ export default function NewService() {
                       lat, lng, timestamp: now.toISOString(),
                       address: pool?.address || '',
                       clientName: client?.name || '',
+                      poolName: pool?.name || '',
                       businessName: business?.name || '',
                       technicianName,
                     }
@@ -1726,6 +1729,7 @@ export default function NewService() {
                       lat, lng, timestamp: now.toISOString(),
                       address: pool?.address || '',
                       clientName: client?.name || '',
+                      poolName: pool?.name || '',
                       businessName: business?.name || '',
                       technicianName,
                     }
@@ -1971,6 +1975,7 @@ function watermarkPhoto(file, meta) {
         { text: timeStr, size: Math.round(20 * scale), bold: true, alpha: 1 },
       ]
       if (meta.clientName) leftLines.push({ text: meta.clientName, size: Math.round(13 * scale), bold: false, alpha: 0.95 })
+      if (meta.poolName) leftLines.push({ text: meta.poolName, size: Math.round(12 * scale), bold: false, alpha: 0.9 })
       leftLines.push({ text: dateStr, size: Math.round(12 * scale), bold: false, alpha: 0.85 })
       if (meta.address) leftLines.push({ text: meta.address, size: Math.round(11 * scale), bold: false, alpha: 0.9 })
       if (meta.lat && meta.lng) leftLines.push({ text: `${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)}`, size: Math.round(9 * scale), bold: false, alpha: 0.6 })
