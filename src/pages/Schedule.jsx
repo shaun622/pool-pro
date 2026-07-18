@@ -389,6 +389,11 @@ function Schedule({ business }) {
     const weekEnd = rangeEnd
     weekEnd.setHours(23, 59, 59, 999)
 
+    // Today (midnight local) — used by path 3 to flag missed in-grid occurrences
+    // red on their own day, and by path 4's day-view catch-up.
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
     const byDay = new Map()
     const ensure = (d) => {
       const key = ymd(d)
@@ -533,7 +538,13 @@ function Schedule({ business }) {
               // day as the completed/unable stop, so suppress the due projection.
               coverPool(cursor, profile.pool_id)
             } else {
-              ensure(cursor).stops.push(profileToStop(profile, cursor))
+              // An unfulfilled occurrence whose day is already past = a MISSED
+              // visit — render it red on its own day (not relocated to today).
+              const cStart = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate())
+              const overdueOpts = cStart < startOfToday
+                ? { isOverdue: true, daysOverdue: Math.max(Math.round((startOfToday - cStart) / 86400000), 1) }
+                : undefined
+              ensure(cursor).stops.push(profileToStop(profile, cursor, overdueOpts))
               coverPool(cursor, profile.pool_id)
             }
           }
@@ -547,9 +558,10 @@ function Schedule({ business }) {
     // moved (replaced) or already materialized (taken). One stop per profile,
     // surfaced under today — so stacked profiles overdue on different days each
     // surface. Derived from ENUMERATION, never from the next_due_at cache.
-    const now = new Date()
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    if (startOfToday >= weekStart && startOfToday <= weekEnd) {
+    // Only the DAY work-list (a flat list with nowhere else to surface an old
+    // miss) stacks overdue under today. Month & Week are calendars — their misses
+    // now render red in place via path 3, so relocating to today would double up.
+    if (view === 'day' && startOfToday >= weekStart && startOfToday <= weekEnd) {
       const todayGroup = byDay.get(ymd(now))
       if (todayGroup) {
         const overdueFrom = new Date(startOfToday); overdueFrom.setDate(overdueFrom.getDate() - 365)
@@ -601,7 +613,16 @@ function Schedule({ business }) {
     const flat = new Map()
     for (const [k, v] of byDay.entries()) flat.set(k, v.stops)
     return flat
-  }, [allJobs, allPools, allProfiles, rangeStart, rangeEnd, serviceDays, serviceRecords])
+  }, [allJobs, allPools, allProfiles, rangeStart, rangeEnd, serviceDays, serviceRecords, view])
+
+  // Pools currently overdue (earliest unfulfilled occurrence is before today, per
+  // the next_due_at cache — same signal the tech run sheet's OVERDUE list uses).
+  // Grid-independent, so a pool missed BEFORE the visible month/week still shows
+  // as a persistent badge now that Month/Week no longer stack overdue onto today.
+  const overdueCount = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return allPools.filter(p => p.next_due_at && new Date(p.next_due_at) < today).length
+  }, [allPools])
 
   // Days in the active range (7 for week/day, ~42 for the month grid).
   const periodDays = useMemo(() => {
@@ -701,10 +722,21 @@ function Schedule({ business }) {
       />
       <OneOffVisitPicker open={oneOffOpen} onClose={() => setOneOffOpen(false)} />
 
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-3 flex-wrap">
         <Button variant="primary" size="md" leftIcon={Plus} onClick={() => setOneOffOpen(true)} className="w-full sm:w-auto">
           Service a one-off visit
         </Button>
+        {(view === 'month' || view === 'week') && overdueCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setView('day')}
+            title="View overdue visits"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/50 px-3 py-1.5 text-sm font-semibold hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
+          >
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            {overdueCount} overdue visit{overdueCount > 1 ? 's' : ''}
+          </button>
+        )}
       </div>
 
       {view === 'map' ? (
@@ -1671,7 +1703,7 @@ function jobToStop(j) {
   }
 }
 
-function profileToStop(profile, occurrenceDate) {
+function profileToStop(profile, occurrenceDate, { isOverdue = false, daysOverdue = 0 } = {}) {
   const duration = 60
   const time = profile.preferred_time ? String(profile.preferred_time).slice(0, 5) : null
   const timeDisp = time ? formatTimeRange(time, duration) : null
@@ -1685,6 +1717,8 @@ function profileToStop(profile, occurrenceDate) {
     pool_name: profile.pools?.name || null,
     address: profile.pools?.address || null,
     status: 'scheduled',
+    isOverdue,
+    daysOverdue,
     scheduled_date: ymd(occurrenceDate),
     recurring_profile_id: profile.id,
     occurrence_date: ymd(occurrenceDate),
