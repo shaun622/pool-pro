@@ -33,11 +33,13 @@ export function AuthProvider({ children }) {
       }
     })
 
-    // Get initial session (also detects hash fragments)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    // Get initial session (also detects hash fragments). A hung getSession now
+    // rejects (global fetch timeout) instead of leaving loading stuck true — clear
+    // the gate regardless of outcome (onAuthStateChange also clears it).
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => setUser(session?.user ?? null))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false))
 
     return () => subscription.unsubscribe()
   }, [])

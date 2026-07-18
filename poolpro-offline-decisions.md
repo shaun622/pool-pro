@@ -16,6 +16,8 @@
 >
 > **Outbox v2 hardening (2026-07-18):** the sender now classifies failures by TYPE — **transient** (offline/timeout/abort/5xx/**unknown = default**) retries forever with backoff + jitter; **permanent** (Postgres data/constraint SQLSTATE 22xxx/23xxx≠23505, storage payload-too-large) is marked `failed` and stops auto-retrying, surfacing "Failed — needs attention" on the pending strip (only a manual "Send now" re-attempts it). A long-running transient (≥100 attempts or ≥7 days) escalates to a louder "still not sent — please check" while still retrying.
 >
+> **Global read timeout (2026-07-18) — "no network call may hang", now applied to READS too:** `src/lib/supabase.js` wraps `createClient`'s fetch (`global.fetch`) with a ~30s `AbortController` ceiling that **combines** any caller signal (so the outbox's own 25s abort still works). Browser fetch has no timeout, so a dead-but-open connection was hanging reads forever and sticking the app on an infinite loading spinner. **A timeout is treated as exactly another rejected fetch** — same cache fallback, same `loading` clears; there is NO "timeout state" and NO `if (isTimeout)` branch anywhere (that would reintroduce divergent behaviour). Uniform 30s (not a shorter read default) because `@supabase/storage-js` `upload()` can't carry its own signal, so a shorter ceiling would kill a slow photo upload. Loading gates were also made to clear on reject (finally/catch), and `Schedule` only shows the spinner on the first load (background refetches are silent, latest-request-wins).
+>
 > The original v1 decisions are preserved below for history.
 
 ---

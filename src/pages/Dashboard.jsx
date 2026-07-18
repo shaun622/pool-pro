@@ -54,6 +54,7 @@ export default function Dashboard() {
 
     async function fetchDashboard() {
       setLoading(true)
+      try {
 
       const now = new Date()
       const startOfWeek = new Date(now)
@@ -228,7 +229,12 @@ export default function Dashboard() {
       })
       setRecentActivity(activityRes.data || [])
       setUnableFollowups(unableRes.data || [])
-      setLoading(false)
+      } catch (e) {
+        // A timed-out/failed load must clear the gate (never an infinite spinner).
+        console.warn('Dashboard load failed:', e?.message || e)
+      } finally {
+        setLoading(false)
+      }
     }
 
     fetchDashboard()

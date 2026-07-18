@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useToast } from '../contexts/ToastContext'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -225,6 +226,9 @@ function Schedule({ business }) {
   const [loading, setLoading] = useState(true)
   const [selectedStop, setSelectedStop] = useState(null)
   const [overdueListOpen, setOverdueListOpen] = useState(false)
+  const toast = useToast()
+  const hasLoadedRef = useRef(false)   // spinner only on the FIRST load, not refetches
+  const fetchAbortRef = useRef(null)   // latest-request-wins + abort-on-supersede
   const [recurEditProfile, setRecurEditProfile] = useState(null) // recurring profile being edited from a stop
   const [recurModalOpen, setRecurModalOpen] = useState(false)
   const [jobTypes, setJobTypes] = useState([])
@@ -297,11 +301,21 @@ function Schedule({ business }) {
 
   async function fetchData() {
     if (!business?.id) return
-    setLoading(true)
+    // Latest-request-wins: abort any in-flight refetch so a slow/hung one can
+    // neither clobber newer data nor wedge future refetches.
+    if (fetchAbortRef.current) fetchAbortRef.current.abort()
+    const controller = new AbortController()
+    fetchAbortRef.current = controller
+    // Spinner ONLY on the first load. A focus/visibility/nav refetch updates
+    // silently — never flash the spinner over already-loaded data (that "refetch
+    // flips loading true then hangs" is exactly the circling-loading bug).
+    const isInitial = !hasLoadedRef.current
+    if (isInitial) setLoading(true)
+
     // Wide window so prev/next week navigation is cached.
     const from = new Date(); from.setDate(from.getDate() - 60)
     const to = new Date(); to.setDate(to.getDate() + 120)
-    const [jobsRes, poolsRes, profilesRes, staffRes, servicesRes] = await Promise.all([
+    const runQueries = () => Promise.all([
       supabase
         .from('jobs')
         .select('*, clients(name, email, phone, branch_id), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
@@ -309,50 +323,80 @@ function Schedule({ business }) {
         .gte('scheduled_date', ymd(from))
         .lte('scheduled_date', ymd(to))
         .order('scheduled_date')
-        .order('scheduled_time'),
+        .order('scheduled_time')
+        .abortSignal(controller.signal),
       supabase
         .from('pools')
         .select('*, clients(name, email, phone, branch_id), staff:staff_members!assigned_staff_id(id, name, photo_url)')
-        .eq('business_id', business.id),
+        .eq('business_id', business.id)
+        .abortSignal(controller.signal),
       supabase
         .from('recurring_job_profiles')
         .select('*, clients(name, email, phone, branch_id), pools(name, address, latitude, longitude), staff:staff_members!assigned_staff_id(id, name, photo_url)')
         .eq('business_id', business.id)
-        .eq('is_active', true),
+        .eq('is_active', true)
+        .abortSignal(controller.signal),
       supabase
         .from('staff_members')
         .select('id, name, photo_url, is_active')
         .eq('business_id', business.id)
-        .eq('is_active', true),
-      // Completed services in the visible window — used to suppress pool
-      // projections on days when the pool was already serviced AND to
-      // emit the dim "completed" stop in path 5. We need the record id
-      // so StopDetailModal can hard-delete it when the operator clicks
-      // Delete on a completed stop (the synthetic stop id won't match
-      // anything in pools / jobs — has to delete the service_record).
+        .eq('is_active', true)
+        .abortSignal(controller.signal),
+      // Completed/unable services in the window — suppress pool projections on
+      // serviced days and emit the dim/orange stop; record id lets StopDetailModal
+      // hard-delete a completed stop.
       supabase
         .from('service_records')
         .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, is_one_off')
         .eq('business_id', business.id)
         .in('status', ['completed', 'unable_to_service'])
         .gte('serviced_at', from.toISOString())
-        .lte('serviced_at', to.toISOString()),
+        .lte('serviced_at', to.toISOString())
+        .abortSignal(controller.signal),
     ])
-    setAllJobs(jobsRes.data || [])
-    setAllPools(poolsRes.data || [])
-    setAllProfiles(profilesRes.data || [])
-    setAllStaff(staffRes.data || [])
-    setServiceRecords(servicesRes.data || [])
-    // Build a set of "<pool_id>:<ymd>" keys for fast lookup in the projector.
-    const days = new Set()
-    for (const r of servicesRes.data || []) {
-      if (!r.pool_id || !r.serviced_at) continue
-      const d = new Date(r.serviced_at)
-      if (isNaN(d.getTime())) continue
-      days.add(`${r.pool_id}:${ymd(d)}`)
+
+    const started = Date.now()
+    try {
+      let res
+      try {
+        res = await runQueries()
+      } catch (err) {
+        if (fetchAbortRef.current !== controller) throw err // superseded — let outer catch ignore
+        // Fast blip on a BACKGROUND refetch → one silent retry. A slow (~timeout)
+        // failure is NOT retried — another 30s is worse than showing stale data.
+        if (!isInitial && Date.now() - started < 5000) res = await runQueries()
+        else throw err
+      }
+      if (fetchAbortRef.current !== controller) return // a newer refetch owns the state now
+      const [jobsRes, poolsRes, profilesRes, staffRes, servicesRes] = res
+      setAllJobs(jobsRes.data || [])
+      setAllPools(poolsRes.data || [])
+      setAllProfiles(profilesRes.data || [])
+      setAllStaff(staffRes.data || [])
+      setServiceRecords(servicesRes.data || [])
+      // Build a set of "<pool_id>:<ymd>" keys for fast lookup in the projector.
+      const days = new Set()
+      for (const r of servicesRes.data || []) {
+        if (!r.pool_id || !r.serviced_at) continue
+        const d = new Date(r.serviced_at)
+        if (isNaN(d.getTime())) continue
+        days.add(`${r.pool_id}:${ymd(d)}`)
+      }
+      setServiceDays(days)
+      hasLoadedRef.current = true
+    } catch (err) {
+      if (fetchAbortRef.current !== controller) return // superseded/aborted — ignore silently
+      if (isInitial) {
+        console.warn('Schedule load failed:', err?.message || err)
+      } else {
+        // A real background-refetch failure → keep the last-loaded data, tell the
+        // operator quietly. Never an infinite spinner (isInitial is false here).
+        toast.error('Couldn’t refresh — showing last loaded data.')
+      }
+    } finally {
+      if (fetchAbortRef.current === controller) fetchAbortRef.current = null
+      if (isInitial) setLoading(false)
     }
-    setServiceDays(days)
-    setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [business?.id, location.key])
