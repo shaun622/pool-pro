@@ -88,27 +88,23 @@ export default function NewService() {
   // fulfils EXACTLY that occurrence — not "today". Falls back to the pool's
   // single active profile + its current due occurrence when the tech opened the
   // pool directly (no specific stop).
-  async function resolveOccurrence() {
-    // One-off visit: NEVER fulfil or advance any recurring occurrence. Return
-    // null identity BEFORE the single-active-profile fallback below — otherwise a
-    // one-off on a pool that has a lone recurring profile would silently attach to
-    // it. Shared by handleComplete AND handleUnable, so an "unable one-off" is inert too.
+  function resolveOccurrence() {
+    // One-off visit: NEVER fulfil or advance any recurring occurrence. Return null
+    // identity BEFORE any fallback — otherwise a one-off on a pool with a lone
+    // profile would silently attach to it. Shared by handleComplete AND handleUnable.
     if (location.state?.oneOff) return { recurringProfileId: null, occurrenceDate: null }
-    let recurringProfileId = location.state?.recurringProfileId || null
+    // Identity priority: the clicked stop's route state > the tech's schedule pick
+    // (multi-profile pools) > the pool's single active profile. A pool with 2+
+    // active profiles and no route state requires a pick (see needsScheduleChoice),
+    // so we never land a null-identity recurring completion (audit #3).
+    let recurringProfileId = location.state?.recurringProfileId || chosenProfileId || null
     let occurrenceDate = location.state?.occurrenceDate || null
-    if (!recurringProfileId) {
-      const { data } = await supabase
-        .from('recurring_job_profiles')
-        .select('id, next_generation_at')
-        .eq('pool_id', poolId)
-        .eq('is_active', true)
-        .in('status', ['active'])
-      if (data && data.length === 1) {
-        recurringProfileId = data[0].id
-        if (!occurrenceDate) {
-          occurrenceDate = data[0].next_generation_at ? String(data[0].next_generation_at).split('T')[0] : null
-        }
-      }
+    if (!recurringProfileId && activeProfiles.length === 1) {
+      recurringProfileId = activeProfiles[0].id
+    }
+    if (recurringProfileId && !occurrenceDate) {
+      const p = activeProfiles.find(x => x.id === recurringProfileId)
+      occurrenceDate = p?.next_generation_at ? String(p.next_generation_at).split('T')[0] : null
     }
     return { recurringProfileId, occurrenceDate }
   }
@@ -165,6 +161,12 @@ export default function NewService() {
   // saved and sending. Steer them back rather than let them create a duplicate.
   const [reentryPending, setReentryPending] = useState(null)
   const [ignoreReentry, setIgnoreReentry] = useState(false)
+  // Active recurring schedules for this pool. When a pool has 2+ (e.g. 2x/week is
+  // two weekly profiles) and the tech opened it without a specific stop, we can't
+  // know which visit this is — they must pick, else the completion lands with a
+  // NULL occurrence identity and the schedule never advances (audit #3).
+  const [activeProfiles, setActiveProfiles] = useState([])
+  const [chosenProfileId, setChosenProfileId] = useState(null)
   const gpsRef = useRef(null) // pre-fetched GPS position
 
   // Detect an already-saved visit for this pool (IndexedDB only — no network, so
@@ -239,7 +241,7 @@ export default function NewService() {
 
   async function loadPool() {
     try {
-      const [poolRes, staffRes, lastServiceRes, productsRes] = await Promise.all([
+      const [poolRes, staffRes, lastServiceRes, productsRes, profilesRes] = await Promise.all([
         supabase.from('pools').select('*, clients(*)').eq('id', poolId).single(),
         supabase.from('staff_members').select('*').eq('business_id', business?.id).eq('is_active', true).order('name'),
         supabase.from('service_records')
@@ -254,10 +256,16 @@ export default function NewService() {
           .eq('business_id', business.id)
           .order('use_count', { ascending: false })
           .limit(20),
+        supabase.from('recurring_job_profiles')
+          .select('id, title, next_generation_at, recurrence_rule, preferred_time')
+          .eq('pool_id', poolId)
+          .eq('is_active', true)
+          .in('status', ['active']),
       ])
       if (poolRes.error) throw poolRes.error
       setPool(poolRes.data)
       setClient(poolRes.data.clients)
+      setActiveProfiles(profilesRes.data || [])
 
       // Store last service readings for comparison
       if (lastServiceRes.data?.chemical_logs?.length) {
@@ -381,6 +389,13 @@ export default function NewService() {
 
       // Occurrence identity (from route state; null for a one-off / ad-hoc visit).
       const occ = await resolveOccurrence()
+      // Never land a null-identity recurring completion on a multi-schedule pool —
+      // that leaves next_due_at stuck (audit #3). The picker prevents reaching here
+      // without a choice; this is the belt-and-suspenders backstop.
+      if (!location.state?.oneOff && !occ.recurringProfileId && activeProfiles.length >= 2) {
+        toast.error('Please choose which schedule this visit is for.')
+        return
+      }
       const servicedAt = new Date().toISOString()
 
       const draft = {
@@ -514,6 +529,13 @@ export default function NewService() {
       const techName = selectedStaff?.name || business?.owner_name || 'Owner'
       const serviceRecordId = genId()
       const occ = await resolveOccurrence()
+      // Never land a null-identity recurring completion on a multi-schedule pool —
+      // that leaves next_due_at stuck (audit #3). The picker prevents reaching here
+      // without a choice; this is the belt-and-suspenders backstop.
+      if (!location.state?.oneOff && !occ.recurringProfileId && activeProfiles.length >= 2) {
+        toast.error('Please choose which schedule this visit is for.')
+        return
+      }
       const servicedAt = new Date().toISOString()
       const reason = unableReason
       const note = unableNote.trim() || null
@@ -801,6 +823,50 @@ export default function NewService() {
             >
               This is a different visit — start anyway
             </button>
+          </div>
+        </PageWrapper>
+      </>
+    )
+  }
+
+  // Multi-schedule pool opened without a specific stop → the tech must pick which
+  // visit this is, else the completion lands null-identity and the schedule never
+  // advances (audit #3). Precedes the form; single-profile / one-off / stop-opened
+  // flows skip it.
+  const needsScheduleChoice = !location.state?.oneOff
+    && !location.state?.recurringProfileId
+    && !chosenProfileId
+    && activeProfiles.length >= 2
+  if (needsScheduleChoice && !completed && !unableSubmitted && !unableMode) {
+    const occDate = (p) => p.next_generation_at ? new Date(String(p.next_generation_at).slice(0, 10) + 'T00:00:00') : null
+    const labelFor = (p) => {
+      const d = occDate(p)
+      const wd = d ? d.toLocaleDateString('en-AU', { weekday: 'long' }) : ''
+      const freq = { weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly', '6_weekly': '6-weekly', quarterly: 'Quarterly', custom: 'Custom' }[p.recurrence_rule] || 'Recurring'
+      return wd ? `${freq} · ${wd}` : freq
+    }
+    const dueFor = (p) => { const d = occDate(p); return d ? d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' }
+    return (
+      <>
+        <Header title="Which schedule?" backTo={-1} />
+        <PageWrapper>
+          <div className="py-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">This pool has more than one schedule</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">Pick which visit you're servicing so it's recorded on the right one.</p>
+            <div className="space-y-2">
+              {activeProfiles.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setChosenProfileId(p.id)}
+                  className="w-full text-left rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                >
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{labelFor(p)}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Next due {dueFor(p)}</p>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => navigate(-1)} className="text-sm text-gray-400 dark:text-gray-500 mt-5 underline">Cancel</button>
           </div>
         </PageWrapper>
       </>
