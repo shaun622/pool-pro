@@ -27,6 +27,28 @@ function notifyPendingChanged() {
   try { window.dispatchEvent(new Event(PENDING_EVENT)) } catch { /* non-browser */ }
 }
 
+// Per-request network timeout. A pool's uplink can be "up but dead" (full signal
+// bars, no throughput), and a bare fetch will then hang for the OS TCP timeout
+// (a minute+) or effectively forever — which is exactly what froze the Submit
+// button in the field. Cap every network op so a stalled attempt fails FAST and
+// the auto-sender retries, instead of hanging the UI.
+export const SEND_TIMEOUT_MS = 25_000
+
+// Reject if `promise` hasn't settled within `ms`. The underlying request may keep
+// running after we stop waiting — that's harmless here because every send is
+// idempotent (deterministic upsert photo path + serviceRecordId RPC key), so a
+// late-completing upload/RPC and its retry converge on the same single result.
+function withTimeout(promise, ms, label) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(Object.assign(new Error(`${label} timed out after ${ms}ms`), { _timeout: true })),
+      ms,
+    )
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 export async function createDraft(draft) {
   // Quota gate — only for photo-bearing drafts. A photoless completion is never
   // blocked. Throws so the caller can tell the tech to submit before capturing more.
@@ -96,9 +118,13 @@ export async function submitOne(draft, currentBusinessId) {
     const photoRows = []
     for (const p of (draft.photos || [])) {
       const path = `${draft.businessId}/${draft.serviceRecordId}/${p.clientPhotoId}.jpg`
-      const { error: upErr } = await supabase.storage
-        .from('service-photos')
-        .upload(path, p.blob, { upsert: true, contentType: 'image/jpeg' })
+      const { error: upErr } = await withTimeout(
+        supabase.storage
+          .from('service-photos')
+          .upload(path, p.blob, { upsert: true, contentType: 'image/jpeg' }),
+        SEND_TIMEOUT_MS,
+        'photo upload',
+      )
       if (upErr) return isFatalAuthError(upErr) ? 'auth' : 'pending'
       const { data: urlData } = supabase.storage.from('service-photos').getPublicUrl(path)
       photoRows.push({
@@ -112,12 +138,25 @@ export async function submitOne(draft, currentBusinessId) {
       })
     }
 
-    // 2. Call the atomic RPC.
+    // 2. Call the atomic RPC. AbortController actually cancels the request on
+    //    timeout; withTimeout guarantees we stop waiting even if the abort is
+    //    ignored. Either way a stalled RPC becomes 'pending' (retried), not a hang.
     const fn = draft.kind === 'unable' ? 'mark_unable_to_service_tx' : 'complete_service_tx'
-    const { data, error } = await supabase.rpc(fn, {
-      p_id: draft.serviceRecordId,
-      p_payload: buildPayload(draft, photoRows),
-    })
+    const rpcAbort = new AbortController()
+    const rpcTimer = setTimeout(() => rpcAbort.abort(), SEND_TIMEOUT_MS)
+    let data, error
+    try {
+      ({ data, error } = await withTimeout(
+        supabase.rpc(fn, {
+          p_id: draft.serviceRecordId,
+          p_payload: buildPayload(draft, photoRows),
+        }).abortSignal(rpcAbort.signal),
+        SEND_TIMEOUT_MS,
+        'save',
+      ))
+    } finally {
+      clearTimeout(rpcTimer)
+    }
     if (error) return isFatalAuthError(error) ? 'auth' : 'pending'
 
     // 3. Delete the draft — only now that both upload + RPC returned.

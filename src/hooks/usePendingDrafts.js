@@ -1,16 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useBusiness } from './useBusiness'
-import { useToast } from '../contexts/ToastContext'
-import { countDraftsAsync, submitAll, PENDING_EVENT } from '../lib/pendingDrafts'
+import { useState, useEffect, useCallback } from 'react'
+import { countDraftsAsync, PENDING_EVENT } from '../lib/pendingDrafts'
+import { drainOutbox, getOutboxStatus, OUTBOX_STATUS_EVENT } from '../lib/outboxProcessor'
 
-// Live count of unsent drafts + a manual Submit action. "Pending", never "sync":
-// there is no background sending — submit() only runs when the human taps.
+// Live view of the automatic outbox: how many visits are still unsent, and what
+// the background sender is doing right now. Sending is AUTOMATIC (see
+// outboxProcessor) — this hook no longer owns the send loop. `submit()` is just
+// an optional "try now" that nudges the same automatic sender; the tech never
+// has to tap anything for a visit to go out.
 export function usePendingDrafts() {
-  const { business } = useBusiness()
-  const toast = useToast()
   const [count, setCount] = useState(0)
-  const [submitting, setSubmitting] = useState(false)
-  const submittingRef = useRef(false)
+  const [status, setStatus] = useState(() => getOutboxStatus().status)
 
   const refresh = useCallback(async () => {
     setCount(await countDraftsAsync())
@@ -19,45 +18,23 @@ export function usePendingDrafts() {
   useEffect(() => {
     refresh()
     const onChange = () => refresh()
+    const onStatus = (e) => setStatus(e.detail?.status || 'idle')
     window.addEventListener(PENDING_EVENT, onChange)
     window.addEventListener('focus', onChange)
     document.addEventListener('visibilitychange', onChange)
+    window.addEventListener(OUTBOX_STATUS_EVENT, onStatus)
     return () => {
       window.removeEventListener(PENDING_EVENT, onChange)
       window.removeEventListener('focus', onChange)
       document.removeEventListener('visibilitychange', onChange)
+      window.removeEventListener(OUTBOX_STATUS_EVENT, onStatus)
     }
   }, [refresh])
 
-  const submit = useCallback(async () => {
-    if (submittingRef.current) return
-    submittingRef.current = true
-    setSubmitting(true)
-    try {
-      // Always attempt — never trust navigator.onLine to BLOCK (it lies when the
-      // link is up but dead). Use it only to word the message.
-      const { sent, pending, wrongOrg, auth } = await submitAll(business?.id)
-      await refresh()
-      if (wrongOrg > 0) {
-        toast.error(`${wrongOrg} visit${wrongOrg > 1 ? 's' : ''} belong to another organisation and can't be sent from this account.`)
-      }
-      if (auth > 0) {
-        toast.error(`Sign in again to send ${auth} pending visit${auth > 1 ? 's' : ''}.`)
-      }
-      if (sent > 0 && pending === 0) {
-        toast.success(sent === 1 ? '1 visit sent.' : `${sent} visits sent.`)
-      } else if (sent > 0) {
-        toast.success(`${sent} sent, ${pending} still pending.`)
-      } else if (pending > 0) {
-        toast.error(navigator.onLine
-          ? `Couldn't send — ${pending} still pending. Try again shortly.`
-          : `Still offline — ${pending} will send when you reconnect.`)
-      }
-    } finally {
-      submittingRef.current = false
-      setSubmitting(false)
-    }
-  }, [business?.id, refresh, toast])
+  // Optional manual nudge — force an immediate retry of every draft. Not required
+  // for correctness (the sender retries on its own); it just lets an impatient
+  // tech skip the backoff.
+  const submit = useCallback(() => { drainOutbox({ force: true }) }, [])
 
-  return { count, submitting, submit, refresh }
+  return { count, status, submitting: status === 'sending', submit, refresh }
 }

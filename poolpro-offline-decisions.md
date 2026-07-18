@@ -1,5 +1,21 @@
 # PoolPro offline v1: final locked decisions
 
+> ## ⚠️ UPDATE — 2026-07-18: automatic sending now supersedes the "manual tap" model
+>
+> The manual model below failed in the field. Two things broke it: (1) the send had **no network timeout**, so on a pool's dead-but-up uplink the upload hung indefinitely and the button sat on "Submitting…" forever; and (2) the crew reacted the worst possible way — **refreshing** (which cancelled the in-flight upload) or **re-entering the whole visit** (creating duplicates). The operator's explicit direction: the crew cannot be relied on to wait, retry, or avoid refreshing, so the app must **send by itself, forever**.
+>
+> What changed (see `src/lib/outboxProcessor.js`):
+> - **Automatic background sender.** A module-level singleton, started by `OutboxSyncProvider` mounted **above** the router (so it's never torn down by navigation), drains the outbox on app load, `online`, foreground/visibility, a new draft, and a **backoff timer** (10s → 5m cap), retrying forever until each visit is confirmed. This **reverses Decision 5 ("no background sync")** and **Decision 6 ("human tap is the trigger")** — deliberately, at the operator's request.
+> - **Retry bookkeeping is now kept** (`attemptCount`, `nextAttemptAt`, `lastError` on the draft) to drive the backoff. This **reverses the "no retry counters" part of Decision 1.** The continue-on-failure + single-summary spirit of Decision 1 otherwise stands.
+> - **Network timeouts** (`SEND_TIMEOUT_MS`, `AbortController`) wrap every upload/RPC so a dead link fails fast and retries, instead of hanging. Decision 6's insight — never *trust* `navigator.onLine` — still holds: we never gate on it; we always attempt, with a timeout.
+> - **"Complete Service" is instant** — it saves the durable draft and hands off to the sender; it never blocks on the network. The pending strip is now a **calm auto-status** ("saved — sending automatically"), and a re-entry guard steers a tech away from re-doing a visit that's already saved.
+>
+> **What did NOT change (still load-bearing):** draft durability is still #1; the same-path model (Decision 3), sequential sends (Decision 4), org binding + server authz (Decision 7), deterministic upsert photo path before the RPC (Decision 2), conflict-clears-the-draft and delete-only-after-success (the "two points"), and `report_sent_at` email idempotency all still hold — they are exactly what makes automatic retry safe from duplicates. The **one invariant** the auto-sender must never break: a retry always reuses the existing `serviceRecordId`; it must never mint a new one.
+>
+> The original v1 decisions are preserved below for history.
+
+---
+
 Both implementation plans, and a round of review on top, converged on the same direction: manual draft and submit, no background sync, draft durability as the top property. They diverged on a handful of points, and a few details drifted in ways that quietly reintroduce the complexity we cut. This document resolves all of it, with the reasoning for each decision so it survives into the build. Each decision states the alternative that was considered and why it loses.
 
 This is the final set. Last call for technical pushback on any single decision. Otherwise this is what we build.

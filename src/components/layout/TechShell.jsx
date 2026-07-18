@@ -14,7 +14,7 @@ export default function TechShell() {
   const { lang, setLang, seedFromProfile, t } = useLanguage()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
-  const { count: pendingCount, submitting: pendingSubmitting, submit: submitPending } = usePendingDrafts()
+  const { count: pendingCount, status: pendingStatus, submitting: pendingSubmitting, submit: submitPending } = usePendingDrafts()
 
   const techName = staffRecord?.name || 'Tech'
   const initials = techName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -123,8 +123,8 @@ export default function TechShell() {
         </div>
       </header>
 
-      {/* Unsent offline visits — loud, persistent, manual Submit */}
-      <PendingDrafts count={pendingCount} submitting={pendingSubmitting} onSubmit={submitPending} />
+      {/* Unsent offline visits — sends automatically; this is a calm status strip */}
+      <PendingDrafts count={pendingCount} status={pendingStatus} submitting={pendingSubmitting} onSubmit={submitPending} />
 
       {/* Page content */}
       <Outlet />

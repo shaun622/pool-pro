@@ -54,6 +54,13 @@ export async function getSnapshot(id) {
 export async function putDraft(draft) {
   return (await db()).put('drafts', draft)
 }
+// Update an existing draft in place (used to stamp retry bookkeeping —
+// attemptCount / nextAttemptAt / lastError). SAFE (never throws): a failed
+// metadata write just means the auto-sender retries on its normal cadence
+// instead of the backed-off one. Durability of the ORIGINAL draft is unaffected.
+export async function updateDraft(draft) {
+  return safe(async () => { await (await db()).put('drafts', draft) }, undefined)
+}
 export async function getAllDrafts() {
   return safe(async () => (await db()).getAll('drafts'), [])
 }

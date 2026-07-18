@@ -5,7 +5,8 @@ import PageWrapper from '../components/layout/PageWrapper'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Input, { TextArea, Select } from '../components/ui/Input'
-import { createDraft, submitOne } from '../lib/pendingDrafts'
+import { createDraft, listDrafts } from '../lib/pendingDrafts'
+import { kickOutbox } from '../lib/outboxProcessor'
 import { appendCachedServiceRecord } from '../lib/offlineStore'
 import { useBusiness } from '../hooks/useBusiness'
 import { useLanguage, translateTaskName, translateUnableReason } from '../contexts/LanguageContext'
@@ -159,7 +160,27 @@ export default function NewService() {
   const [unablePhotos, setUnablePhotos] = useState([]) // { blob, preview, meta }
   const [capturingUnablePhoto, setCapturingUnablePhoto] = useState(false)
   const [unableSubmitted, setUnableSubmitted] = useState(false)
+  // Failsafe against re-entry duplicates: if an unsent draft already exists for
+  // this pool, the tech is (almost certainly) re-doing a visit that's already
+  // saved and sending. Steer them back rather than let them create a duplicate.
+  const [reentryPending, setReentryPending] = useState(null)
+  const [ignoreReentry, setIgnoreReentry] = useState(false)
   const gpsRef = useRef(null) // pre-fetched GPS position
+
+  // Detect an already-saved visit for this pool (IndexedDB only — no network, so
+  // it can't hang). Best-effort; on any failure we simply show the normal form.
+  useEffect(() => {
+    if (completed || unableSubmitted) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const drafts = await listDrafts()
+        const match = drafts.find(d => d.poolId === poolId)
+        if (!cancelled) setReentryPending(match || null)
+      } catch { /* best-effort */ }
+    })()
+    return () => { cancelled = true }
+  }, [poolId, completed, unableSubmitted])
 
   // Pre-fetch GPS as soon as the page loads so permission is granted before photo
   useEffect(() => {
@@ -392,32 +413,36 @@ export default function NewService() {
         // with client/pool names on an offline reload (before the real row syncs).
         pools: { name: pool?.name, address: pool?.address, type: pool?.type, clients: { name: client?.name, phone: client?.phone } },
       })
-      const status = await submitOne(draft, business.id)
+      // Hand the visit to the automatic sender. It uploads the photos, saves the
+      // record, and retries on its own until confirmed — so we NEVER block the tap
+      // on the network. A weak uplink can no longer freeze "Complete Service"; the
+      // visit is already saved durably above and will send itself.
+      kickOutbox({ force: true })
 
-      // Online-only analytics: bump chemical library use_count after a real send.
-      if (status === 'sent' && validChemicals.length) {
-        try {
-          for (const c of validChemicals) {
-            const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
-            if (existing) {
-              await supabase.from('chemical_products')
-                .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
-                .eq('id', existing.id)
+      // Best-effort, online-only analytics — fire-and-forget, never blocks the tap.
+      if (validChemicals.length) {
+        ;(async () => {
+          try {
+            for (const c of validChemicals) {
+              const existing = chemicalProducts.find(p => p.name.toLowerCase() === c.product_name.toLowerCase())
+              if (existing) {
+                await supabase.from('chemical_products')
+                  .update({ use_count: (existing.use_count || 0) + 1, last_used_at: new Date().toISOString() })
+                  .eq('id', existing.id)
+              }
             }
+          } catch (e) {
+            console.warn('Chemical use_count bump failed (non-critical):', e)
           }
-        } catch (e) {
-          console.warn('Chemical use_count bump failed (non-critical):', e)
-        }
+        })()
       }
 
-      // Success screen survives reload either way. Carry the new record id so the
-      // success screen can offer "View service details".
+      // Success screen survives reload. Carry the new record id so it can offer
+      // "View service details".
       navigate(`/pools/${poolId}/service?done=1&serviceId=${serviceRecordId}`, { replace: true })
       setCompleted(true)
       findNextStop()
-      if (status === 'pending') {
-        toast.success("Saved on your device — tap Submit when you're back online.")
-      }
+      toast.success('Saved ✓ — sending automatically')
     } catch (err) {
       console.error('Error completing service:', err)
       toast.error(t('service.completeFailed') + (err?.message || JSON.stringify(err)))
@@ -524,12 +549,12 @@ export default function NewService() {
         is_one_off: draft.isOneOff,
         pools: { name: pool?.name, address: pool?.address, type: pool?.type, clients: { name: client?.name, phone: client?.phone } },
       })
-      const status = await submitOne(draft, business.id)
+      // Hand off to the automatic sender (see handleComplete) — never block on
+      // the network; the report is saved durably and will send itself.
+      kickOutbox({ force: true })
       setUnableSubmitted(true)
       findNextStop()
-      if (status === 'pending') {
-        toast.success("Saved on your device — tap Submit when you're back online.")
-      }
+      toast.success('Saved ✓ — sending automatically')
     } catch (err) {
       console.error('Error reporting unable to service:', err)
       toast.error(t('service.unableFailed') + (err?.message || JSON.stringify(err)))
@@ -741,6 +766,40 @@ export default function NewService() {
             {!unableReason && (
               <p className="text-xs text-center text-amber-600 dark:text-amber-400">{t('service.unableReasonRequired')}</p>
             )}
+          </div>
+        </PageWrapper>
+      </>
+    )
+  }
+
+  // Already-saved guard — precedes the blank form so a tech can't unknowingly
+  // re-do (and duplicate) a visit that's already saved and sending. The escape
+  // hatch keeps a genuinely separate visit possible.
+  if (reentryPending && !ignoreReentry && !completed && !unableSubmitted && !unableMode) {
+    return (
+      <>
+        <Header title="Service" backTo={-1} />
+        <PageWrapper>
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-950/40 flex items-center justify-center mb-4">
+              <Check className="w-8 h-8 text-green-600 dark:text-green-400" strokeWidth={2} />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">This visit is already saved</h2>
+            {pool?.name && <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{pool.name}</p>}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-xs">
+              It’s sending automatically — you don’t need to redo it. No need to refresh or submit again.
+            </p>
+            <div className="w-full">
+              <Button className="w-full min-h-[48px]" onClick={() => navigate(isTech ? '/tech' : '/schedule')}>
+                {isTech ? 'Back to run sheet' : 'Back to schedule'}
+              </Button>
+            </div>
+            <button
+              onClick={() => setIgnoreReentry(true)}
+              className="text-xs text-gray-400 dark:text-gray-500 mt-4 underline"
+            >
+              This is a different visit — start anyway
+            </button>
           </div>
         </PageWrapper>
       </>

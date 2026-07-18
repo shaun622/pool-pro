@@ -8,6 +8,7 @@ import { ToastProvider } from './contexts/ToastContext'
 import AppShell from './components/layout/AppShell'
 import TechShell from './components/layout/TechShell'
 import MfaGate from './components/auth/MfaGate'
+import OutboxSyncProvider from './components/OutboxSyncProvider'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
@@ -112,6 +113,7 @@ export default function App() {
       <ToastProvider>
       <AuthProvider>
         <BusinessProvider>
+          <OutboxSyncProvider>
           <Suspense fallback={<Loading />}>
             <Routes>
               {/* Public routes - no auth */}
@@ -189,6 +191,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
+          </OutboxSyncProvider>
         </BusinessProvider>
       </AuthProvider>
       </ToastProvider>
