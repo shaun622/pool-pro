@@ -617,17 +617,67 @@ function Schedule({ business }) {
     return flat
   }, [allJobs, allPools, allProfiles, rangeStart, rangeEnd, serviceDays, serviceRecords, view])
 
-  // Pools currently overdue (earliest unfulfilled occurrence is before today, per
-  // the next_due_at cache — same signal the tech run sheet's OVERDUE list uses).
-  // Grid-independent, so a pool missed BEFORE the visible month/week still shows
-  // as a persistent badge now that Month/Week no longer stack overdue onto today.
-  const overduePools = useMemo(() => {
+  // Individual overdue VISITS (occurrences), grid-independent. An occurrence is
+  // overdue iff it has no COVERING service record — completed OR unable, matched by
+  // the same path-1b coverage the calendar uses (render on occurrence_date, else
+  // serviced_at), NOT by the next_due_at cache. That's what lets a marked-unable day
+  // drop off even when its record lost its occurrence_date (audit #3). Look-back is
+  // capped to fetchData's loaded window (today−60d) — coverage data doesn't exist
+  // beyond it, so a visit overdue by >60d is deliberately not surfaced here.
+  const overdueVisits = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    return allPools
-      .filter(p => p.next_due_at && new Date(p.next_due_at) < today)
-      .map(p => ({ pool: p, daysOverdue: Math.max(Math.round((today - new Date(p.next_due_at)) / 86400000), 1) }))
-      .sort((a, b) => b.daysOverdue - a.daysOverdue)
-  }, [allPools])
+    const from = new Date(today); from.setDate(from.getDate() - 60)
+
+    // pool-day coverage from identity-bearing service records (mirrors path 1b).
+    const coveredDayPool = new Set()
+    for (const r of serviceRecords) {
+      if (!r.pool_id || !r.recurring_profile_id) continue
+      const ry = r.occurrence_date
+        ? String(r.occurrence_date).split('T')[0]
+        : (r.serviced_at ? ymd(new Date(r.serviced_at)) : null)
+      if (ry) coveredDayPool.add(`${ry}|${r.pool_id}`)
+    }
+    // jobs materialized from a profile occupy / move that occurrence (mirrors path 3).
+    const takenByProfile = new Map()
+    const replacedByProfile = new Map()
+    for (const j of allJobs) {
+      if (j.recurring_profile_id && j.scheduled_date) {
+        if (!takenByProfile.has(j.recurring_profile_id)) takenByProfile.set(j.recurring_profile_id, new Set())
+        takenByProfile.get(j.recurring_profile_id).add(j.scheduled_date)
+      }
+      if (j.recurring_profile_id && j.replaces_recurring_date) {
+        const ds = typeof j.replaces_recurring_date === 'string' ? j.replaces_recurring_date.split('T')[0] : null
+        if (ds) {
+          if (!replacedByProfile.has(j.recurring_profile_id)) replacedByProfile.set(j.recurring_profile_id, new Set())
+          replacedByProfile.get(j.recurring_profile_id).add(ds)
+        }
+      }
+    }
+
+    const rows = []
+    for (const profile of allProfiles) {
+      if (!isProfileActive(profile) || !profile.pool_id) continue
+      const taken = takenByProfile.get(profile.id)
+      const replaced = replacedByProfile.get(profile.id)
+      let idx = 0
+      for (const cursor of occurrencesInRange(profile, from, today)) {
+        if (!isOccurrenceInRange(profile, cursor, idx)) break
+        const cs = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate())
+        if (cs < today) {
+          const key = ymd(cursor)
+          const excluded = (replaced && replaced.has(key))
+            || (taken && taken.has(key))
+            || coveredDayPool.has(`${key}|${profile.pool_id}`)
+          if (!excluded) {
+            rows.push({ profile, occurrenceDate: cursor, daysOverdue: Math.max(Math.round((today - cs) / 86400000), 1) })
+          }
+        }
+        idx++
+      }
+    }
+    rows.sort((a, b) => b.daysOverdue - a.daysOverdue)
+    return rows
+  }, [allProfiles, allJobs, serviceRecords])
 
   // Days in the active range (7 for week/day, ~42 for the month grid).
   const periodDays = useMemo(() => {
@@ -731,15 +781,15 @@ function Schedule({ business }) {
         <Button variant="primary" size="md" leftIcon={Plus} onClick={() => setOneOffOpen(true)} className="w-full sm:w-auto">
           Service a one-off visit
         </Button>
-        {(view === 'month' || view === 'week') && overduePools.length > 0 && (
+        {(view === 'month' || view === 'week') && overdueVisits.length > 0 && (
           <button
             type="button"
             onClick={() => setOverdueListOpen(true)}
-            title="View overdue pools"
+            title="View overdue visits"
             className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/50 px-3 py-1.5 text-sm font-semibold hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
           >
             <span className="w-2 h-2 rounded-full bg-red-500" />
-            {overduePools.length} overdue pool{overduePools.length > 1 ? 's' : ''}
+            {overdueVisits.length} overdue visit{overdueVisits.length > 1 ? 's' : ''}
           </button>
         )}
       </div>
@@ -834,18 +884,20 @@ function Schedule({ business }) {
         onEditRecurring={handleEditRecurring}
       />
 
-      <Modal open={overdueListOpen} onClose={() => setOverdueListOpen(false)} title="Overdue pools" size="sm">
+      <Modal open={overdueListOpen} onClose={() => setOverdueListOpen(false)} title="Overdue visits" size="sm">
         <div className="space-y-2">
-          {overduePools.map(({ pool, daysOverdue }) => (
+          {overdueVisits.map(({ profile, occurrenceDate, daysOverdue }) => (
             <button
-              key={pool.id}
+              key={`${profile.id}-${ymd(occurrenceDate)}`}
               type="button"
-              onClick={() => { setOverdueListOpen(false); handleStopSelect(poolToStop(pool, { isOverdue: true, daysOverdue })) }}
+              onClick={() => { setOverdueListOpen(false); handleStopSelect(profileToStop(profile, occurrenceDate, { isOverdue: true, daysOverdue })) }}
               className="w-full text-left rounded-xl border border-gray-100 dark:border-gray-800 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors flex items-center justify-between gap-3"
             >
               <div className="min-w-0">
-                <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{pool.clients?.name || 'Client'}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{pool.name || 'Pool'}</p>
+                <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{profile.clients?.name || 'Client'}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                  {(profile.pools?.name || 'Pool')} · {occurrenceDate.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </p>
               </div>
               <span className="shrink-0 text-xs font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-full px-2.5 py-1">
                 {daysOverdue}d overdue
