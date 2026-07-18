@@ -106,6 +106,11 @@ serve(async (req) => {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;')
     }
+    // URL for an <img src>: only http(s), attribute-escaped, else empty.
+    const safeUrl = (u: any): string => {
+      const s = u == null ? '' : String(u)
+      return /^https?:\/\//i.test(s) ? esc(s) : ''
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const allPhotos = record.service_photos || []
@@ -137,7 +142,7 @@ serve(async (req) => {
       ? `<div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Photos</h3>
           ${photoUrls.map((u: string) =>
-            `<img src="${u}" alt="Access issue" width="520" style="width:100%;max-width:520px;height:auto;display:block;border-radius:8px;border:1px solid #E5E7EB;margin-bottom:8px;" />`
+            `<img src="${safeUrl(u)}" alt="Access issue" width="520" style="width:100%;max-width:520px;height:auto;display:block;border-radius:8px;border:1px solid #E5E7EB;margin-bottom:8px;" />`
           ).join('')}
         </div>`
       : ''
@@ -167,7 +172,7 @@ serve(async (req) => {
 
           <table style="width:100%;font-size:13px;color:#6B7280;background:#F9FAFB;border-radius:8px;">
             <tr><td style="padding:10px 14px;"><strong style="color:#374151;">Date:</strong> ${serviceDate}</td></tr>
-            <tr><td style="padding:0 14px 10px;"><strong style="color:#374151;">Technician:</strong> ${techName}</td></tr>
+            <tr><td style="padding:0 14px 10px;"><strong style="color:#374151;">Technician:</strong> ${esc(techName)}</td></tr>
           </table>
         </div>
 

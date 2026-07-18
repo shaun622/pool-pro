@@ -189,7 +189,7 @@ serve(async (req) => {
       .map((t: any) => `
       <li style="padding:4px 0;color:#374151;">
         <span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:#22C55E;color:white;text-align:center;line-height:18px;font-size:11px;margin-right:8px;vertical-align:middle;">&#10003;</span>
-        ${t.task_name}
+        ${esc(t.task_name)}
       </li>
     `).join('')
 
@@ -221,6 +221,12 @@ serve(async (req) => {
     // stray "<" or a crafted name can't inject markup into the customer/owner email.
     const esc = (s: any): string =>
       s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    // URL destined for an <img src> / <a href>: only http(s), attribute-escaped,
+    // else empty — blocks attribute breakout and javascript:/data: URLs.
+    const safeUrl = (u: any): string => {
+      const s = u == null ? '' : String(u)
+      return /^https?:\/\//i.test(s) ? esc(s) : ''
+    }
     const notesEscaped = record.notes ? esc(record.notes) : ''
 
     // ── Customisable email copy (Settings → Notifications) ──────────────────
@@ -270,7 +276,7 @@ serve(async (req) => {
       <div style="max-width:600px;margin:0 auto;">
         <!-- Header -->
         <div style="background:white;padding:28px 24px 16px;text-align:center;border-bottom:3px solid ${brandColour};">
-          ${business?.logo_url ? `<img src="${business.logo_url}" alt="${esc(business?.name)}" style="max-height:56px;max-width:220px;margin-bottom:10px;" />` : ''}
+          ${business?.logo_url ? `<img src="${safeUrl(business.logo_url)}" alt="${esc(business?.name)}" style="max-height:56px;max-width:220px;margin-bottom:10px;" />` : ''}
           <h1 style="margin:0;color:#111827;font-size:20px;font-weight:700;">${esc(business?.name) || 'PoolPro'}</h1>
         </div>
 
@@ -297,14 +303,14 @@ serve(async (req) => {
               <tr>
                 <td style="width:56px;vertical-align:top;">
                   ${staffMember.photo_url
-                    ? `<img src="${staffMember.photo_url}" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover;" />`
+                    ? `<img src="${safeUrl(staffMember.photo_url)}" alt="" style="width:48px;height:48px;border-radius:50%;object-fit:cover;" />`
                     : `<div style="width:48px;height:48px;border-radius:50%;background:${brandColour}20;color:${brandColour};font-size:18px;font-weight:700;text-align:center;line-height:48px;">${(staffMember.name || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}</div>`
                   }
                 </td>
                 <td style="vertical-align:top;padding-left:12px;">
-                  <p style="margin:0;font-size:15px;font-weight:600;color:#111827;">${staffMember.name}</p>
-                  <p style="margin:2px 0 0;font-size:13px;color:#6B7280;">${{technician:'Pool Technician',senior_tech:'Senior Technician',manager:'Manager',owner:'Owner'}[staffMember.role] || staffMember.role}</p>
-                  ${staffMember.phone ? `<p style="margin:2px 0 0;font-size:13px;color:${brandColour};">${staffMember.phone}</p>` : ''}
+                  <p style="margin:0;font-size:15px;font-weight:600;color:#111827;">${esc(staffMember.name)}</p>
+                  <p style="margin:2px 0 0;font-size:13px;color:#6B7280;">${{technician:'Pool Technician',senior_tech:'Senior Technician',manager:'Manager',owner:'Owner'}[staffMember.role] || esc(staffMember.role)}</p>
+                  ${staffMember.phone ? `<p style="margin:2px 0 0;font-size:13px;color:${brandColour};">${esc(staffMember.phone)}</p>` : ''}
                 </td>
               </tr>
             </table>
@@ -319,9 +325,9 @@ serve(async (req) => {
                 <td style="padding:2px 0;"><strong style="color:#374151;">Date:</strong> ${serviceDate}</td>
               </tr>
               <tr>
-                <td style="padding:2px 0;"><strong style="color:#374151;">Technician:</strong> ${staffMember?.name || record.technician_name || 'Technician'}</td>
+                <td style="padding:2px 0;"><strong style="color:#374151;">Technician:</strong> ${esc(staffMember?.name || record.technician_name || 'Technician')}</td>
               </tr>
-              ${pool.type ? `<tr><td style="padding:2px 0;"><strong style="color:#374151;">Pool type:</strong> ${pool.type}</td></tr>` : ''}
+              ${pool.type ? `<tr><td style="padding:2px 0;"><strong style="color:#374151;">Pool type:</strong> ${esc(pool.type)}</td></tr>` : ''}
             </table>
           </div>
           ` : ''}
@@ -331,7 +337,7 @@ serve(async (req) => {
         ${photoUrl && showC('photo') ? `
         <div style="background:white;padding:0 24px 20px;">
           <h3 style="margin:0 0 12px;font-size:15px;font-weight:600;color:#111827;">Pool & Test Kit Photo</h3>
-          <img src="${photoUrl}" alt="Pool and test kit" width="520" style="width:100%;max-width:520px;height:auto;display:block;border-radius:8px;border:1px solid #E5E7EB;" />
+          <img src="${safeUrl(photoUrl)}" alt="Pool and test kit" width="520" style="width:100%;max-width:520px;height:auto;display:block;border-radius:8px;border:1px solid #E5E7EB;" />
         </div>
         ` : ''}
 
@@ -388,8 +394,8 @@ serve(async (req) => {
                 <span style="font-size:18px;font-weight:700;color:${brandColour};">${esc(dose) || '--'}</span>
               </td>
             </tr></table>
-            ${product?.suggested_dose ? `<p style="margin:6px 0 0;font-size:12px;color:#6B7280;">Recommended dose: ${product.suggested_dose}</p>` : ''}
-            ${product?.notes ? `<p style="margin:3px 0 0;font-size:11px;color:#9CA3AF;line-height:1.4;">${product.notes}</p>` : ''}
+            ${product?.suggested_dose ? `<p style="margin:6px 0 0;font-size:12px;color:#6B7280;">Recommended dose: ${esc(product.suggested_dose)}</p>` : ''}
+            ${product?.notes ? `<p style="margin:3px 0 0;font-size:11px;color:#9CA3AF;line-height:1.4;">${esc(product.notes)}</p>` : ''}
           </div>`
           }).join('')}
         </div>
@@ -520,7 +526,7 @@ serve(async (req) => {
             ${record.notes && showA('notesCallout') ? `
             <!-- Tech Notes & Issues — red callout so the office sees flagged issues immediately -->
             <div style="background:#FEF2F2;border:1px solid #FECACA;border-left:4px solid #DC2626;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
-              <p style="margin:0 0 5px;font-size:12px;color:#991B1B;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">&#9888;&#65039; Notes &amp; issues from ${techName}</p>
+              <p style="margin:0 0 5px;font-size:12px;color:#991B1B;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">&#9888;&#65039; Notes &amp; issues from ${esc(techName)}</p>
               <p style="margin:0;font-size:14px;color:#7F1D1D;line-height:1.5;">${notesEscaped}</p>
             </div>
             ` : ''}
@@ -551,7 +557,7 @@ serve(async (req) => {
               <table style="width:100%;font-size:13px;color:#374151;">
                 <tr><td style="padding:3px 0;color:#6B7280;">Client</td><td style="padding:3px 0;text-align:right;font-weight:600;">${esc(client.name)}</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Pool</td><td style="padding:3px 0;text-align:right;font-weight:600;">${esc(pool.address)}</td></tr>
-                <tr><td style="padding:3px 0;color:#6B7280;">Technician</td><td style="padding:3px 0;text-align:right;font-weight:600;">${techName}</td></tr>
+                <tr><td style="padding:3px 0;color:#6B7280;">Technician</td><td style="padding:3px 0;text-align:right;font-weight:600;">${esc(techName)}</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Tasks</td><td style="padding:3px 0;text-align:right;font-weight:600;">${completedTaskCount}/${tasks.length} completed</td></tr>
                 <tr><td style="padding:3px 0;color:#6B7280;">Chemicals added</td><td style="padding:3px 0;text-align:right;font-weight:600;">${chemicalsAdded.length}</td></tr>
               </table>
@@ -561,7 +567,7 @@ serve(async (req) => {
             ${photoUrl && showA('photo') ? `
             <div style="margin-bottom:16px;">
               <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#374151;">Pool Photo</p>
-              <img src="${photoUrl}" alt="Pool and test kit" width="512" style="width:100%;max-width:512px;height:auto;display:block;border-radius:6px;border:1px solid #E5E7EB;" />
+              <img src="${safeUrl(photoUrl)}" alt="Pool and test kit" width="512" style="width:100%;max-width:512px;height:auto;display:block;border-radius:6px;border:1px solid #E5E7EB;" />
             </div>
             ` : ''}
 

@@ -66,6 +66,10 @@ serve(async (req) => {
     // item descriptions) so a crafted value can't inject markup into the email.
     const esc = (s: any): string =>
       s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const safeUrl = (u: any): string => {
+      const s = u == null ? '' : String(u)
+      return /^https?:\/\//i.test(s) ? esc(s) : ''
+    }
 
     const itemsHtml = lineItems.map((item: any) => `
       <tr>
@@ -82,7 +86,7 @@ serve(async (req) => {
     <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F9FAFB;">
       <div style="max-width:600px;margin:0 auto;background:white;">
         <div style="background:${brandColour};padding:24px;text-align:center;">
-          ${business?.logo_url ? `<img src="${business.logo_url}" alt="" style="height:48px;margin-bottom:8px;" />` : ''}
+          ${business?.logo_url ? `<img src="${safeUrl(business.logo_url)}" alt="" style="height:48px;margin-bottom:8px;" />` : ''}
           <h1 style="margin:0;color:white;font-size:20px;">${esc(business?.name) || 'PoolPro'}</h1>
         </div>
         <div style="padding:24px;">

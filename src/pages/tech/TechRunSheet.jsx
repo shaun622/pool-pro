@@ -12,7 +12,7 @@ import { cacheRoute, readCachedRoute } from '../../lib/offlineStore'
 import { requestPersist } from '../../lib/offlineDb'
 import { cn, formatDate } from '../../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../../lib/mapbox'
-import { occurrencesInRange } from '../../lib/recurringScheduling'
+import { occurrencesInRange, isProfileActive } from '../../lib/recurringScheduling'
 import { Calendar, Check, Clock, MapPin, Phone, Plus } from 'lucide-react'
 
 // ─── Helpers ───────────────────────────────────
@@ -46,12 +46,10 @@ function profileIntervalDays(profile) {
   return map[rule] || 7
 }
 
-function isProfileActive(profile) {
-  if (profile.status === 'completed' || profile.status === 'cancelled' || profile.status === 'paused') return false
-  if (profile.duration_type === 'num_visits' && profile.total_visits && (profile.completed_visits || 0) >= profile.total_visits) return false
-  if (profile.duration_type === 'until_date' && profile.end_date && new Date(profile.end_date) < new Date()) return false
-  return true
-}
+// isProfileActive now comes from ../../lib/recurringScheduling (shared helper): its
+// until_date check treats end_date as end-of-day LOCAL, so a profile's final visit
+// stays on the run sheet all day. The old local copy here compared end_date against
+// UTC midnight and dropped the last visit from ~10am AEST on its final day.
 
 // Numbered pin
 function numberedIcon(n, color = '#0CA5EB') {
