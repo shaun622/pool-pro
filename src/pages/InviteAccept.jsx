@@ -18,13 +18,9 @@ export default function InviteAccept() {
   useEffect(() => {
     if (!token) return
     async function fetchInvite() {
-      // Find the staff member by invite token
-      const { data, error: err } = await supabase
-        .from('staff_members')
-        .select('*, businesses(name)')
-        .eq('invite_token', token)
-        .eq('invite_status', 'pending')
-        .maybeSingle()
+      // Look up the invite via a security-definer RPC — anon has NO direct read on
+      // staff_members. Returns only { name, email, business_name } for this token.
+      const { data, error: err } = await supabase.rpc('get_invite_by_token', { p_token: token })
 
       if (err || !data) {
         setError('This invite link is invalid or has already been used.')
@@ -33,7 +29,7 @@ export default function InviteAccept() {
       }
 
       setInvite(data)
-      setBusinessName(data.businesses?.name || 'a business')
+      setBusinessName(data.business_name || 'a business')
       setLoading(false)
     }
     fetchInvite()
@@ -54,8 +50,8 @@ export default function InviteAccept() {
     setError('')
 
     try {
-      // 1. Create the auth user
-      const { data: authData, error: signupErr } = await supabase.auth.signUp({
+      // 1. Create the auth user (invite.email comes from get_invite_by_token)
+      const { error: signupErr } = await supabase.auth.signUp({
         email: invite.email,
         password,
         options: {
@@ -66,21 +62,15 @@ export default function InviteAccept() {
 
       if (signupErr) throw signupErr
 
-      // 2. Link the staff member to the auth user
-      const userId = authData.user?.id
-      if (userId) {
-        await supabase
-          .from('staff_members')
-          .update({
-            user_id: userId,
-            invite_status: 'accepted',
-            invite_token: null,
-          })
-          .eq('id', invite.id)
-      }
-
-      // 3. Sign in immediately
+      // 2. Sign in so the claim RPC runs as the new user.
       await supabase.auth.signInWithPassword({ email: invite.email, password })
+
+      // 3. Link the pending seat to this user, server-side (security-definer RPC).
+      //    Self-links auth.uid() to the token's row — no client-supplied user_id —
+      //    and verifies the invite email matches the signed-in user.
+      const { data: claim, error: claimErr } = await supabase.rpc('claim_staff_invite', { p_token: token })
+      if (claimErr) throw claimErr
+      if (!claim?.ok) throw new Error('This invite link is invalid or has already been used.')
 
       // 4. Navigate to tech view
       navigate('/tech', { replace: true })
