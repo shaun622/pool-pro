@@ -22,13 +22,15 @@
 
 -- ── service-photos ────────────────────────────────────────────────────────────
 drop policy if exists "Anyone can view service photos" on storage.objects;
+drop policy if exists "Business reads own service photos" on storage.objects;
+drop policy if exists "Customer reads own service photos" on storage.objects;
 
 -- Business reads its own folder (list / management / future signed URLs).
 create policy "Business reads own service photos" on storage.objects
   for select to authenticated
   using (
     bucket_id = 'service-photos'
-    and (storage.foldername(name))[1] = public.current_business_id()::text
+    and (storage.foldername(storage.objects.name))[1] = public.current_business_id()::text
   );
 
 -- Customer portal reads photos of THEIR OWN pools' service records (the service
@@ -42,17 +44,18 @@ create policy "Customer reads own service photos" on storage.objects
       from service_records sr
       join pools   p on p.id = sr.pool_id
       join clients c on c.id = p.client_id
-      where sr.id::text = (storage.foldername(name))[2]
+      where sr.id::text = (storage.foldername(storage.objects.name))[2]
         and c.auth_user_id = auth.uid()
     )
   );
 
 -- ── staff-photos ──────────────────────────────────────────────────────────────
 drop policy if exists "Anyone can view staff photos" on storage.objects;
+drop policy if exists "Business reads own staff photos" on storage.objects;
 
 create policy "Business reads own staff photos" on storage.objects
   for select to authenticated
   using (
     bucket_id = 'staff-photos'
-    and (storage.foldername(name))[1] = public.current_business_id()::text
+    and (storage.foldername(storage.objects.name))[1] = public.current_business_id()::text
   );
