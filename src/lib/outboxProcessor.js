@@ -18,8 +18,16 @@ import { updateDraft } from './offlineDb'
 // serviceRecordId (the RPC idempotency key) and a deterministic upsert photo
 // path; the draft is deleted only after the server confirms; the RPC collapses
 // replays to `conflict`; the email is guarded by report_sent_at. See
-// src/lib/pendingDrafts.js. The one invariant this file must uphold: NEVER mint a
-// new serviceRecordId for an existing draft — only ever resend it.
+// src/lib/pendingDrafts.js.
+//
+// ARCHITECTURAL INVARIANT: never mint a new serviceRecordId for an existing draft —
+// only ever resend it. The processor mutates ONLY retry metadata
+// (attemptCount/nextAttemptAt/lastAttemptAt/lastError/failed), never draft contents.
+//
+// ARCHITECTURAL INVARIANT: one occurrence produces at most one ServiceRecord. A
+// completion carries its recurring_profile_id + occurrence_date (identity); a
+// null-identity completion on a multi-profile pool is a bug (audit #3), not a valid
+// one-off. The processor never manufactures identity — it sends the draft as written.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Backoff (ms) indexed by attemptCount. First attempt is immediate; thereafter
@@ -29,9 +37,15 @@ const BACKOFF_MS = [0, 10_000, 30_000, 60_000, 120_000, 300_000]
 // When drafts remain but none are individually due yet, re-check at least this
 // often (safety heartbeat).
 const HEARTBEAT_MS = 60_000
+// A TRANSIENT draft still retrying past either threshold escalates its status from
+// the calm "retrying" to "stuck" — it keeps retrying forever, just louder, so a
+// genuinely wedged visit gets noticed instead of blending into normal weak-signal.
+const STUCK_ATTEMPTS = 100
+const STUCK_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 // Status broadcast so the "waiting to send" banner can show calm auto-status
-// instead of a scary manual button. Values: idle | sending | retrying | auth | wrong-org.
+// instead of a scary manual button.
+// Values: idle | sending | retrying | stuck | failed | auth | wrong-org.
 export const OUTBOX_STATUS_EVENT = 'outbox:status'
 
 let _started = false
@@ -39,12 +53,20 @@ let _businessId = null
 let _draining = false
 let _rerun = false
 let _forceNext = false
+let _retryFailedNext = false
 let _timer = null
 let _status = 'idle'
 let _lastError = null
 
 function backoffFor(attempt) {
   return BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)]
+}
+
+// A draft whose transient retries have run long enough to warrant a louder warning.
+function isAged(draft) {
+  if ((draft.attemptCount || 0) >= STUCK_ATTEMPTS) return true
+  const created = draft.createdAt || draft.lastAttemptAt
+  return created ? (Date.now() - created) >= STUCK_AGE_MS : false
 }
 
 function setStatus(status, lastError = null) {
@@ -75,43 +97,57 @@ export function setOutboxBusiness(businessId) {
 }
 
 // Request a drain now. `force` retries every draft immediately, ignoring its
-// backoff (used for user/connectivity events — a good moment to try). Without
-// force, drafts still waiting out their backoff are skipped.
-export function kickOutbox({ force = false } = {}) {
+// backoff (used for user/connectivity events — a good moment to try). `retryFailed`
+// ALSO re-attempts permanently-failed drafts — reserved for an explicit manual
+// "Send now" tap; automatic/event kicks leave failed drafts alone.
+export function kickOutbox({ force = false, retryFailed = false } = {}) {
   if (force) _forceNext = true
+  if (retryFailed) _retryFailedNext = true
   scheduleTimer(0)
 }
 
-export async function drainOutbox({ force = false } = {}) {
+export async function drainOutbox({ force = false, retryFailed = false } = {}) {
   if (force) _forceNext = true
+  if (retryFailed) _retryFailedNext = true
   if (_draining) { _rerun = true; return }
   _draining = true
   try {
     do {
       _rerun = false
       const useForce = _forceNext
+      const useRetryFailed = _retryFailedNext
       _forceNext = false
-      await drainPass(useForce)
+      _retryFailedNext = false
+      await drainPass(useForce, useRetryFailed)
     } while (_rerun)
   } finally {
     _draining = false
   }
 }
 
-async function drainPass(force) {
+async function drainPass(force, retryFailed) {
   const drafts = await listDrafts()
   if (!drafts.length) { setStatus('idle'); scheduleTimer(null); return }
 
   const now = Date.now()
   let anyAuth = false
   let anyWrongOrg = false
+  let anyFailed = false
+  let anyStuck = false
+  let anyRetryable = false
   let soonestDue = null
 
   setStatus('sending')
 
   for (const d of drafts) {
+    // Permanently failed — never auto-retried. Only an explicit manual "Send now"
+    // (retryFailed) re-attempts it; otherwise it just waits for operator attention.
+    if (d.failed && !retryFailed) { anyFailed = true; continue }
+
     const dueAt = d.nextAttemptAt || 0
-    if (!force && dueAt > now) {
+    if (!force && !d.failed && dueAt > now) {
+      anyRetryable = true
+      if (isAged(d)) anyStuck = true
       soonestDue = soonestDue == null ? dueAt : Math.min(soonestDue, dueAt)
       continue
     }
@@ -119,24 +155,48 @@ async function drainPass(force) {
     const status = await submitOne(d, _businessId)
     if (status === 'sent' || status === 'conflict') continue // deleted inside submitOne
 
-    // Failure — keep the draft, stamp retry bookkeeping, back off.
     const attempt = (d.attemptCount || 0) + 1
-    const nextAttemptAt = Date.now() + backoffFor(attempt)
-    await updateDraft({ ...d, attemptCount: attempt, lastAttemptAt: Date.now(), nextAttemptAt, lastError: status })
-    soonestDue = soonestDue == null ? nextAttemptAt : Math.min(soonestDue, nextAttemptAt)
+
+    if (status === 'failed') {
+      // PERMANENT: a malformed payload can't succeed on retry. Keep the draft (no
+      // data loss), stop auto-retrying, flag for attention.
+      await updateDraft({ ...d, attemptCount: attempt, lastAttemptAt: Date.now(), failed: true, lastError: status })
+      anyFailed = true
+      continue
+    }
+
+    // TRANSIENT / auth / wrong-org — keep, back off (with jitter), keep retrying.
+    // Jitter avoids a whole crew hammering the server in lockstep on reconnect.
+    const base = backoffFor(attempt)
+    const jitter = base > 0 ? Math.floor(Math.random() * Math.min(base * 0.3, 10_000)) : 0
+    const nextAttemptAt = Date.now() + base + jitter
+    const next = { ...d, attemptCount: attempt, lastAttemptAt: Date.now(), nextAttemptAt, lastError: status, failed: false }
+    await updateDraft(next)
+    anyRetryable = true
     if (status === 'auth') anyAuth = true
     else if (status === 'wrong-org') anyWrongOrg = true
+    else if (isAged(next)) anyStuck = true
+    soonestDue = soonestDue == null ? nextAttemptAt : Math.min(soonestDue, nextAttemptAt)
   }
 
   const remaining = await listDrafts()
   if (!remaining.length) { setStatus('idle'); scheduleTimer(null); return }
 
-  if (anyAuth) setStatus('auth', 'auth')
+  // Status precedence, most-actionable first.
+  if (anyFailed) setStatus('failed', 'failed')
+  else if (anyAuth) setStatus('auth', 'auth')
   else if (anyWrongOrg) setStatus('wrong-org', 'wrong-org')
+  else if (anyStuck) setStatus('stuck', 'stuck')
   else setStatus('retrying')
 
-  const wait = soonestDue != null ? soonestDue - Date.now() : HEARTBEAT_MS
-  scheduleTimer(Math.min(Math.max(0, wait), HEARTBEAT_MS))
+  // Schedule the next pass only if something is actually retryable. If every
+  // remaining draft is permanently failed, stop the timer — a manual retry or a
+  // connectivity/focus event will re-trigger a drain.
+  if (anyRetryable && soonestDue != null) {
+    scheduleTimer(Math.min(Math.max(0, soonestDue - Date.now()), HEARTBEAT_MS))
+  } else {
+    scheduleTimer(null)
+  }
 }
 
 // Start the singleton once. Wires the triggers that should attempt a send:

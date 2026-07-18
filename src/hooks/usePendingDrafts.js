@@ -31,10 +31,10 @@ export function usePendingDrafts() {
     }
   }, [refresh])
 
-  // Optional manual nudge — force an immediate retry of every draft. Not required
-  // for correctness (the sender retries on its own); it just lets an impatient
-  // tech skip the backoff.
-  const submit = useCallback(() => { drainOutbox({ force: true }) }, [])
+  // Optional manual nudge — force an immediate retry of every draft, INCLUDING any
+  // permanently-failed ones (a manual tap is the one place we re-attempt those).
+  // Not required for correctness; the sender retries transient failures on its own.
+  const submit = useCallback(() => { drainOutbox({ force: true, retryFailed: true }) }, [])
 
   return { count, status, submitting: status === 'sending', submit, refresh }
 }

@@ -617,6 +617,9 @@ function Schedule({ business }) {
     return flat
   }, [allJobs, allPools, allProfiles, rangeStart, rangeEnd, serviceDays, serviceRecords, view])
 
+  // ARCHITECTURAL INVARIANT: an occurrence is overdue iff it has no covering service
+  // record (completed OR unable, matched by coverage) — never by the next_due_at cache.
+  //
   // Individual overdue VISITS (occurrences), grid-independent. An occurrence is
   // overdue iff it has no COVERING service record — completed OR unable, matched by
   // the same path-1b coverage the calendar uses (render on occurrence_date, else

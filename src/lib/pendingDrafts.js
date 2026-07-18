@@ -97,10 +97,17 @@ function buildPayload(draft, photoRows) {
   }
 }
 
+// ARCHITECTURAL INVARIANT: a draft's serviceRecordId is immutable for the life of
+// the draft — it is the RPC idempotency key. Never regenerate/re-key it on retry,
+// and never rebuild the payload; only retry metadata may change. Every no-duplicate
+// guarantee below depends on the key staying constant across attempts.
+//
 // Submit one draft. NEVER throws — returns a status:
 //   'sent'      RPC applied a fresh record
 //   'conflict'  already recorded (replay / office-won) — treated as success
-//   'pending'   couldn't send (offline / upload or RPC failed) — draft kept
+//   'pending'   TRANSIENT (offline / timeout / 5xx / unknown) — draft kept, keep retrying
+//   'auth'      session expired / no permission — draft kept, tech must sign in
+//   'failed'    PERMANENT (malformed payload) — draft kept, auto-retry STOPS
 //   'wrong-org' draft belongs to another business — draft kept (server also rejects)
 // The draft is deleted ONLY after BOTH all photo uploads AND the RPC return
 // success/conflict. On a retry the photos overwrite their deterministic paths.
@@ -125,7 +132,7 @@ export async function submitOne(draft, currentBusinessId) {
         SEND_TIMEOUT_MS,
         'photo upload',
       )
-      if (upErr) return isFatalAuthError(upErr) ? 'auth' : 'pending'
+      if (upErr) return classifyError(upErr)
       const { data: urlData } = supabase.storage.from('service-photos').getPublicUrl(path)
       photoRows.push({
         clientPhotoId: p.clientPhotoId,
@@ -157,7 +164,7 @@ export async function submitOne(draft, currentBusinessId) {
     } finally {
       clearTimeout(rpcTimer)
     }
-    if (error) return isFatalAuthError(error) ? 'auth' : 'pending'
+    if (error) return classifyError(error)
 
     // 3. Delete the draft — only now that both upload + RPC returned.
     await deleteDraft(draft.serviceRecordId)
@@ -196,6 +203,37 @@ function isFatalAuthError(err) {
   return code === '401' || code === '403' || code === '42501' || code === 'PGRST301'
     || msg.includes('jwt') || msg.includes('permission denied')
     || msg.includes('not authorized') || msg.includes('unauthorized')
+    || msg.includes('authoris') // British spelling — the RPCs raise "Not authorised"
+}
+
+// Classify a submit failure. Order matters:
+//   'auth'    session expired/revoked or lacks permission → keep, tell tech to sign in
+//   'failed'  PERMANENT — the payload is malformed/invalid and will fail identically
+//             on every retry → keep the draft but STOP auto-retrying
+//   'pending' TRANSIENT (offline/timeout/abort/5xx/unknown) → keep, retry (the DEFAULT)
+function classifyError(err) {
+  if (!err) return 'pending'
+  if (isFatalAuthError(err)) return 'auth'
+  if (isPermanentError(err)) return 'failed'
+  return 'pending'
+}
+
+// PERMANENT = deterministic bad-data failures retrying can't fix. Detected
+// CONSERVATIVELY by Postgres SQLSTATE: data-exception 22xxx (bad numeric/date cast,
+// out of range) or integrity-constraint 23xxx (not-null/check/FK) — EXCEPT unique
+// 23505, which the RPC already collapses to `conflict` (success). Plus a storage
+// "payload too large" (413). A transient network/timeout/abort error carries NO
+// SQLSTATE, so it can never be mis-classified as permanent — anything unrecognised
+// stays 'pending' (retry forever). This gates the RPC + storage errors only; the
+// report-email edge function is fire-and-forget and never gates a draft.
+function isPermanentError(err) {
+  if (!err) return false
+  const code = String(err.code || err.statusCode || err.status || '')
+  const msg = String(err.message || '').toLowerCase()
+  if (/^22[0-9a-z]{3}$/i.test(code)) return true
+  if (/^23[0-9a-z]{3}$/i.test(code) && code !== '23505') return true
+  if (code === '413' || /too large|exceeds the maximum|file size/i.test(msg)) return true
+  return false
 }
 
 // Submit all pending drafts sequentially (never parallel), continue-on-failure.
