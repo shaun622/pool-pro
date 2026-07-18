@@ -1,21 +1,34 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { getAAL } from '../../lib/mfa'
+import { getAAL, hasVerifiedMfa } from '../../lib/mfa'
 import MfaChallenge from './MfaChallenge'
 
 /**
  * Wraps the authenticated app. If the signed-in user has a verified TOTP factor
  * but the session is still AAL1, force the step-up challenge before anything
- * renders. Users WITHOUT a factor are unaffected (nextLevel stays 'aal1'), and
- * any API error fails OPEN so MFA can never lock someone out.
+ * renders. Users WITHOUT a factor are unaffected. On an inconclusive AAL check we
+ * now fail CLOSED only when a verified factor is CONFIRMED (audit #5) — a non-MFA
+ * user is never locked out by a transient error.
+ *
+ * NOTE: this is a UX / defence-in-depth gate; being client-side it is bypassable
+ * via a direct API call. Real enforcement needs AAL2 in RLS (#5 Part B — not shipped;
+ * requires an MFA-enrolled account to test the lockout boundary safely).
  */
 export default function MfaGate({ children }) {
   const [status, setStatus] = useState('checking') // checking | ok | challenge
 
   async function check() {
     const { currentLevel, nextLevel } = await getAAL()
-    if (nextLevel === 'aal2' && currentLevel === 'aal1') setStatus('challenge')
-    else setStatus('ok')
+    if (nextLevel === 'aal2' && currentLevel === 'aal1') { setStatus('challenge'); return }
+    if (currentLevel === 'aal2') { setStatus('ok'); return }
+    // AAL was inconclusive (null → API error). Fail CLOSED only if we can CONFIRM a
+    // verified factor exists (audit #5); otherwise fail open so a transient hiccup
+    // never locks out a user who has no MFA.
+    if (currentLevel == null && nextLevel == null) {
+      setStatus((await hasVerifiedMfa()) ? 'challenge' : 'ok')
+      return
+    }
+    setStatus('ok')
   }
 
   useEffect(() => {
