@@ -451,12 +451,10 @@ export default function PortalDashboard() {
 
       setClientName(clients[0].name)
 
-      // Get business info from first client
-      const { data: bizData } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', clients[0].business_id)
-        .single()
+      // Get business branding/contact via a definer RPC (returns only name/logo/
+      // colour/phone/email — never Stripe/bank/report config). The whole-row
+      // customer SELECT policy on businesses is dropped in the #9 migration.
+      const { data: bizData } = await supabase.rpc('get_portal_business', { p_business_id: clients[0].business_id })
       setBusiness(bizData)
 
       // Collect all pools

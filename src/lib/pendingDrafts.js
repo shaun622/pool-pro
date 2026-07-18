@@ -73,6 +73,12 @@ export async function countDraftsAsync() {
   return (await getAllDrafts()).length
 }
 
+// Local YYYY-MM-DD of a date-like (or now). Mirrors the online path's ymdLocal.
+function ymdLocalOf(dateLike) {
+  const d = dateLike ? new Date(dateLike) : new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function buildPayload(draft, photoRows) {
   const base = {
     businessId: draft.businessId,
@@ -81,7 +87,14 @@ function buildPayload(draft, photoRows) {
     technicianName: draft.technicianName || null,
     servicedAt: draft.servicedAt,
     recurringProfileId: draft.recurringProfileId || null,
-    occurrenceDate: draft.occurrenceDate || null,
+    // A recurring completion with an identity but no occurrence date (e.g. a profile
+    // with no computed next_generation_at) falls back to the SERVICE day
+    // (draft.servicedAt) — matching the online path's ymdLocal(now) fallback
+    // (useService.js) — so the RPC fulfils an occurrence instead of bumping
+    // completed_visits against a null and leaving the schedule stuck (audit #12).
+    occurrenceDate: draft.recurringProfileId
+      ? (draft.occurrenceDate || ymdLocalOf(draft.servicedAt))
+      : null,
     isOneOff: !!draft.isOneOff,
     photos: photoRows,
   }
