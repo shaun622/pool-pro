@@ -21,6 +21,32 @@ import {
   cn,
 } from '../lib/utils'
 
+// Pool condition on arrival — the tech's required selection on the arrival step.
+// Colours mirror the ADMIN report email exactly (complete-service/index.ts):
+// Good=green, Cloudy/Dirty=orange, Green=red. Admin record only, never customer-facing.
+const CONDITION_STYLES = {
+  Good: {
+    card: 'border-green-200 dark:border-green-900 bg-green-50/60 dark:bg-green-950/20',
+    dot: 'bg-green-500',
+    text: 'text-green-700 dark:text-green-300',
+  },
+  Cloudy: {
+    card: 'border-orange-200 dark:border-orange-900 bg-orange-50/60 dark:bg-orange-950/20',
+    dot: 'bg-orange-500',
+    text: 'text-orange-700 dark:text-orange-300',
+  },
+  Dirty: {
+    card: 'border-orange-200 dark:border-orange-900 bg-orange-50/60 dark:bg-orange-950/20',
+    dot: 'bg-orange-500',
+    text: 'text-orange-700 dark:text-orange-300',
+  },
+  Green: {
+    card: 'border-red-200 dark:border-red-900 bg-red-50/60 dark:bg-red-950/20',
+    dot: 'bg-red-500',
+    text: 'text-red-700 dark:text-red-300',
+  },
+}
+
 export default function ServiceDetail() {
   const { id: serviceId } = useParams()
   const [record, setRecord] = useState(null)
@@ -273,6 +299,24 @@ export default function ServiceDetail() {
               )}
             </div>
           </Card>
+
+          {/* Pool condition on arrival — mirrors the admin report banner. Only
+              renders for records that captured it (pre-feature rows are null). */}
+          {CONDITION_STYLES[record.pool_condition] && (
+            <Card className={CONDITION_STYLES[record.pool_condition].card}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Pool condition on arrival
+                  </h2>
+                  <p className={cn('text-base font-bold mt-0.5', CONDITION_STYLES[record.pool_condition].text)}>
+                    {record.pool_condition}
+                  </p>
+                </div>
+                <span className={cn('w-3 h-3 rounded-full shrink-0', CONDITION_STYLES[record.pool_condition].dot)} />
+              </div>
+            </Card>
+          )}
 
           {/* Chemical Readings */}
           <Card>
