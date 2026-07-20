@@ -510,6 +510,21 @@ serve(async (req) => {
       const jobsThisWeek = weekRes.count ?? '—'
       const remainingToday = remainingRes.count ?? '—'
 
+      // Pool condition on arrival — ADMIN report only. Colour: Good=green,
+      // Cloudy/Dirty=orange, Green=red. Styled like the Notes & Issues callout.
+      const poolCondition = record.pool_condition || null
+      const conditionStyle = ({
+        Good:   { bg: '#F0FDF4', border: '#BBF7D0', accent: '#16A34A', label: '#166534', text: '#14532D' },
+        Cloudy: { bg: '#FFF7ED', border: '#FED7AA', accent: '#EA580C', label: '#9A3412', text: '#7C2D12' },
+        Dirty:  { bg: '#FFF7ED', border: '#FED7AA', accent: '#EA580C', label: '#9A3412', text: '#7C2D12' },
+        Green:  { bg: '#FEF2F2', border: '#FECACA', accent: '#DC2626', label: '#991B1B', text: '#7F1D1D' },
+      } as Record<string, any>)[poolCondition as string]
+      const poolConditionBanner = (poolCondition && conditionStyle) ? `
+            <div style="background:${conditionStyle.bg};border:1px solid ${conditionStyle.border};border-left:4px solid ${conditionStyle.accent};border-radius:8px;padding:14px 16px;margin-bottom:16px;">
+              <p style="margin:0 0 5px;font-size:12px;color:${conditionStyle.label};text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Pool condition on arrival</p>
+              <p style="margin:0;font-size:16px;color:${conditionStyle.text};line-height:1.5;font-weight:700;">${esc(poolCondition)}</p>
+            </div>` : ''
+
       const ownerHtml = `
       <!DOCTYPE html>
       <html>
@@ -563,6 +578,8 @@ serve(async (req) => {
               </table>
             </div>
             ` : ''}
+
+            ${poolConditionBanner}
 
             ${photoUrl && showA('photo') ? `
             <div style="margin-bottom:16px;">

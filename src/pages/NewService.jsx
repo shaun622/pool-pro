@@ -127,6 +127,7 @@ export default function NewService() {
 
   // Pool photo
   const [servicePhoto, setServicePhoto] = useState(null)
+  const [poolCondition, setPoolCondition] = useState(null) // required arrival selection → admin-report banner
   const [photoPreview, setPhotoPreview] = useState(null)
   const [photoMeta, setPhotoMeta] = useState(null) // { lat, lng, timestamp, address }
   const [capturingPhoto, setCapturingPhoto] = useState(false)
@@ -410,6 +411,7 @@ export default function NewService() {
         occurrenceDate: occ.occurrenceDate || null,
         isOneOff: !!location.state?.oneOff,
         notes,
+        poolCondition,
         readings: cleanReadings,
         tasks: tasks.map(t => ({ name: t.name, completed: t.completed })),
         chemicals: validChemicals,
@@ -1054,15 +1056,40 @@ export default function NewService() {
               )}
             </div>
 
+            {/* Pool condition on arrival — required. Drives the admin-report banner. */}
+            <div className="mt-5">
+              <label className="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Pool condition on arrival <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {['Good', 'Cloudy', 'Dirty', 'Green'].map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setPoolCondition(opt)}
+                    className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+                      poolCondition === opt
+                        ? 'border-pool-500 bg-pool-50 text-pool-700 dark:bg-pool-950/40 dark:text-pool-300 dark:border-pool-400'
+                        : 'border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Button
               onClick={() => setStep(1)}
-              disabled={!servicePhoto}
-              className="w-full min-h-[48px] mt-2"
+              disabled={!servicePhoto || !poolCondition}
+              className="w-full min-h-[48px] mt-4"
             >
               {t('common.continue')}
             </Button>
-            {!servicePhoto && (
-              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">{t('service.photoRequired')}</p>
+            {(!servicePhoto || !poolCondition) && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1">
+                {!servicePhoto ? t('service.photoRequired') : 'Select the pool condition to continue'}
+              </p>
             )}
           </div>
         )}

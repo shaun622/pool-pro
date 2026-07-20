@@ -96,6 +96,7 @@ function buildPayload(draft, photoRows) {
       ? (draft.occurrenceDate || ymdLocalOf(draft.servicedAt))
       : null,
     isOneOff: !!draft.isOneOff,
+    poolCondition: draft.poolCondition || null,
     photos: photoRows,
   }
   if (draft.kind === 'unable') {
