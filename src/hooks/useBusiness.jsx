@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext, createContext, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { withDeadline, DEADLINE_MS } from '../lib/deadline'
 import { useAuth } from './useAuth'
 import { usePlans } from './usePlans'
 import { cacheContext, readCachedContext } from '../lib/offlineStore'
@@ -38,11 +39,13 @@ export function BusinessProvider({ children }) {
 
     async function resolve() {
       // 1. Check if they own a business
-      const { data: ownedBiz, error: bizErr } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('owner_id', userId)
-        .maybeSingle()
+      const { data: ownedBiz, error: bizErr } = await withDeadline(
+        supabase
+          .from('businesses')
+          .select('*')
+          .eq('owner_id', userId)
+          .maybeSingle(),
+        DEADLINE_MS, 'business-resolve')
 
       if (cancelled) return
 
@@ -56,12 +59,14 @@ export function BusinessProvider({ children }) {
       }
 
       // 2. Check if they're a staff member linked via user_id
-      const { data: staffRow, error: staffErr } = await supabase
-        .from('staff_members')
-        .select('*, businesses(*)')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .maybeSingle()
+      const { data: staffRow, error: staffErr } = await withDeadline(
+        supabase
+          .from('staff_members')
+          .select('*, businesses(*)')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .maybeSingle(),
+        DEADLINE_MS, 'staff-resolve')
 
       if (cancelled) return
 
@@ -162,38 +167,49 @@ export function BusinessProvider({ children }) {
     // But since user hasn't changed, we need to manually re-run
     const userId = user.id
 
-    const { data: ownedBiz } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('owner_id', userId)
-      .maybeSingle()
+    try {
+      const { data: ownedBiz } = await withDeadline(
+        supabase
+          .from('businesses')
+          .select('*')
+          .eq('owner_id', userId)
+          .maybeSingle(),
+        DEADLINE_MS, 'business-refetch')
 
-    if (ownedBiz) {
-      setBusiness(ownedBiz)
-      setStaffRecord(null)
-      setUserRole('owner')
+      if (ownedBiz) {
+        setBusiness(ownedBiz)
+        setStaffRecord(null)
+        setUserRole('owner')
+        return
+      }
+
+      const { data: staffRow } = await withDeadline(
+        supabase
+          .from('staff_members')
+          .select('*, businesses(*)')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .maybeSingle(),
+        DEADLINE_MS, 'staff-refetch')
+
+      if (staffRow && staffRow.businesses) {
+        setBusiness(staffRow.businesses)
+        setStaffRecord(staffRow)
+        const r = staffRow.role?.toLowerCase()
+        setUserRole(r === 'admin' || r === 'manager' || r === 'owner' ? 'admin' : 'tech')
+      } else {
+        setBusiness(null)
+        setStaffRecord(null)
+        setUserRole(null)
+      }
+    } catch (e) {
+      // A deadline/failure must clear the app-shell gate — never pin it on the
+      // spinner. Keep whatever business context is already in state.
+      console.warn('Business refetch failed:', e?.message || e)
+    } finally {
+      // `return` in the owner branch above still runs this — loading always clears.
       setBusinessLoading(false)
-      return
     }
-
-    const { data: staffRow } = await supabase
-      .from('staff_members')
-      .select('*, businesses(*)')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (staffRow && staffRow.businesses) {
-      setBusiness(staffRow.businesses)
-      setStaffRecord(staffRow)
-      const r = staffRow.role?.toLowerCase()
-      setUserRole(r === 'admin' || r === 'manager' || r === 'owner' ? 'admin' : 'tech')
-    } else {
-      setBusiness(null)
-      setStaffRecord(null)
-      setUserRole(null)
-    }
-    setBusinessLoading(false)
   }, [user])
 
   return (

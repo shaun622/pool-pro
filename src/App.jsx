@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { BusinessProvider, useBusiness } from './hooks/useBusiness'
@@ -9,6 +9,7 @@ import AppShell from './components/layout/AppShell'
 import TechShell from './components/layout/TechShell'
 import MfaGate from './components/auth/MfaGate'
 import OutboxSyncProvider from './components/OutboxSyncProvider'
+import { initAuthWatchdog } from './lib/authWatchdog'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
@@ -108,6 +109,9 @@ function TechGuard() {
 }
 
 export default function App() {
+  // Heal a wedged supabase auth client on tab-return (see authWatchdog). Once,
+  // app-wide — the reload guards live inside the watchdog.
+  useEffect(() => { initAuthWatchdog() }, [])
   return (
     <BrowserRouter>
       <ThemeProvider>

@@ -18,6 +18,7 @@ import { AlertCircle, CalendarClock, ChevronLeft, ChevronRight, Map as MapIcon, 
 import { useBusiness } from '../hooks/useBusiness'
 import { useBranches } from '../hooks/useBranches'
 import { supabase } from '../lib/supabase'
+import { withDeadline, DEADLINE_MS } from '../lib/deadline'
 import { cn } from '../lib/utils'
 import { MAPBOX_TILE_URL, MAPBOX_ATTRIBUTION } from '../lib/mapbox'
 import { occurrencesInRange, isProfileActive, isOccurrenceInRange } from '../lib/recurringScheduling'
@@ -359,12 +360,12 @@ function Schedule({ business }) {
     try {
       let res
       try {
-        res = await runQueries()
+        res = await withDeadline(runQueries(), DEADLINE_MS, 'schedule')
       } catch (err) {
         if (fetchAbortRef.current !== controller) throw err // superseded — let outer catch ignore
-        // Fast blip on a BACKGROUND refetch → one silent retry. A slow (~timeout)
-        // failure is NOT retried — another 30s is worse than showing stale data.
-        if (!isInitial && Date.now() - started < 5000) res = await runQueries()
+        // Fast blip on a BACKGROUND refetch → one silent retry. A slow (deadline/
+        // timeout) failure is NOT retried — another wait is worse than stale data.
+        if (!isInitial && Date.now() - started < 5000) res = await withDeadline(runQueries(), DEADLINE_MS, 'schedule-retry')
         else throw err
       }
       if (fetchAbortRef.current !== controller) return // a newer refetch owns the state now
@@ -385,6 +386,9 @@ function Schedule({ business }) {
       setServiceDays(days)
       hasLoadedRef.current = true
     } catch (err) {
+      // Deadline/failure: cancel the abandoned in-flight queries so they can't
+      // late-fire and clobber newer data.
+      controller.abort()
       if (fetchAbortRef.current !== controller) return // superseded/aborted — ignore silently
       if (isInitial) {
         console.warn('Schedule load failed:', err?.message || err)
@@ -394,8 +398,12 @@ function Schedule({ business }) {
         toast.error('Couldn’t refresh — showing last loaded data.')
       }
     } finally {
-      if (fetchAbortRef.current === controller) fetchAbortRef.current = null
-      if (isInitial) setLoading(false)
+      // Only the CURRENT owner clears the spinner + releases the ref — a superseded
+      // initial run must not hide the spinner while the winning run is still in
+      // flight (closes the double-initial race).
+      const owner = fetchAbortRef.current === controller
+      if (owner) fetchAbortRef.current = null
+      if (isInitial && owner) setLoading(false)
     }
   }
 
@@ -408,6 +416,10 @@ function Schedule({ business }) {
     function onVisible() {
       if (document.visibilityState === 'visible') fetchData()
     }
+    // visibilitychange covers tab-return; 'focus' also covers same-tab OS refocus
+    // (alt-tab to another app while this tab stays visible). The double-fire this
+    // once caused is now race-safe — fetchData aborts any in-flight run and
+    // owner-guards state, so a concurrent second fire simply drops the loser.
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
     return () => {

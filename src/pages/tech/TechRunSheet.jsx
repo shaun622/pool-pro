@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -8,6 +8,7 @@ import OneOffVisitPicker from '../../components/ui/OneOffVisitPicker'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useLanguage, translateUnableReason } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
+import { withDeadline, DEADLINE_MS } from '../../lib/deadline'
 import { cacheRoute, readCachedRoute } from '../../lib/offlineStore'
 import { requestPersist } from '../../lib/offlineDb'
 import { cn, formatDate } from '../../lib/utils'
@@ -86,12 +87,24 @@ export default function TechRunSheet() {
   const [todayServiceRecords, setTodayServiceRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [fromCache, setFromCache] = useState(false) // route hydrated from the offline snapshot
+  const hasLoadedRef = useRef(false)   // spinner only on the FIRST load, not tab-return refetches
+  const fetchAbortRef = useRef(null)   // latest-request-wins + abort-on-supersede
 
   const staffId = staffRecord?.id
 
   async function fetchData() {
     if (!business?.id || !staffId) return
-    setLoading(true)
+    // Latest-request-wins: abort any in-flight refetch so a slow/hung one can't
+    // clobber newer data or wedge future refetches.
+    if (fetchAbortRef.current) fetchAbortRef.current.abort()
+    const controller = new AbortController()
+    fetchAbortRef.current = controller
+    // Spinner ONLY on the first load. A focus/visibility/online refetch updates
+    // silently over the loaded route — never flash the full-screen spinner on
+    // tab-return (that "refetch flips loading true then hangs" is the bug).
+    const isInitial = !hasLoadedRef.current
+    if (isInitial) setLoading(true)
+
     const from = new Date()
     from.setDate(from.getDate() - 7)
     const to = new Date()
@@ -100,42 +113,49 @@ export default function TechRunSheet() {
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
 
+    const runQueries = () => Promise.all([
+      supabase
+        .from('jobs')
+        .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
+        .eq('business_id', business.id)
+        .eq('assigned_staff_id', staffId)
+        .gte('scheduled_date', ymd(from))
+        .lte('scheduled_date', ymd(to))
+        .order('scheduled_date')
+        .order('scheduled_time')
+        .abortSignal(controller.signal),
+      supabase
+        .from('pools')
+        .select('*, clients(name, phone, email)')
+        .eq('business_id', business.id)
+        .eq('assigned_staff_id', staffId)
+        .not('next_due_at', 'is', null)
+        .abortSignal(controller.signal),
+      supabase
+        .from('recurring_job_profiles')
+        .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
+        .eq('business_id', business.id)
+        .eq('assigned_staff_id', staffId)
+        .eq('is_active', true)
+        .abortSignal(controller.signal),
+      // Today's completed + unable-to-service records (business-wide).
+      // Filtered client-side to the pools on THIS tech's route below — a pool
+      // can reach the run sheet via its recurring profile while the pool row
+      // itself is unassigned, so a pools.assigned_staff_id filter would miss it.
+      // Shown in their own Completed / Unable sections so finished work stays
+      // visible instead of vanishing off the route.
+      supabase
+        .from('service_records')
+        .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, is_one_off, pools(name, address, type, clients(name, phone))')
+        .eq('business_id', business.id)
+        .in('status', ['completed', 'unable_to_service'])
+        .gte('serviced_at', startOfToday.toISOString())
+        .abortSignal(controller.signal),
+    ])
+
     try {
-      const [jobsRes, poolsRes, profilesRes, unableRes] = await Promise.all([
-        supabase
-          .from('jobs')
-          .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
-          .eq('business_id', business.id)
-          .eq('assigned_staff_id', staffId)
-          .gte('scheduled_date', ymd(from))
-          .lte('scheduled_date', ymd(to))
-          .order('scheduled_date')
-          .order('scheduled_time'),
-        supabase
-          .from('pools')
-          .select('*, clients(name, phone, email)')
-          .eq('business_id', business.id)
-          .eq('assigned_staff_id', staffId)
-          .not('next_due_at', 'is', null),
-        supabase
-          .from('recurring_job_profiles')
-          .select('*, clients(name, phone, email), pools(name, address, latitude, longitude, type, access_notes)')
-          .eq('business_id', business.id)
-          .eq('assigned_staff_id', staffId)
-          .eq('is_active', true),
-        // Today's completed + unable-to-service records (business-wide).
-        // Filtered client-side to the pools on THIS tech's route below — a pool
-        // can reach the run sheet via its recurring profile while the pool row
-        // itself is unassigned, so a pools.assigned_staff_id filter would miss it.
-        // Shown in their own Completed / Unable sections so finished work stays
-        // visible instead of vanishing off the route.
-        supabase
-          .from('service_records')
-          .select('id, pool_id, serviced_at, status, unable_reason, recurring_profile_id, occurrence_date, is_one_off, pools(name, address, type, clients(name, phone))')
-          .eq('business_id', business.id)
-          .in('status', ['completed', 'unable_to_service'])
-          .gte('serviced_at', startOfToday.toISOString()),
-      ])
+      const [jobsRes, poolsRes, profilesRes, unableRes] = await withDeadline(runQueries(), DEADLINE_MS, 'runsheet')
+      if (fetchAbortRef.current !== controller) return // a newer refetch owns the state now
       // supabase-js resolves with { data:null, error } on a network failure
       // (it doesn't throw), so check explicitly and fall through to the cache.
       const err = jobsRes.error || poolsRes.error || profilesRes.error || unableRes.error
@@ -150,20 +170,31 @@ export default function TechRunSheet() {
       setProfiles(profiles)
       setTodayServiceRecords(serviceRecords)
       setFromCache(false)
+      hasLoadedRef.current = true
       // Cache the full result so the run sheet (incl. Week/Upcoming) renders offline.
       cacheRoute({ businessId: business.id, staffId, jobs, pools, profiles, serviceRecords })
     } catch (e) {
+      // Deadline/failure: cancel the abandoned queries, then fall back to cache.
+      controller.abort()
+      if (fetchAbortRef.current !== controller) return // superseded — a newer run owns state
       console.warn('Run sheet fetch failed — falling back to offline cache:', e?.message || e)
       const snap = await readCachedRoute(business.id, staffId)
+      // A newer run may have started (and succeeded) during the cache read — don't
+      // let this loser overwrite the winner's fresh data with a stale snapshot.
+      if (fetchAbortRef.current !== controller) return
       if (snap) {
         setJobs(snap.jobs || [])
         setPools(snap.pools || [])
         setProfiles(snap.profiles || [])
         setTodayServiceRecords(snap.serviceRecords || [])
         setFromCache(true)
+        hasLoadedRef.current = true // showed cached data → don't re-spin on the next tab-return
       }
     } finally {
-      setLoading(false)
+      // Only the current owner clears the spinner + releases the ref.
+      const owner = fetchAbortRef.current === controller
+      if (owner) fetchAbortRef.current = null
+      if (isInitial && owner) setLoading(false)
     }
   }
 

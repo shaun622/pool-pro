@@ -17,11 +17,18 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-k
 // a read timeout is invisible except on the rare initial-load hang.
 const REQUEST_TIMEOUT_MS = 30_000
 
+// Timestamp of the last fetch START. The auth watchdog reads this to tell a real
+// WEDGE (auth-lock queue frozen → no fetch ever starts) from a slow-but-alive
+// client (a token refresh IS fetching): if fetches are still flowing, don't reload.
+let _lastFetchAt = 0
+export function lastFetchAt() { return _lastFetchAt }
+
 // Combine the caller's signal (e.g. the outbox's own 25s AbortController) with our
 // timeout signal: abort when EITHER fires. Never replace or ignore the caller's
 // signal. Manual AbortController on purpose — AbortSignal.any/timeout lag on iOS
 // Safari. Every fetch option is spread through unchanged (headers/body/credentials).
 function timeoutFetch(input, init = {}) {
+  _lastFetchAt = Date.now()
   const controller = new AbortController()
   const started = Date.now()
   const timer = setTimeout(() => {

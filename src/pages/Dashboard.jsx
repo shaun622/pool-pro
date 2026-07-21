@@ -8,6 +8,7 @@ import StatCard from '../components/ui/StatCard'
 import { useBusiness } from '../hooks/useBusiness'
 import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../lib/supabase'
+import { withDeadline, DEADLINE_MS } from '../lib/deadline'
 import { formatDate, cn } from '../lib/utils'
 import {
   Calendar, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronRight,
@@ -87,7 +88,7 @@ export default function Dashboard() {
         poolCountRes,
         serviceCountRes,
         unableRes,
-      ] = await Promise.all([
+      ] = await withDeadline(Promise.all([
         supabase
           .from('service_records')
           .select('id', { count: 'exact', head: true })
@@ -182,7 +183,7 @@ export default function Dashboard() {
           .is('followup_dismissed_at', null)
           .order('serviced_at', { ascending: false })
           .limit(10),
-      ])
+      ]), DEADLINE_MS, 'dashboard')
 
       const overdueCount = overduePoolsRes.data?.length || 0
       const dueTodayCount = (dueTodayPoolsRes.data?.length || 0) + (todayJobsRes.data?.length || 0)
