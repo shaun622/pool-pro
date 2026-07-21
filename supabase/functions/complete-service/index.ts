@@ -1,3 +1,4 @@
+// ═══ VERSION: cs-2026-07-21-3 (esc module-scope fix) — verify this line survives the paste ═══
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -18,6 +19,26 @@ async function isBusinessMember(admin: any, userId: string, businessId: string) 
   const { data: st } = await admin.from('staff_members')
     .select('id').eq('user_id', userId).eq('business_id', businessId).eq('is_active', true).maybeSingle()
   return !!st
+}
+
+// Build marker — the deployed artifact states which version it is, so a stale
+// paste is caught at a glance (Edge Function logs' boot line + every response body).
+const FN_VERSION = 'cs-2026-07-21-3'
+console.log('complete-service boot', FN_VERSION)
+
+// esc / safeUrl live at MODULE scope (not inside the handler) so no execution
+// order inside serve() can ever put them in a temporal dead zone again — the class
+// of bug that crashed every send ("Cannot access 'esc' before initialization").
+// Pure string helpers, no request state. HTML-escape every user-controlled value
+// interpolated into an email so a crafted name/address can't inject markup.
+function esc(s: any): string {
+  return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+// URL destined for an <img src> / <a href>: only http(s), attribute-escaped,
+// else empty — blocks attribute breakout and javascript:/data: URLs.
+function safeUrl(u: any): string {
+  const s = u == null ? '' : String(u)
+  return /^https?:\/\//i.test(s) ? esc(s) : ''
 }
 
 serve(async (req) => {
@@ -96,7 +117,7 @@ serve(async (req) => {
       .rpc('claim_service_report', { p_id: service_record_id })
     if (claimErr) throw claimErr
     if (claimedAttempt == null) {
-      return new Response(JSON.stringify({ skipped: true, reason: 'not claimable (already sent, in-flight, capped, or non-retryable)' }), {
+      return new Response(JSON.stringify({ skipped: true, version: FN_VERSION, reason: 'not claimable (already sent, in-flight, capped, or non-retryable)' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -242,20 +263,6 @@ serve(async (req) => {
     // HTML-escape every user-controlled value interpolated into the email body
     // (client/business names, addresses, chemical names, doses, notes) so a
     // stray "<" or a crafted name can't inject markup into the customer/owner email.
-    // Function declarations (NOT const arrows) so they hoist to the top of the
-    // handler: the tasks map ABOVE calls esc(t.task_name), which with a const/arrow
-    // would be in the temporal dead zone ("Cannot access 'esc' before
-    // initialization" — a crash on every send). HTML-escape every user-controlled
-    // value interpolated into the email so a crafted name can't inject markup.
-    function esc(s: any): string {
-      return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    }
-    // URL destined for an <img src> / <a href>: only http(s), attribute-escaped,
-    // else empty — blocks attribute breakout and javascript:/data: URLs.
-    function safeUrl(u: any): string {
-      const s = u == null ? '' : String(u)
-      return /^https?:\/\//i.test(s) ? esc(s) : ''
-    }
     const notesEscaped = record.notes ? esc(record.notes) : ''
 
     // ── Customisable email copy (Settings → Notifications) ──────────────────
@@ -746,7 +753,7 @@ serve(async (req) => {
         .eq('id', service_record_id)
     }
 
-    return new Response(JSON.stringify({ success: primaryOk, emails: emailResults }), {
+    return new Response(JSON.stringify({ success: primaryOk, version: FN_VERSION, emails: emailResults }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
@@ -762,7 +769,7 @@ serve(async (req) => {
           .eq('id', sid)
       } catch (_) { /* best effort — never mask the original error */ }
     }
-    return new Response(JSON.stringify({ error: msg }), {
+    return new Response(JSON.stringify({ error: msg, version: FN_VERSION }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
