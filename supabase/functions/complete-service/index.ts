@@ -242,11 +242,17 @@ serve(async (req) => {
     // HTML-escape every user-controlled value interpolated into the email body
     // (client/business names, addresses, chemical names, doses, notes) so a
     // stray "<" or a crafted name can't inject markup into the customer/owner email.
-    const esc = (s: any): string =>
-      s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    // Function declarations (NOT const arrows) so they hoist to the top of the
+    // handler: the tasks map ABOVE calls esc(t.task_name), which with a const/arrow
+    // would be in the temporal dead zone ("Cannot access 'esc' before
+    // initialization" — a crash on every send). HTML-escape every user-controlled
+    // value interpolated into the email so a crafted name can't inject markup.
+    function esc(s: any): string {
+      return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    }
     // URL destined for an <img src> / <a href>: only http(s), attribute-escaped,
     // else empty — blocks attribute breakout and javascript:/data: URLs.
-    const safeUrl = (u: any): string => {
+    function safeUrl(u: any): string {
       const s = u == null ? '' : String(u)
       return /^https?:\/\//i.test(s) ? esc(s) : ''
     }
