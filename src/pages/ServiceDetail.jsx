@@ -47,6 +47,35 @@ const CONDITION_STYLES = {
   },
 }
 
+// Report-email delivery status, from the backstop columns on the service record.
+// The server guarantees the email eventually sends (send-pending-reports sweep),
+// so this is mostly reassurance — but it also surfaces a genuine permanent failure
+// (bad address) that needs a human. Cap mirrors claim_service_report / the sweep.
+const REPORT_CAP = 20
+function ReportDeliveryLine({ record }) {
+  if (record.report_sent_at) {
+    return (
+      <p className="mt-2 text-xs font-medium text-green-700 dark:text-green-400">
+        Report emailed ✓ · {formatDate(record.report_sent_at)}
+      </p>
+    )
+  }
+  const attempts = record.report_attempts ?? 0
+  const stuck = record.report_retryable === false || attempts >= REPORT_CAP
+  if (stuck) {
+    return (
+      <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+        Report not sent — {record.report_last_error ? String(record.report_last_error).slice(0, 120) : 'needs attention'}
+      </p>
+    )
+  }
+  return (
+    <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+      Report sending… (attempt {attempts}/{REPORT_CAP}{record.report_last_attempt_at ? `, last tried ${formatDate(record.report_last_attempt_at)}` : ''}) — will retry automatically
+    </p>
+  )
+}
+
 export default function ServiceDetail() {
   const { id: serviceId } = useParams()
   const [record, setRecord] = useState(null)
@@ -191,6 +220,7 @@ export default function ServiceDetail() {
                   {servedOffSchedule && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Scheduled visit: {formatDate(occDay)}</p>
                   )}
+                  <ReportDeliveryLine record={record} />
                 </div>
               </div>
             </Card>
@@ -298,6 +328,7 @@ export default function ServiceDetail() {
                 <Badge variant="default">Extra visit (one-off)</Badge>
               )}
             </div>
+            <ReportDeliveryLine record={record} />
           </Card>
 
           {/* Pool condition on arrival — mirrors the admin report banner. Only

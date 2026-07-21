@@ -31,20 +31,30 @@ serve(async (req) => {
 
     const { service_record_id } = await req.json()
 
-    // Authorize: the app invokes this with the tech's access token. Reject anon,
-    // customers, and outsiders before doing any privileged (service-role) work —
-    // otherwise anyone with a known service_record_id could fire (and, via
-    // report_sent_at, permanently suppress) a customer's service report.
-    const callerClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } },
-    )
-    const { data: { user: caller } } = await callerClient.auth.getUser()
-    if (!caller) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    // Two invocation paths:
+    //   • CRON — header x-cron-secret == CRON_SECRET → the trusted server backstop
+    //     (send-pending-reports). No user JWT; the request is already scoped to a
+    //     single service_record_id. Mirrors cleanup-service-photos.
+    //   • CLIENT — the app invokes with the tech's access token. Reject anon,
+    //     customers, and outsiders before any privileged (service-role) work —
+    //     otherwise anyone with a known service_record_id could fire a report.
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const isCron = !!(cronSecret && req.headers.get('x-cron-secret') === cronSecret)
+
+    let caller: any = null
+    if (!isCron) {
+      const callerClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } },
+      )
+      const { data: { user } } = await callerClient.auth.getUser()
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      caller = user
     }
 
     // Fetch full service record with related data
@@ -64,16 +74,24 @@ serve(async (req) => {
     if (recordError) throw recordError
 
     // The caller must own or be active staff of THIS record's business.
-    if (!(await isBusinessMember(supabase, caller.id, record.business_id))) {
+    // (Skipped on the trusted cron path, which has no user.)
+    if (!isCron && !(await isBusinessMember(supabase, caller.id, record.business_id))) {
       return new Response(JSON.stringify({ error: 'Forbidden' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Idempotent: if the report already went out, don't re-send. A retried
-    // offline submit (lost response, then re-Submit) can invoke this twice.
-    if (record.report_sent_at) {
-      return new Response(JSON.stringify({ skipped: true, reason: 'report already sent' }), {
+    // Atomic claim (lease). The single row-locked UPDATE in claim_service_report
+    // guarantees at most one concurrent invocation proceeds to send — the client
+    // fast path and the cron backstop both funnel through here. Returns the new
+    // attempt number when claimed; null when not (already sent, non-retryable, at
+    // the attempt cap, or another invocation holds the lease). REPLACES the old
+    // report_sent_at-only guard, which couldn't serialise concurrent senders.
+    const { data: claimedAttempt, error: claimErr } = await supabase
+      .rpc('claim_service_report', { p_id: service_record_id })
+    if (claimErr) throw claimErr
+    if (claimedAttempt == null) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'not claimable (already sent, in-flight, capped, or non-retryable)' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -445,6 +463,7 @@ serve(async (req) => {
     // Send emails via Resend
     const resendKey = Deno.env.get('RESEND_API_KEY')
     const emailResults: any[] = []
+    const officeResults: any[] = []
 
     if (!resendKey) {
       console.error('RESEND_API_KEY not found in environment')
@@ -454,29 +473,54 @@ serve(async (req) => {
       })
     }
 
+    // Never throws: a network/timeout error surfaces as status 0 so the caller's
+    // success-gating + failure classification always run deterministically
+    // instead of bubbling to the outer 400 (which would strand a customer send
+    // that already succeeded while an office copy failed).
     async function sendEmail(to: string, subject: string, emailHtml: string) {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
-          to: [to],
-          subject,
-          html: emailHtml,
-        }),
-      })
-      const result = await res.json()
-      if (!res.ok) {
-        console.error(`Resend error sending to ${to}:`, JSON.stringify(result))
+      // 30s timeout (< the 2-min claim lease) so a hung send can never outlive its
+      // lease and let a concurrent invocation re-send the same email.
+      const ac = new AbortController()
+      const timer = setTimeout(() => ac.abort(), 30_000)
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+            // Provider-level idempotency: if a retry re-sends (e.g. a crash between
+            // Resend's 2xx and the report_sent_at commit), Resend returns the cached
+            // result instead of delivering a second email. Keyed per (record,
+            // recipient) so the customer and each office copy stay distinct.
+            'Idempotency-Key': `svc-${service_record_id}-${to}`,
+          },
+          body: JSON.stringify({
+            from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
+            to: [to],
+            subject,
+            html: emailHtml,
+          }),
+          signal: ac.signal,
+        })
+        const result = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          console.error(`Resend error sending to ${to}:`, JSON.stringify(result))
+        }
+        return { to, status: res.status, result }
+      } catch (e) {
+        console.error(`Network error sending to ${to}:`, (e as Error).message)
+        return { to, status: 0, result: { error: (e as Error).message } }
+      } finally {
+        clearTimeout(timer)
       }
-      return { to, status: res.status, result }
     }
 
-    // 1. Client email — service report
+    // 1. Client email — service report. This is the PRIMARY send: it decides
+    //    report_sent_at (I1) and whether automations fire (I3).
+    let customerResult: any = null
     if (client.email) {
-      emailResults.push(
-        await sendEmail(client.email, renderSubject(cfgCustomer.subject, `Pool Service Complete — ${pool.address} — ${serviceDateShort}`), html)
-      )
+      customerResult = await sendEmail(client.email, renderSubject(cfgCustomer.subject, `Pool Service Complete — ${pool.address} — ${serviceDateShort}`), html)
+      emailResults.push(customerResult)
     }
 
     // 2. Office summary — head office + the assigned client's branch (if enabled).
@@ -488,7 +532,12 @@ serve(async (req) => {
       business?.report_email || business?.email,
       (branch?.notify_enabled && branch?.email) ? branch.email : null,
     ].filter(Boolean))]
-    if (officeRecipients.length > 0) {
+    // The office copy is SECONDARY when there's a customer email → send it once,
+    // on the first server attempt, so a failing/retried CUSTOMER send can't spam
+    // the office with a duplicate summary on every sweep. When there is NO customer
+    // email the office copy IS the primary, so it must keep retrying until it 2xx's.
+    const sendOffice = officeRecipients.length > 0 && (!client.email || claimedAttempt === 1)
+    if (sendOffice) {
       const techName = staffMember?.name || record.technician_name || 'Technician'
       const today = new Date()
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
@@ -627,38 +676,65 @@ serve(async (req) => {
       </html>`
 
       for (const to of officeRecipients) {
-        emailResults.push(
-          await sendEmail(to, renderSubject(cfgAdmin.subject, `✅ ${techName} completed ${pool.address}`), ownerHtml)
-        )
+        const r = await sendEmail(to, renderSubject(cfgAdmin.subject, `✅ ${techName} completed ${pool.address}`), ownerHtml)
+        officeResults.push(r)
+        emailResults.push(r)
       }
     }
 
-    // Update report_sent_at
-    await supabase
-      .from('service_records')
-      .update({ report_sent_at: new Date().toISOString() })
-      .eq('id', service_record_id)
+    // Success-gate report_sent_at (I1). PRIMARY = the customer email; with no
+    // customer email the office copy stands in; with no recipients at all there
+    // is nothing to send, so treat as done (never retry forever). The office copy
+    // is attempted on the first server attempt regardless of the customer result,
+    // so the operator still gets their copy when a customer address is bad.
+    const isOk = (r: any) => r && r.status >= 200 && r.status < 300
+    const primaryResult = customerResult ?? officeResults[0] ?? null
+    const primaryOk = primaryResult == null ? true : isOk(primaryResult)
 
-    // Trigger automations for service_completed event (fire and forget)
-    try {
-      const autoUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`
-      fetch(autoUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-        body: JSON.stringify({
-          trigger_event: 'service_completed',
-          business_id: record.business_id,
-          service_record_id,
-          client_id: pool.client_id,
-          pool_id: pool.id,
-          staff_name: staffMember?.name || record.technician_name,
-        }),
-      }).catch(e => console.error('Automation trigger failed:', e))
-    } catch (e) {
-      console.error('Automation trigger error:', e)
+    if (primaryOk) {
+      // Sent for real → stamp report_sent_at and clear any prior error.
+      await supabase
+        .from('service_records')
+        .update({ report_sent_at: new Date().toISOString(), report_last_error: null })
+        .eq('id', service_record_id)
+
+      // Automations fire EXACTLY once (I3): only on the run that actually sent,
+      // and only when a real recipient existed (not the no-email no-op case, where
+      // we still stamp report_sent_at just to stop retries). A later invocation
+      // can't reach here — the claim above returns null once report_sent_at is set.
+      if (primaryResult != null) try {
+        const autoUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`
+        fetch(autoUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+          body: JSON.stringify({
+            trigger_event: 'service_completed',
+            business_id: record.business_id,
+            service_record_id,
+            client_id: pool.client_id,
+            pool_id: pool.id,
+            staff_name: staffMember?.name || record.technician_name,
+          }),
+        }).catch(e => console.error('Automation trigger failed:', e))
+      } catch (e) {
+        console.error('Automation trigger error:', e)
+      }
+    } else {
+      // Not sent. Classify on HTTP STATUS only (never message text — Resend's
+      // wording isn't a stable contract). Permanent = the recipient/request is
+      // invalid (400/422) → stop retrying immediately. Everything else (0/network,
+      // 429, 5xx, and any systemic auth error such as a bad Resend key) is
+      // transient → stays retryable; the attempt cap bounds it.
+      const status = primaryResult?.status ?? 0
+      const permanent = status === 400 || status === 422
+      const errMsg = `status ${status}: ${JSON.stringify(primaryResult?.result ?? {}).slice(0, 400)}`
+      await supabase
+        .from('service_records')
+        .update({ report_last_error: errMsg, ...(permanent ? { report_retryable: false } : {}) })
+        .eq('id', service_record_id)
     }
 
-    return new Response(JSON.stringify({ success: true, emails: emailResults }), {
+    return new Response(JSON.stringify({ success: primaryOk, emails: emailResults }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {

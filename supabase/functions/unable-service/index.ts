@@ -31,17 +31,26 @@ serve(async (req) => {
 
     const { service_record_id } = await req.json()
 
-    // Authorize: reject anon / customers / outsiders before any service-role work.
-    const callerClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } },
-    )
-    const { data: { user: caller } } = await callerClient.auth.getUser()
-    if (!caller) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    // Two invocation paths (see complete-service): CRON via x-cron-secret (the
+    // trusted send-pending-reports backstop, no user JWT) or CLIENT via the tech's
+    // access token. Reject anon/customers/outsiders on the client path.
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const isCron = !!(cronSecret && req.headers.get('x-cron-secret') === cronSecret)
+
+    let caller: any = null
+    if (!isCron) {
+      const callerClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } },
+      )
+      const { data: { user } } = await callerClient.auth.getUser()
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      caller = user
     }
 
     const { data: record, error: recordError } = await supabase
@@ -57,7 +66,8 @@ serve(async (req) => {
     if (recordError) throw recordError
 
     // The caller must own or be active staff of THIS record's business.
-    if (!(await isBusinessMember(supabase, caller.id, record.business_id))) {
+    // (Skipped on the trusted cron path, which has no user.)
+    if (!isCron && !(await isBusinessMember(supabase, caller.id, record.business_id))) {
       return new Response(JSON.stringify({ error: 'Forbidden' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -68,9 +78,14 @@ serve(async (req) => {
       })
     }
 
-    // Idempotent: a retried offline submit can invoke this twice — don't re-notify.
-    if (record.report_sent_at) {
-      return new Response(JSON.stringify({ skipped: true, reason: 'notification already sent' }), {
+    // Atomic claim (lease) — same guarantee as complete-service: at most one
+    // concurrent invocation proceeds. Returns the attempt number when claimed,
+    // null when not (already sent, non-retryable, capped, or lease held).
+    const { data: claimedAttempt, error: claimErr } = await supabase
+      .rpc('claim_service_report', { p_id: service_record_id })
+    if (claimErr) throw claimErr
+    if (claimedAttempt == null) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'not claimable (already sent, in-flight, capped, or non-retryable)' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -220,32 +235,64 @@ serve(async (req) => {
       (branch?.notify_enabled && branch?.email) ? branch.email : null,
     ].filter(Boolean))]
     const emailResults: any[] = []
+    // The office send is the PRIMARY (there is no customer email here): it decides
+    // report_sent_at (I1). Never throws — a network error surfaces as status 0.
+    let primaryStatus: number | null = null
+    let primaryBody: any = null
     if (officeRecipients.length > 0) {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
-          to: officeRecipients,
-          subject: `⚠ Unable to service — ${pool.address} — ${serviceDateShort}`,
-          html,
-        }),
-      })
-      const result = await res.json()
-      if (!res.ok) console.error('Resend error:', JSON.stringify(result))
-      emailResults.push({ to: officeRecipients, status: res.status })
+      // 30s timeout (< the 2-min claim lease) so a hung send can't outlive its
+      // lease; Idempotency-Key dedupes a crash-window re-send at the provider.
+      const ac = new AbortController()
+      const timer = setTimeout(() => ac.abort(), 30_000)
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': `unable-${service_record_id}`,
+          },
+          body: JSON.stringify({
+            from: `${business?.name || 'PoolPro'} <noreply@poolmateapp.online>`,
+            to: officeRecipients,
+            subject: `⚠ Unable to service — ${pool.address} — ${serviceDateShort}`,
+            html,
+          }),
+          signal: ac.signal,
+        })
+        primaryBody = await res.json().catch(() => ({}))
+        if (!res.ok) console.error('Resend error:', JSON.stringify(primaryBody))
+        primaryStatus = res.status
+      } catch (e) {
+        console.error('Network error sending unable notification:', (e as Error).message)
+        primaryStatus = 0
+        primaryBody = { error: (e as Error).message }
+      } finally {
+        clearTimeout(timer)
+      }
+      emailResults.push({ to: officeRecipients, status: primaryStatus })
     } else {
       console.warn('No office email — notification not sent')
     }
 
-    // Mark the notification as sent (reuses report_sent_at — same column the
-    // completion report uses to record "the owner has been told").
-    await supabase
-      .from('service_records')
-      .update({ report_sent_at: new Date().toISOString() })
-      .eq('id', service_record_id)
+    // Success-gate report_sent_at (I1). No recipients → nothing to send → done.
+    // Classify on HTTP status only: permanent = 400/422, everything else transient.
+    const primaryOk = primaryStatus == null ? true : (primaryStatus >= 200 && primaryStatus < 300)
+    if (primaryOk) {
+      await supabase
+        .from('service_records')
+        .update({ report_sent_at: new Date().toISOString(), report_last_error: null })
+        .eq('id', service_record_id)
+    } else {
+      const permanent = primaryStatus === 400 || primaryStatus === 422
+      const errMsg = `status ${primaryStatus}: ${JSON.stringify(primaryBody ?? {}).slice(0, 400)}`
+      await supabase
+        .from('service_records')
+        .update({ report_last_error: errMsg, ...(permanent ? { report_retryable: false } : {}) })
+        .eq('id', service_record_id)
+    }
 
-    return new Response(JSON.stringify({ success: true, emails: emailResults }), {
+    return new Response(JSON.stringify({ success: primaryOk, emails: emailResults }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {

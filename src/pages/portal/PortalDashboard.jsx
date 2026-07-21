@@ -466,8 +466,11 @@ export default function PortalDashboard() {
       const poolIds = allPools.map(p => p.id)
       if (poolIds.length > 0) {
         const { data: records } = await supabase
+          // Explicit column list (not '*') — keeps internal/admin-only columns out
+          // of the customer-facing payload: the report_* backstop bookkeeping and
+          // pool_condition (an admin-report field) must not ship to the portal.
           .from('service_records')
-          .select('*, service_tasks(*), chemicals_added(*), service_photos(*)')
+          .select('id, pool_id, serviced_at, technician_name, notes, status, service_tasks(*), chemicals_added(*), service_photos(*)')
           .in('pool_id', poolIds)
           .eq('status', 'completed')
           .order('serviced_at', { ascending: false })
