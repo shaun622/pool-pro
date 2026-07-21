@@ -482,8 +482,10 @@ serve(async (req) => {
     // 2. Office summary — head office + the assigned client's branch (if enabled).
     // The branch (a to-one embed) may be null; each office recipient gets a copy.
     const branch = (client as any).branches || null
+    // Head office copy → the dedicated report_email if the operator set one,
+    // otherwise the public/customer-facing email (back-compat default).
     const officeRecipients = [...new Set([
-      business?.email,
+      business?.report_email || business?.email,
       (branch?.notify_enabled && branch?.email) ? branch.email : null,
     ].filter(Boolean))]
     if (officeRecipients.length > 0) {

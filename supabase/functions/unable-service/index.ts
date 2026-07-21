@@ -213,8 +213,10 @@ serve(async (req) => {
 
     // Office notification → head office + the assigned client's branch (if enabled).
     const branch = (client as any).branches || null
+    // Head office copy → the dedicated report_email if the operator set one,
+    // otherwise the public/customer-facing email (back-compat default).
     const officeRecipients = [...new Set([
-      business?.email,
+      business?.report_email || business?.email,
       (branch?.notify_enabled && branch?.email) ? branch.email : null,
     ].filter(Boolean))]
     const emailResults: any[] = []

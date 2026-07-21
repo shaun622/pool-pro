@@ -48,7 +48,30 @@ export default function Notifications() {
   const fieldRefs = useRef({})            // `${side}.${key}` -> input/textarea el
   const focusedKey = useRef({ customer: 'intro', admin: 'intro' })
 
+  // Head-office report recipient (businesses.report_email). Separate from the
+  // public/customer-facing email; blank falls back to it in the edge functions.
+  const [headEmail, setHeadEmail] = useState(business?.report_email ?? '')
+  const [savingHead, setSavingHead] = useState(false)
+  const headDirty = headEmail.trim() !== (business?.report_email ?? '')
+
   useEffect(() => { setForm(initForm(business?.report_email_config)) }, [business?.id, business?.report_email_config])
+  useEffect(() => { setHeadEmail(business?.report_email ?? '') }, [business?.id, business?.report_email])
+
+  async function saveHeadEmail() {
+    const val = headEmail.trim()
+    // Light validation — a typo here would silently drop every office copy.
+    if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      toast.error('Enter a valid email address')
+      return
+    }
+    setSavingHead(true)
+    try {
+      await updateBusiness({ report_email: val || null })
+      toast.success(val ? 'Head office email saved' : 'Cleared — office copies fall back to your public email')
+    } catch (err) {
+      toast.error(err?.message || 'Could not save — has the report_email migration been applied?')
+    } finally { setSavingHead(false) }
+  }
 
   function setField(side, key, value) {
     setForm(f => ({ ...f, [side]: { ...f[side], [key]: value } }))
@@ -171,17 +194,38 @@ export default function Notifications() {
 
         <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-5 mb-3">Service reports are emailed to</h4>
         <ul className="divide-y divide-gray-100 dark:divide-gray-800 rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
-          <li className="flex items-center gap-3 px-4 py-3">
-            <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
-              <Building2 className="w-4 h-4 text-pool-600 dark:text-pool-400" strokeWidth={2} />
+          <li className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-pool-50 dark:bg-pool-950/40 flex items-center justify-center shrink-0">
+                <Building2 className="w-4 h-4 text-pool-600 dark:text-pool-400" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Head office</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Internal office copy — separate from your public customer-facing email.</p>
+              </div>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 shrink-0">Always</span>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Head office</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {business?.email || <>No email set — <Link to="/settings" className="text-pool-600 dark:text-pool-400 font-medium">add one in Business details</Link></>}
-              </p>
+            <div className="mt-2.5 flex items-center gap-2 sm:pl-12">
+              <input
+                type="email"
+                inputMode="email"
+                autoComplete="off"
+                value={headEmail}
+                onChange={e => setHeadEmail(e.target.value)}
+                placeholder={business?.email ? `${business.email} (public email)` : 'office@yourbusiness.com'}
+                className="input flex-1 min-w-0"
+              />
+              <Button size="sm" variant="secondary" onClick={saveHeadEmail} loading={savingHead} disabled={!headDirty} className="shrink-0">
+                Save
+              </Button>
             </div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 shrink-0">Always</span>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 sm:pl-12">
+              {headEmail.trim()
+                ? 'Office copies of every service report are sent here.'
+                : business?.email
+                  ? <>Blank — office copies fall back to your public email (<span className="font-medium">{business.email}</span>). Enter an address to send them somewhere else.</>
+                  : <>No public email set either — <Link to="/settings" className="text-pool-600 dark:text-pool-400 font-medium">add one in Business details</Link> or set a head office address here.</>}
+            </p>
           </li>
           {branches.map(b => (
             <li key={b.id} className="flex items-center gap-3 px-4 py-3">

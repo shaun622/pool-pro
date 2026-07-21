@@ -24,7 +24,7 @@ serve(async (req) => {
     // Find quote by public token
     const { data: quote, error } = await supabase
       .from('quotes')
-      .select('*, clients!inner(name), businesses!inner(name, email, owner_id)')
+      .select('*, clients!inner(name), businesses!inner(name, email, report_email, owner_id)')
       .eq('public_token', public_token)
       .single()
 
@@ -51,9 +51,11 @@ serve(async (req) => {
         scheduled_date: new Date().toISOString().split('T')[0],
       })
 
-      // Notify business owner
+      // Notify head office — the dedicated report_email if set, else the
+      // public/customer-facing email (same office-copy rule as service reports).
+      const officeEmail = quote.businesses.report_email || quote.businesses.email
       const resendKey = Deno.env.get('RESEND_API_KEY')
-      if (resendKey && quote.businesses.email) {
+      if (resendKey && officeEmail) {
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -62,7 +64,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             from: `${quote.businesses.name || 'PoolPro'} <noreply@poolmateapp.online>`,
-            to: [quote.businesses.email],
+            to: [officeEmail],
             subject: `Quote Accepted by ${quote.clients.name}`,
             html: `<p><strong>${quote.clients.name}</strong> has accepted your quote for <strong>$${Number(quote.total).toFixed(2)}</strong>.</p><p>A new job has been created automatically.</p>`,
           }),
