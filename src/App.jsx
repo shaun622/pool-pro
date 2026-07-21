@@ -47,6 +47,8 @@ const Reports = lazy(() => import('./pages/Reports'))
 const Subscription = lazy(() => import('./pages/Subscription'))
 const PublicQuote = lazy(() => import('./pages/PublicQuote'))
 const PortalLogin = lazy(() => import('./pages/portal/PortalLogin'))
+const PortalForgotPassword = lazy(() => import('./pages/portal/PortalForgotPassword'))
+const PortalResetPassword = lazy(() => import('./pages/portal/PortalResetPassword'))
 const PortalSetup = lazy(() => import('./pages/portal/PortalSetup'))
 const PortalTokenLanding = lazy(() => import('./pages/portal/PortalTokenLanding'))
 const PortalDashboard = lazy(() => import('./pages/portal/PortalDashboard'))
@@ -118,6 +120,8 @@ export default function App() {
             <Routes>
               {/* Public routes - no auth */}
               <Route path="/portal/login" element={<PortalLogin />} />
+              <Route path="/portal/forgot-password" element={<PortalForgotPassword />} />
+              <Route path="/portal/reset-password" element={<PortalResetPassword />} />
               <Route path="/portal/setup/:token" element={<PortalSetup />} />
               <Route path="/portal" element={<PortalDashboard />} />
               <Route path="/portal/:token" element={<PortalTokenLanding />} />

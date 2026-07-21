@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -73,6 +73,11 @@ export default function PortalLogin() {
               Sign In
             </Button>
           </form>
+          <p className="text-center mt-4">
+            <Link to="/portal/forgot-password" className="text-xs font-medium text-pool-600 hover:text-pool-700 transition-colors">
+              Forgot your password?
+            </Link>
+          </p>
           <p className="text-xs text-gray-400 text-center mt-5">
             Don't have an account? Check your service email for a portal link to get started.
           </p>
