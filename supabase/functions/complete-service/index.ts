@@ -23,13 +23,18 @@ async function isBusinessMember(admin: any, userId: string, businessId: string) 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+  // Hoisted so the outer catch can surface WHY a claimed report crashed — a throw
+  // between the claim and the stamp otherwise leaves report_sent_at AND
+  // report_last_error both null, and the sweep silently retries with no signal.
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  )
+  let sid: string | null = null
 
+  try {
     const { service_record_id } = await req.json()
+    sid = service_record_id
 
     // Two invocation paths:
     //   • CRON — header x-cron-secret == CRON_SECRET → the trusted server backstop
@@ -693,10 +698,11 @@ serve(async (req) => {
 
     if (primaryOk) {
       // Sent for real → stamp report_sent_at and clear any prior error.
-      await supabase
+      const { error: stampErr } = await supabase
         .from('service_records')
         .update({ report_sent_at: new Date().toISOString(), report_last_error: null })
         .eq('id', service_record_id)
+      if (stampErr) console.error('report_sent_at stamp failed:', stampErr.message, JSON.stringify(stampErr))
 
       // Automations fire EXACTLY once (I3): only on the run that actually sent,
       // and only when a real recipient existed (not the no-email no-op case, where
@@ -738,7 +744,19 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const msg = (error as any)?.message ?? String(error)
+    console.error('complete-service crashed:', msg, (error as any)?.stack)
+    // Surface the crash on the record (queryable) so a claimed-but-failed report
+    // stops retrying silently with no signal — review finding: a throw after the
+    // claim used to leave report_last_error null.
+    if (sid) {
+      try {
+        await supabase.from('service_records')
+          .update({ report_last_error: `crash: ${msg}`.slice(0, 400) })
+          .eq('id', sid)
+      } catch (_) { /* best effort — never mask the original error */ }
+    }
+    return new Response(JSON.stringify({ error: msg }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
