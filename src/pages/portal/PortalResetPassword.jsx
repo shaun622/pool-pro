@@ -34,8 +34,8 @@ export default function PortalResetPassword() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (password.length < 10) {
-      setError('Password must be at least 10 characters.')
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
       return
     }
     if (password !== confirm) {
@@ -93,7 +93,7 @@ export default function PortalResetPassword() {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="At least 10 characters"
+                placeholder="At least 6 characters"
                 autoComplete="new-password"
                 required
               />
