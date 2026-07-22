@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import '@fontsource-variable/inter'
 import '@fontsource-variable/jetbrains-mono'
 import App from './App'
+import './lib/pwaInstall' // capture beforeinstallprompt early (can fire before React mounts)
 import './styles/index.css'
 import 'leaflet/dist/leaflet.css'
 

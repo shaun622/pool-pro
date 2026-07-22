@@ -44,6 +44,14 @@ export const translations = {
     'profile.logout': 'Log Out',
     'profile.photoHint': 'Tap to change photo',
     'profile.backToRunSheet': 'Back to Run Sheet',
+
+    // ── install prompt (PWA add-to-home-screen) ──
+    'install.title': 'Install the app',
+    'install.blurb': 'Add PoolPro to your home screen — faster to open and keeps your saved visits safe.',
+    'install.button': 'Install app',
+    'install.iosLead': 'Add PoolPro to your Home Screen:',
+    'install.iosShare': 'Tap the Share button',
+    'install.iosAdd': 'then choose “Add to Home Screen”',
     'profile.saveChanges': 'Save Changes',
     'profile.newPasswordLabel': 'New Password',
     'profile.passwordHint': 'At least 6 characters',
@@ -222,6 +230,14 @@ export const translations = {
     'profile.logout': 'Keluar',
     'profile.photoHint': 'Ketuk untuk ganti foto',
     'profile.backToRunSheet': 'Kembali ke Daftar Tugas',
+
+    // ── install prompt (PWA add-to-home-screen) ──
+    'install.title': 'Pasang aplikasi',
+    'install.blurb': 'Tambahkan PoolPro ke layar utama — lebih cepat dibuka dan pekerjaan tersimpan tetap aman.',
+    'install.button': 'Pasang aplikasi',
+    'install.iosLead': 'Tambahkan PoolPro ke Layar Utama:',
+    'install.iosShare': 'Ketuk tombol Bagikan',
+    'install.iosAdd': 'lalu pilih “Tambahkan ke Layar Utama”',
     'profile.saveChanges': 'Simpan Perubahan',
     'profile.newPasswordLabel': 'Kata Sandi Baru',
     'profile.passwordHint': 'Minimal 6 karakter',
