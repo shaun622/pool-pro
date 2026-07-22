@@ -34,6 +34,18 @@ function notifyPendingChanged() {
 // the auto-sender retries, instead of hanging the UI.
 export const SEND_TIMEOUT_MS = 25_000
 
+// Photo-upload concurrency for a completion's remaining photos, opened only when the
+// probe proves the link is fast enough (see submitOne). Concurrent uploads split a
+// fixed uplink, so this stays small.
+const UPLOAD_CONCURRENCY = 3
+// Probe faster than this ⇒ enough headroom that UPLOAD_CONCURRENCY uploads still fit
+// inside SEND_TIMEOUT_MS (~3× the probe). Slower ⇒ stay sequential so we never split a
+// marginal uplink into three simultaneous timeouts (which would regress a slow-but-
+// alive link that succeeds one-at-a-time today). Well under SEND_TIMEOUT_MS, and there
+// is no point raising SEND_TIMEOUT_MS to compensate — the global fetch wrapper hard-
+// aborts every request at 30s (REQUEST_TIMEOUT_MS in ./supabase.js).
+const PROBE_FAST_MS = 8_000
+
 // Reject if `promise` hasn't settled within `ms`. The underlying request may keep
 // running after we stop waiting — that's harmless here because every send is
 // idempotent (deterministic upsert photo path + serviceRecordId RPC key), so a
@@ -111,6 +123,74 @@ function buildPayload(draft, photoRows) {
   }
 }
 
+// Upload ONE photo to its deterministic path. NEVER throws — normalises BOTH failure
+// channels (a storage {error} and a withTimeout rejection) into a returned { error },
+// so a pool worker can collect + classify without an early bail orphaning a rejecting
+// promise. On success returns { row } (the payload row for the RPC).
+async function uploadPhoto(draft, p) {
+  const path = `${draft.businessId}/${draft.serviceRecordId}/${p.clientPhotoId}.jpg`
+  try {
+    const { error } = await withTimeout(
+      supabase.storage
+        .from('service-photos')
+        .upload(path, p.blob, { upsert: true, contentType: 'image/jpeg' }),
+      SEND_TIMEOUT_MS,
+      'photo upload',
+    )
+    if (error) return { error }
+    const { data: urlData } = supabase.storage.from('service-photos').getPublicUrl(path)
+    return {
+      row: {
+        clientPhotoId: p.clientPhotoId,
+        storagePath: path,
+        signedUrl: urlData?.publicUrl || null,
+        tag: p.tag || 'test-kit',
+        lat: p.meta?.lat ?? null,
+        lng: p.meta?.lng ?? null,
+        capturedAt: p.meta?.timestamp ?? null,
+      },
+    }
+  } catch (e) {
+    // withTimeout rejection (or any throw) — transient, same shape as a storage error.
+    return { error: e }
+  }
+}
+
+// Bounded-concurrency upload of photos[startIndex..], filling photoRows[i] in place.
+// Stops scheduling NEW uploads the instant any task errors (don't drain the pool on a
+// dying link); in-flight uploads still settle (each capped by withTimeout). Returns the
+// collected errors ([] = every photo uploaded). Workers never reject (uploadPhoto can't).
+async function uploadPool(draft, photos, startIndex, concurrency, photoRows) {
+  const errors = []
+  let next = startIndex
+  let stop = false
+  async function worker() {
+    // `next++` runs synchronously before the await, so no two workers claim the same i.
+    while (!stop) {
+      const i = next++
+      if (i >= photos.length) return
+      const res = await uploadPhoto(draft, photos[i])
+      if (res.error) { errors.push(res.error); stop = true; return }
+      photoRows[i] = res.row
+    }
+  }
+  const n = Math.min(concurrency, photos.length - startIndex)
+  await Promise.all(Array.from({ length: n }, () => worker()))
+  return errors
+}
+
+// Most-actionable status across ≥1 upload errors: auth > failed > pending. Mirrors the
+// single-error precedence in classifyError so a thrown timeout can't mask a real 401.
+function classifyWorst(errors) {
+  let worst = 'pending'
+  for (const e of errors) {
+    const c = classifyError(e)
+    if (c === 'auth') return 'auth'
+    if (c === 'failed') worst = 'failed'
+  }
+  return worst
+}
+
 // ARCHITECTURAL INVARIANT: a draft's serviceRecordId is immutable for the life of
 // the draft — it is the RPC idempotency key. Never regenerate/re-key it on retry,
 // and never rebuild the payload; only retry metadata may change. Every no-duplicate
@@ -134,29 +214,25 @@ export async function submitOne(draft, currentBusinessId) {
       return 'wrong-org'
     }
 
-    // 1. Upload every photo first. If ANY upload fails, do not call the RPC —
-    //    leave the draft intact (no partial-photo submit).
-    const photoRows = []
-    for (const p of (draft.photos || [])) {
-      const path = `${draft.businessId}/${draft.serviceRecordId}/${p.clientPhotoId}.jpg`
-      const { error: upErr } = await withTimeout(
-        supabase.storage
-          .from('service-photos')
-          .upload(path, p.blob, { upsert: true, contentType: 'image/jpeg' }),
-        SEND_TIMEOUT_MS,
-        'photo upload',
-      )
-      if (upErr) return classifyError(upErr)
-      const { data: urlData } = supabase.storage.from('service-photos').getPublicUrl(path)
-      photoRows.push({
-        clientPhotoId: p.clientPhotoId,
-        storagePath: path,
-        signedUrl: urlData?.publicUrl || null,
-        tag: p.tag || 'test-kit',
-        lat: p.meta?.lat ?? null,
-        lng: p.meta?.lng ?? null,
-        capturedAt: p.meta?.timestamp ?? null,
-      })
+    // 1. Upload photos, then (only if ALL succeed) call the RPC — no partial-photo
+    //    submit. Probe-then-parallel with a throughput gate: the first photo goes up
+    //    ALONE (a dead link fails here at today's one-attempt cost); only if that probe
+    //    was FAST do we upload the rest concurrently. Concurrent uploads split a fixed
+    //    uplink, so on a slow-but-alive link a 3-wide wave would ~triple each photo's
+    //    transfer time against the same 25s ceiling and regress to all-timeouts — so a
+    //    slow probe stays sequential (today's behaviour). photoRows keeps position order.
+    const photos = draft.photos || []
+    const photoRows = new Array(photos.length)
+    if (photos.length) {
+      const t0 = Date.now()
+      const probe = await uploadPhoto(draft, photos[0])
+      if (probe.error) return classifyError(probe.error)
+      photoRows[0] = probe.row
+      if (photos.length > 1) {
+        const concurrency = (Date.now() - t0) < PROBE_FAST_MS ? UPLOAD_CONCURRENCY : 1
+        const errors = await uploadPool(draft, photos, 1, concurrency, photoRows)
+        if (errors.length) return classifyWorst(errors)
+      }
     }
 
     // 2. Call the atomic RPC. AbortController actually cancels the request on

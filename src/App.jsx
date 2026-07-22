@@ -9,6 +9,7 @@ import AppShell from './components/layout/AppShell'
 import TechShell from './components/layout/TechShell'
 import MfaGate from './components/auth/MfaGate'
 import OutboxSyncProvider from './components/OutboxSyncProvider'
+import CrewSyncProvider from './components/CrewSyncProvider'
 import { initAuthWatchdog } from './lib/authWatchdog'
 
 const Login = lazy(() => import('./pages/Login'))
@@ -120,6 +121,7 @@ export default function App() {
       <AuthProvider>
         <BusinessProvider>
           <OutboxSyncProvider>
+          <CrewSyncProvider>
           <Suspense fallback={<Loading />}>
             <Routes>
               {/* Public routes - no auth */}
@@ -199,6 +201,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
+          </CrewSyncProvider>
           </OutboxSyncProvider>
         </BusinessProvider>
       </AuthProvider>

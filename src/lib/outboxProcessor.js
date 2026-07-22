@@ -42,6 +42,11 @@ const HEARTBEAT_MS = 60_000
 // genuinely wedged visit gets noticed instead of blending into normal weak-signal.
 const STUCK_ATTEMPTS = 100
 const STUCK_AGE_MS = 7 * 24 * 60 * 60 * 1000
+// In a FORCED rerun, don't re-hit a draft attempted within this window. A mixed pass
+// (some sent, some failed) fires PENDING_EVENT → force-kick → immediate rerun, which
+// ignores nextAttemptAt; without this a just-failed draft would be re-attempted with
+// zero backoff on a flaky link. New drafts (no lastAttemptAt) are unaffected.
+const FORCE_MIN_GAP_MS = 5_000
 
 // Status broadcast so the "waiting to send" banner can show calm auto-status
 // instead of a scary manual button.
@@ -143,6 +148,17 @@ async function drainPass(force, retryFailed) {
     // Permanently failed — never auto-retried. Only an explicit manual "Send now"
     // (retryFailed) re-attempts it; otherwise it just waits for operator attention.
     if (d.failed && !retryFailed) { anyFailed = true; continue }
+
+    // FORCED rerun: skip a draft we JUST attempted so a mid-pass success (which
+    // force-kicks a rerun) can't instantly re-hit the just-failed drafts with zero
+    // backoff. The scheduled timer still picks this one up at its backoff time.
+    if (force && !d.failed && d.lastAttemptAt && (now - d.lastAttemptAt) < FORCE_MIN_GAP_MS) {
+      anyRetryable = true
+      if (isAged(d)) anyStuck = true
+      const dueSoon = d.nextAttemptAt || (d.lastAttemptAt + FORCE_MIN_GAP_MS)
+      soonestDue = soonestDue == null ? dueSoon : Math.min(soonestDue, dueSoon)
+      continue
+    }
 
     const dueAt = d.nextAttemptAt || 0
     if (!force && !d.failed && dueAt > now) {

@@ -2034,7 +2034,7 @@ function watermarkPhoto(file, meta) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
-      const MAX = 1400
+      const MAX = 1200
       let { width, height } = img
       if (width > MAX || height > MAX) {
         const ratio = Math.min(MAX / width, MAX / height)
@@ -2130,11 +2130,11 @@ function watermarkPhoto(file, meta) {
           if (!blob) return reject(new Error('Watermark failed'))
           // JPEG, not WebP — Outlook desktop / Outlook.com don't render WebP,
           // so the watermarked report photo must be a universally-supported format.
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.75)
           resolve({ blob, dataUrl })
         },
         'image/jpeg',
-        0.85
+        0.75
       )
     }
     img.onerror = () => reject(new Error('Failed to load image'))

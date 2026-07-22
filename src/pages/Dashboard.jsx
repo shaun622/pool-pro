@@ -5,6 +5,7 @@ import PageHero from '../components/layout/PageHero'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import StatCard from '../components/ui/StatCard'
+import CrewSyncCard from '../components/CrewSyncCard'
 import { useBusiness } from '../hooks/useBusiness'
 import { useToast } from '../contexts/ToastContext'
 import { supabase } from '../lib/supabase'
@@ -368,6 +369,9 @@ export default function Dashboard() {
             onClick={() => navigate('/work-orders')}
           />
         </div>
+
+        {/* Field sync — technicians still uploading completed visits (offline outbox) */}
+        <CrewSyncCard />
 
         {/* Unable to service — needs follow-up (only when there are any) */}
         {unableFollowups.length > 0 && (
