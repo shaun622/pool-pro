@@ -12,7 +12,7 @@ import {
   DEFAULT_TARGET_RANGES,
   cn,
 } from '../../lib/utils'
-import { Calendar, Check } from 'lucide-react'
+import { Calendar, Check, Phone, Mail } from 'lucide-react'
 
 const CHEMICAL_KEYS = ['ph', 'free_chlorine', 'total_chlorine', 'alkalinity', 'stabiliser', 'calcium_hardness', 'salt']
 const RANGE_KEY_MAP = { ph: 'ph', free_chlorine: 'free_cl', total_chlorine: 'total_cl', alkalinity: 'alk', stabiliser: 'stabiliser', calcium_hardness: 'calcium', salt: 'salt' }
@@ -33,8 +33,6 @@ const CATEGORY_STYLES = {
   other:      { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-300' },
 }
 
-// Status → colour/label for the headline stat tiles. green/amber/red/neutral come
-// from getChemicalStatus; the labels are customer-friendly (not "amber/red").
 const STAT_STATUS = {
   green:   { label: 'In range',     text: 'text-emerald-700', bg: 'bg-emerald-50', ring: 'ring-emerald-200', dot: 'bg-emerald-500' },
   amber:   { label: 'Keep an eye',  text: 'text-amber-700',   bg: 'bg-amber-50',   ring: 'ring-amber-200',   dot: 'bg-amber-500' },
@@ -43,12 +41,12 @@ const STAT_STATUS = {
 }
 
 const SECTION = 'text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2'
+const CARD = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5'
 
 function photoUrl(p) {
   return p?.signed_url || supabase.storage.from('service-photos').getPublicUrl(p?.storage_path).data?.publicUrl
 }
 
-// Big headline reading (pH / Total Chlorine). The two the tech records first.
 function StatTile({ label, value, unit, range }) {
   const has = value != null
   const status = has && range ? getChemicalStatus(value, range) : 'neutral'
@@ -176,6 +174,164 @@ function PhotoGrid({ photos }) {
   )
 }
 
+// Read-only company contact — customers can't edit their own details here, but
+// they can always reach the business.
+function ContactCard({ business }) {
+  if (!business) return null
+  const phone = business.phone
+  const email = business.email
+  return (
+    <div className={CARD}>
+      <h4 className="font-bold text-gray-900 text-lg">Contact</h4>
+      <p className="text-xs text-gray-500 mt-0.5 mb-4">Questions about your pool? Get in touch.</p>
+      <div className="flex items-center gap-3 mb-4">
+        {business.logo_url && (
+          <img src={business.logo_url} alt={business.name} className="h-10 w-10 rounded-lg object-cover bg-gray-100" />
+        )}
+        <p className="font-semibold text-gray-900 leading-tight">{business.name}</p>
+      </div>
+      <div className="space-y-2">
+        {phone && (
+          <a href={`tel:${phone}`} className="flex items-center gap-3 text-sm text-gray-700 hover:text-pool-600 transition-colors">
+            <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0"><Phone className="w-4 h-4 text-gray-500" /></span>
+            {phone}
+          </a>
+        )}
+        {email && (
+          <a href={`mailto:${email}`} className="flex items-center gap-3 text-sm text-gray-700 hover:text-pool-600 transition-colors break-all">
+            <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center shrink-0"><Mail className="w-4 h-4 text-gray-500" /></span>
+            {email}
+          </a>
+        )}
+        {!phone && !email && <p className="text-sm text-gray-400">No contact details available.</p>}
+      </div>
+    </div>
+  )
+}
+
+// Titled "Next Service" card — always present so the customer can see when we're
+// next due, and how overdue we are if we've slipped.
+function NextService({ pool }) {
+  const due = pool.next_due_at ? new Date(pool.next_due_at) : null
+  const isOverdue = due && due < new Date()
+  const freq = pool.schedule_frequency ? (FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency) : null
+  return (
+    <div className={CARD}>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-bold text-gray-900 text-lg">Next Service</h4>
+        {freq && <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">{freq}</span>}
+      </div>
+      {due ? (
+        <div className="flex items-center gap-3">
+          <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center shrink-0', isOverdue ? 'bg-red-100' : 'bg-emerald-100')}>
+            <Calendar className={cn('w-5 h-5', isOverdue ? 'text-red-600' : 'text-emerald-600')} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className={cn('text-2xl font-bold leading-none', isOverdue ? 'text-red-600' : 'text-emerald-700')}>{formatDate(pool.next_due_at)}</p>
+              {isOverdue && <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-red-100 text-red-700">Overdue</span>}
+            </div>
+            <p className={cn('text-xs font-medium mt-1', isOverdue ? 'text-red-500' : 'text-emerald-600')}>
+              {isOverdue ? "We'll be in touch to reschedule your visit." : 'Your next scheduled visit.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400">No upcoming visit scheduled.</p>
+      )}
+    </div>
+  )
+}
+
+// The main column for the active pool: hero, next service, latest details, history.
+function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAddedByRecord, photosByRecord, brandColor, chemProductMap }) {
+  const ranges = pool.target_ranges || DEFAULT_TARGET_RANGES
+  const latest = serviceRecords[0] || null
+  const latestLog = latest ? chemicalLogs[latest.id] : null
+  const latestPhotos = latest ? (photosByRecord[latest.id] || []) : []
+  const hero = latestPhotos.find(p => p.tag === 'completion') || latestPhotos[0] || null
+  const heroUrl = hero ? photoUrl(hero) : null
+
+  const latestTasks = latest ? tasksByRecord[latest.id] : []
+  const latestChems = latest ? chemAddedByRecord[latest.id] : []
+  const hasLatestExtras = (latestChems?.length || 0) > 0 || (latestTasks?.some(t => t.completed))
+
+  return (
+    <div className="space-y-5">
+      {/* Hero: the customer's actual pool */}
+      <div className="relative rounded-3xl overflow-hidden shadow-sm">
+        {heroUrl ? (
+          <img src={heroUrl} alt="Your pool" className="w-full h-52 sm:h-64 object-cover" />
+        ) : (
+          <div className="w-full h-36" style={{ background: `linear-gradient(135deg, ${brandColor}, ${brandColor}bb)` }} />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+          <div className="flex items-center gap-2 mb-1.5">
+            {pool.type && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm capitalize">{pool.type}</span>
+            )}
+            {pool.volume_litres && <span className="text-xs text-white/75">{Number(pool.volume_litres).toLocaleString()}L</span>}
+          </div>
+          <h3 className="text-lg sm:text-xl font-bold leading-tight drop-shadow-sm">{pool.address}</h3>
+          {latest && (
+            <p className="text-sm text-white/85 mt-1">
+              Last serviced {formatDate(latest.serviced_at)}{latest.technician_name ? ` by ${latest.technician_name}` : ''}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Next Service — titled, above Latest Service Details */}
+      <NextService pool={pool} />
+
+      {/* Latest Service Details */}
+      {latest && (
+        <div className={CARD}>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-bold text-gray-900 text-lg">Latest Service Details</h4>
+            <span className="text-xs text-gray-400">{formatDate(latest.serviced_at)}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <StatTile label={CHEMICAL_LABELS.ph?.label || 'pH'} value={latestLog?.ph} unit={CHEMICAL_LABELS.ph?.unit} range={ranges.ph} />
+            <StatTile label={CHEMICAL_LABELS.total_chlorine?.label || 'Total Chlorine'} value={latestLog?.total_chlorine} unit={CHEMICAL_LABELS.total_chlorine?.unit || 'ppm'} range={ranges.total_cl} />
+          </div>
+
+          {hasLatestExtras ? (
+            <div className="space-y-5">
+              <TasksDone tasks={latestTasks} />
+              <ChemicalsAdded chemicalsAdded={latestChems} chemProductMap={chemProductMap} />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No chemicals or tasks were logged for this visit.</p>
+          )}
+        </div>
+      )}
+
+      {/* Service history */}
+      {serviceRecords.length > 0 ? (
+        <div>
+          <h4 className="font-bold text-gray-900 mb-3">
+            Service History <span className="text-sm font-normal text-gray-400 ml-1">{serviceRecords.length} visit{serviceRecords.length === 1 ? '' : 's'}</span>
+          </h4>
+          <div className="space-y-2">
+            {serviceRecords.map(record => (
+              <ServiceCard key={record.id} record={record} chemLog={chemicalLogs[record.id]}
+                tasks={tasksByRecord[record.id]} chemicalsAdded={chemAddedByRecord[record.id]}
+                photos={photosByRecord[record.id]} ranges={ranges} chemProductMap={chemProductMap} brandColor={brandColor} />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-gray-100 bg-white text-center py-8">
+          <p className="text-gray-400 text-sm">No services recorded yet for this pool.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // One past service — collapsed to a date row, expands to the full detail. No
 // health score, no notes (customer-facing).
 function ServiceCard({ record, chemLog, tasks, chemicalsAdded, photos, ranges, chemProductMap, brandColor }) {
@@ -211,113 +367,6 @@ function ServiceCard({ record, chemLog, tasks, chemicalsAdded, photos, ranges, c
   )
 }
 
-function PoolSection({ pool, serviceRecords, chemicalLogs, tasksByRecord, chemAddedByRecord, photosByRecord, brandColor, chemProductMap }) {
-  const ranges = pool.target_ranges || DEFAULT_TARGET_RANGES
-  const latest = serviceRecords[0] || null
-  const latestLog = latest ? chemicalLogs[latest.id] : null
-  const latestPhotos = latest ? (photosByRecord[latest.id] || []) : []
-  const hero = latestPhotos.find(p => p.tag === 'completion') || latestPhotos[0] || null
-  const heroUrl = hero ? photoUrl(hero) : null
-  const isOverdue = pool.next_due_at && new Date(pool.next_due_at) < new Date()
-
-  const latestTasks = latest ? tasksByRecord[latest.id] : []
-  const latestChems = latest ? chemAddedByRecord[latest.id] : []
-  const hasLatestExtras = (latestChems?.length || 0) > 0 || (latestTasks?.some(t => t.completed))
-
-  return (
-    <div className="mb-10">
-      {/* ── Hero: the customer's actual pool ─────────────────────────── */}
-      <div className="relative rounded-3xl overflow-hidden mb-5 shadow-sm">
-        {heroUrl ? (
-          <img src={heroUrl} alt="Your pool" className="w-full h-52 sm:h-64 object-cover" />
-        ) : (
-          <div className="w-full h-36" style={{ background: `linear-gradient(135deg, ${brandColor}, ${brandColor}bb)` }} />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
-          <div className="flex items-center gap-2 mb-1.5">
-            {pool.type && (
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm capitalize">{pool.type}</span>
-            )}
-            {pool.volume_litres && <span className="text-xs text-white/75">{Number(pool.volume_litres).toLocaleString()}L</span>}
-          </div>
-          <h3 className="text-xl font-bold leading-tight drop-shadow-sm">{pool.address}</h3>
-          {latest && (
-            <p className="text-sm text-white/85 mt-1">
-              Last serviced {formatDate(latest.serviced_at)}{latest.technician_name ? ` by ${latest.technician_name}` : ''}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* ── Next service ─────────────────────────────────────────────── */}
-      {pool.next_due_at && (
-        <div className={cn('rounded-2xl p-4 mb-5 flex items-center justify-between ring-1',
-          isOverdue ? 'bg-red-50 ring-red-200' : 'bg-emerald-50 ring-emerald-200')}>
-          <div className="flex items-center gap-3">
-            <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', isOverdue ? 'bg-red-100' : 'bg-emerald-100')}>
-              <Calendar className={cn('w-5 h-5', isOverdue ? 'text-red-600' : 'text-emerald-600')} />
-            </div>
-            <div>
-              <p className="text-[11px] uppercase font-semibold tracking-wide text-gray-500">{isOverdue ? 'Overdue' : 'Next service'}</p>
-              <p className={cn('text-base font-bold', isOverdue ? 'text-red-600' : 'text-emerald-700')}>{formatDate(pool.next_due_at)}</p>
-            </div>
-          </div>
-          {pool.schedule_frequency && (
-            <span className={cn('text-xs font-semibold px-2.5 py-1 rounded-full', isOverdue ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
-              {FREQUENCY_LABELS[pool.schedule_frequency] || pool.schedule_frequency}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── Latest Service Details ───────────────────────────────────── */}
-      {latest && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-bold text-gray-900 text-lg">Latest Service Details</h4>
-            <span className="text-xs text-gray-400">{formatDate(latest.serviced_at)}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <StatTile label={CHEMICAL_LABELS.ph?.label || 'pH'} value={latestLog?.ph} unit={CHEMICAL_LABELS.ph?.unit} range={ranges.ph} />
-            <StatTile label={CHEMICAL_LABELS.total_chlorine?.label || 'Total Chlorine'} value={latestLog?.total_chlorine} unit={CHEMICAL_LABELS.total_chlorine?.unit || 'ppm'} range={ranges.total_cl} />
-          </div>
-
-          {hasLatestExtras ? (
-            <div className="space-y-5">
-              <TasksDone tasks={latestTasks} />
-              <ChemicalsAdded chemicalsAdded={latestChems} chemProductMap={chemProductMap} />
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">No chemicals or tasks were logged for this visit.</p>
-          )}
-        </div>
-      )}
-
-      {/* ── Service history ──────────────────────────────────────────── */}
-      {serviceRecords.length > 0 ? (
-        <div>
-          <h4 className="font-bold text-gray-900 mb-3">
-            Service History <span className="text-sm font-normal text-gray-400 ml-1">{serviceRecords.length} visit{serviceRecords.length === 1 ? '' : 's'}</span>
-          </h4>
-          <div className="space-y-2">
-            {serviceRecords.map(record => (
-              <ServiceCard key={record.id} record={record} chemLog={chemicalLogs[record.id]}
-                tasks={tasksByRecord[record.id]} chemicalsAdded={chemAddedByRecord[record.id]}
-                photos={photosByRecord[record.id]} ranges={ranges} chemProductMap={chemProductMap} brandColor={brandColor} />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-gray-100 bg-white text-center py-8">
-          <p className="text-gray-400 text-sm">No services recorded yet for this pool.</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function PortalDashboard() {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -345,7 +394,6 @@ export default function PortalDashboard() {
       const { data: { user } } = await withDeadline(supabase.auth.getUser(), DEADLINE_MS, 'portal-getUser')
       if (!user) { navigate('/portal/login', { replace: true }); return }
 
-      // Fetch all client records for this user
       const { data: clients } = await withDeadline(
         supabase.from('clients').select('*, pools(*)').eq('auth_user_id', user.id),
         DEADLINE_MS, 'portal-clients')
@@ -440,11 +488,13 @@ export default function PortalDashboard() {
     )
   }
 
+  const visiblePools = pools.filter(p => pools.length === 1 || p.id === activePool)
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="w-full pt-8 pb-10 px-4 relative overflow-hidden" style={{ backgroundColor: brandColor }}>
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 15% 85%, white 0%, transparent 45%), radial-gradient(circle at 85% 15%, white 0%, transparent 45%)' }} />
-        <div className="max-w-3xl mx-auto relative">
+        <div className="max-w-5xl mx-auto relative">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {business?.logo_url && (
@@ -478,9 +528,9 @@ export default function PortalDashboard() {
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto w-full px-4 py-6 flex-1 -mt-4">
+      <div className="max-w-5xl mx-auto w-full px-4 py-6 flex-1 -mt-4">
         {pools.length > 1 && (
-          <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+          <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
             {pools.map(pool => (
               <button key={pool.id} onClick={() => setActivePool(pool.id)}
                 className={cn('px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors min-h-[40px]',
@@ -497,32 +547,36 @@ export default function PortalDashboard() {
             <p className="text-gray-500">No pools found for your account.</p>
           </div>
         ) : (
-          pools.filter(p => pools.length === 1 || p.id === activePool).map(pool => (
-            <PoolSection key={pool.id} pool={pool}
-              serviceRecords={serviceRecords[pool.id] || []} chemicalLogs={chemicalLogs}
-              tasksByRecord={tasksByRecord} chemAddedByRecord={chemAddedByRecord} photosByRecord={photosByRecord}
-              brandColor={brandColor} chemProductMap={chemProductMap} />
-          ))
-        )}
-
-        {staffMembers.length > 0 && (
-          <section className="mb-4">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Your service team</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {staffMembers.map(member => <StaffCard key={member.id} staff={member} brandColor={brandColor} />)}
+          // Desktop: main pool detail (2/3) + a contact/team sidebar (1/3).
+          // Mobile: single column (sidebar stacks under the detail).
+          <div className="grid gap-5 lg:grid-cols-3 lg:items-start">
+            <div className="lg:col-span-2 space-y-5">
+              {visiblePools.map(pool => (
+                <PoolSection key={pool.id} pool={pool}
+                  serviceRecords={serviceRecords[pool.id] || []} chemicalLogs={chemicalLogs}
+                  tasksByRecord={tasksByRecord} chemAddedByRecord={chemAddedByRecord} photosByRecord={photosByRecord}
+                  brandColor={brandColor} chemProductMap={chemProductMap} />
+              ))}
             </div>
-          </section>
+
+            <aside className="lg:col-span-1 space-y-5">
+              <ContactCard business={business} />
+              {staffMembers.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Your service team</h3>
+                  <div className="space-y-3">
+                    {staffMembers.map(member => <StaffCard key={member.id} staff={member} brandColor={brandColor} />)}
+                  </div>
+                </div>
+              )}
+            </aside>
+          </div>
         )}
       </div>
 
-      <footer className="w-full border-t bg-white py-8 px-4 mt-auto">
-        <div className="max-w-3xl mx-auto text-center text-sm text-gray-500 space-y-1">
-          <p className="font-semibold text-gray-700">{business?.name}</p>
-          <div className="flex items-center justify-center gap-4">
-            {business?.phone && <p>{business.phone}</p>}
-            {business?.email && <p>{business.email}</p>}
-          </div>
-          <p className="pt-3 text-xs text-gray-300">Powered by PoolPro</p>
+      <footer className="w-full border-t bg-white py-6 px-4 mt-auto">
+        <div className="max-w-5xl mx-auto text-center text-xs text-gray-300">
+          <p>Powered by PoolPro</p>
         </div>
       </footer>
     </div>
