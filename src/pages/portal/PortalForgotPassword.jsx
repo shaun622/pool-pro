@@ -5,11 +5,13 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import { supabase } from '../../lib/supabase'
 
-// Customer "forgot password". Uses Supabase's built-in recovery email — the link
-// lands on /portal/reset-password where supabase-js exchanges the recovery token
-// and updateUser({ password }) sets the new one. We ALWAYS show the same "check
-// your inbox" confirmation regardless of whether the email exists, so this can't
-// be used as an account-enumeration oracle (mirrors the login page's stance).
+// Customer "forgot password". Sends a BRANDED reset email (business logo/colour/
+// name) via Resend through the portal-reset-password edge function — not Supabase's
+// generic built-in template. The link still lands on /portal/reset-password where
+// supabase-js exchanges the recovery token and updateUser({ password }) sets the
+// new one. We ALWAYS show the same "check your inbox" confirmation regardless of
+// whether the email exists, so this can't be used as an account-enumeration oracle
+// (the edge function is likewise enumeration-safe — it always returns ok).
 export default function PortalForgotPassword() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
@@ -19,13 +21,16 @@ export default function PortalForgotPassword() {
     e.preventDefault()
     setLoading(true)
     try {
-      await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/portal/reset-password`,
+      await supabase.functions.invoke('portal-reset-password', {
+        body: {
+          email: email.trim(),
+          redirectTo: `${window.location.origin}/portal/reset-password`,
+        },
       })
     } catch (err) {
       // Swallow — revealing success/failure per email would leak which addresses
       // have accounts. The confirmation below is intentionally the same either way.
-      if (import.meta.env.DEV) console.warn('resetPasswordForEmail:', err)
+      if (import.meta.env.DEV) console.warn('portal-reset-password:', err)
     } finally {
       setLoading(false)
       setSent(true)
