@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tropical Pool - Portal Preview</title>
+</head>
+<body>
+<style>
+  :root{
+    /* fictional brand: Tropical Pool */
+    --brand:#0891B2; --brand-600:#0E7490; --brand-tint:#E0F5FA;
+    --ink:#0F172A; --soft:#475569; --faint:#94A3B8; --line:#E9EEF3;
+    --card:#FFFFFF; --app:#F1F5F9;
+    --em:#059669; --em-bg:#ECFDF5; --em-ring:#A7F3D0;
+    --amber:#D97706; --amber-bg:#FFFBEB;
+    --red:#DC2626; --red-bg:#FEF2F2; --red-ring:#FECACA;
+    --page:#EAEEF3; --page-ink:#0F172A; --page-soft:#5B6b7c; --page-line:#D3DBE4;
+    --frame:0 32px 64px -24px rgba(15,23,42,.28), 0 8px 20px -12px rgba(15,23,42,.18);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --page:#0A101B; --page-ink:#E7ECF3; --page-soft:#93A0B2; --page-line:#1E293B;
+      --frame:0 34px 70px -22px rgba(0,0,0,.7), 0 8px 24px -12px rgba(0,0,0,.5); }
+  }
+  :root[data-theme="dark"]{ --page:#0A101B; --page-ink:#E7ECF3; --page-soft:#93A0B2; --page-line:#1E293B;
+    --frame:0 34px 70px -22px rgba(0,0,0,.7), 0 8px 24px -12px rgba(0,0,0,.5); }
+  :root[data-theme="light"]{ --page:#EAEEF3; --page-ink:#0F172A; --page-soft:#5B6b7c; --page-line:#D3DBE4;
+    --frame:0 32px 64px -24px rgba(15,23,42,.28), 0 8px 20px -12px rgba(15,23,42,.18); }
+
+  *{ box-sizing:border-box; }
+  body{ margin:0; }
+  .stage{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--page); color:var(--page-ink);
+    padding:56px 20px 80px; min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width:1180px; margin:0 auto; }
+
+  .intro{ max-width:640px; margin:0 auto 48px; text-align:center; }
+  .eyebrow{ margin:0 0 14px; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--brand); }
+  .intro h1{ margin:0 0 12px; font-size:clamp(28px,4vw,42px); line-height:1.08; letter-spacing:-.02em; text-wrap:balance; }
+  .lede{ margin:0; font-size:16px; line-height:1.6; color:var(--page-soft); }
+  .lede b{ color:var(--page-ink); font-weight:600; }
+
+  .shot{ margin-top:64px; }
+  .shot-cap{ display:flex; align-items:center; gap:12px; margin:0 auto 20px; max-width:1120px; }
+  .tag{ font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--brand-600);
+    background:var(--brand-tint); padding:5px 10px; border-radius:999px; }
+  .shot-cap h2{ margin:0; font-size:17px; font-weight:650; letter-spacing:-.01em; }
+  .scroll-x{ overflow-x:auto; padding-bottom:8px; }
+
+  .browser{ width:1120px; margin:0 auto; border-radius:16px; overflow:hidden; background:#fff;
+    box-shadow:var(--frame); border:1px solid rgba(15,23,42,.06); }
+  .bbar{ height:44px; display:flex; align-items:center; gap:8px; padding:0 16px; background:#EDF1F5; border-bottom:1px solid #E2E8F0; }
+  .dot{ width:12px; height:12px; border-radius:50%; }
+  .url{ margin-left:14px; flex:1; max-width:420px; height:26px; border-radius:8px; background:#fff; border:1px solid #E2E8F0;
+    display:flex; align-items:center; gap:7px; padding:0 12px; font-size:12px; color:#64748B; }
+  .url svg{ width:12px; height:12px; color:#94A3B8; }
+
+  .phone{ width:392px; margin:0 auto; border-radius:52px; padding:12px; background:#0F172A; box-shadow:var(--frame); }
+  .phone-screen{ border-radius:42px; overflow:hidden; background:var(--app); height:812px; overflow-y:auto; position:relative; }
+  .phone-screen::-webkit-scrollbar{ display:none; }
+  .notch{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:150px; height:26px; background:#0F172A; border-radius:0 0 16px 16px; z-index:40; }
+
+  .mail{ width:600px; max-width:100%; margin:0 auto; border-radius:16px; overflow:hidden; background:#fff;
+    box-shadow:var(--frame); border:1px solid rgba(15,23,42,.06); }
+  .mail-hd{ padding:16px 20px; border-bottom:1px solid #E2E8F0; }
+  .mail-subj{ font-size:15px; font-weight:650; color:#0F172A; }
+  .mail-from{ margin-top:4px; font-size:13px; color:#64748B; }
+  .mail-from b{ color:#0F172A; font-weight:600; }
+  .mail-body{ background:#F3F4F6; padding:24px; }
+
+  .app{ background:var(--app); color:var(--ink); font-size:14px; }
+  .app-hd{ background:var(--brand); color:#fff; padding:26px 26px 40px; position:relative; overflow:hidden; }
+  .app-hd::after{ content:""; position:absolute; inset:0; opacity:.12;
+    background:radial-gradient(circle at 12% 88%, #fff 0, transparent 42%), radial-gradient(circle at 88% 8%, #fff 0, transparent 40%); }
+  .hd-row{ display:flex; align-items:center; justify-content:space-between; position:relative; z-index:2; }
+  .hd-brand{ display:flex; align-items:center; gap:12px; }
+  .logo{ width:46px; height:46px; border-radius:13px; background:rgba(255,255,255,.16); display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(0,0,0,.15); }
+  .logo svg{ width:26px; height:26px; }
+  .hd-name{ font-size:19px; font-weight:700; line-height:1.1; }
+  .hd-sub{ font-size:11px; opacity:.8; }
+  .signout{ font-size:13px; font-weight:500; color:rgba(255,255,255,.72); }
+  .hi{ position:relative; z-index:2; margin-top:22px; }
+  .hi h2{ margin:0; font-size:24px; font-weight:700; }
+  .hi p{ margin:5px 0 0; font-size:13.5px; color:rgba(255,255,255,.82); }
+  .stats{ position:relative; z-index:2; margin-top:18px; display:flex; gap:26px; }
+  .stat b{ font-size:24px; font-weight:700; } .stat span{ font-size:13px; opacity:.78; margin-left:5px; }
+
+  .app-body{ padding:22px 26px 30px; margin-top:-14px; position:relative; z-index:3; }
+  .grid{ display:grid; gap:20px; grid-template-columns:2fr 1fr; align-items:start; }
+  .col{ display:flex; flex-direction:column; gap:20px; }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 1px 3px rgba(15,23,42,.05); padding:20px; }
+  .card h4{ margin:0; font-size:17px; font-weight:700; letter-spacing:-.01em; }
+
+  .hero{ position:relative; border-radius:22px; overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,.06); }
+  .hero .water{ display:block; width:100%; height:232px; object-fit:cover; }
+  .hero-ov{ position:absolute; inset:0; background:linear-gradient(to top, rgba(2,10,20,.78) 0%, rgba(2,10,20,.12) 45%, transparent 70%); }
+  .hero-tx{ position:absolute; left:0; right:0; bottom:0; padding:20px; color:#fff; }
+  .chip{ font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; background:rgba(255,255,255,.22); backdrop-filter:blur(4px); text-transform:capitalize; }
+  .hero-tx .addr{ font-size:19px; font-weight:700; line-height:1.15; margin:8px 0 0; text-shadow:0 1px 3px rgba(0,0,0,.3); }
+  .hero-tx .last{ font-size:13px; color:rgba(255,255,255,.85); margin-top:4px; }
+
+  .ns-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .freq{ font-size:12px; font-weight:600; padding:4px 11px; border-radius:999px; background:#F1F5F9; color:#475569; }
+  .ns-row{ display:flex; align-items:center; gap:13px; }
+  .ns-ic{ width:44px; height:44px; border-radius:13px; display:flex; align-items:center; justify-content:center; background:var(--em-bg); }
+  .ns-ic svg{ width:21px; height:21px; color:var(--em); }
+  .ns-date{ font-size:23px; font-weight:700; color:var(--em); line-height:1; }
+  .ns-note{ font-size:12px; font-weight:500; color:var(--em); margin-top:6px; }
+
+  .lsd-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .lsd-date{ font-size:12px; color:var(--faint); }
+  .tiles{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  .tile{ border-radius:16px; padding:16px; border:1px solid; }
+  .tile.em{ background:var(--em-bg); border-color:var(--em-ring); }
+  .tile-top{ display:flex; align-items:center; justify-content:space-between; }
+  .tile-top span{ font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--soft); }
+  .tile-dot{ width:10px; height:10px; border-radius:50%; background:var(--em); }
+  .tile-val{ margin-top:8px; font-variant-numeric:tabular-nums; }
+  .tile-val b{ font-size:34px; font-weight:800; color:var(--em); letter-spacing:-.02em; }
+  .tile-val i{ font-style:normal; font-size:13px; color:var(--faint); font-weight:500; margin-left:3px; }
+  .tile-foot{ margin-top:8px; display:flex; align-items:center; justify-content:space-between; }
+  .tile-foot span{ font-size:12px; font-weight:600; color:var(--em); }
+  .tile-foot i{ font-style:normal; font-size:11px; color:var(--faint); }
+
+  .sec-lbl{ font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); margin:0 0 9px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .task{ display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:500; padding:5px 10px; border-radius:999px; background:var(--em-bg); color:#047857; }
+  .task svg{ width:12px; height:12px; }
+  .chem{ border-radius:12px; border-left:3px solid; background:#fff; box-shadow:0 0 0 1px var(--line); padding:11px 12px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px; }
+  .chem .nm{ font-size:14px; font-weight:600; color:var(--ink); }
+  .chem .cat{ display:inline-block; font-size:10px; font-weight:600; padding:2px 7px; border-radius:5px; margin-top:5px; }
+  .chem .dose{ font-size:17px; font-weight:700; color:var(--ink); white-space:nowrap; }
+  .blue{ border-color:#60A5FA; } .blue .cat{ background:#EFF6FF; color:#1D4ED8; }
+  .green{ border-color:#34D399; } .green .cat{ background:#ECFDF5; color:#047857; }
+
+  .hist h4{ margin-bottom:12px; }
+  .hist h4 span{ font-size:13px; font-weight:400; color:var(--faint); margin-left:6px; }
+  .hrow{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:13px 15px; display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+  .hrow.open{ box-shadow:0 6px 18px -8px rgba(15,23,42,.15); border-color:#E2E8F0; flex-direction:column; align-items:stretch; }
+  .hrow-main{ display:flex; align-items:center; gap:12px; width:100%; }
+  .hic{ width:36px; height:36px; border-radius:11px; display:flex; align-items:center; justify-content:center; background:var(--brand-tint); }
+  .hic svg{ width:16px; height:16px; color:var(--brand); }
+  .hrow .date{ font-size:14px; font-weight:600; color:var(--ink); }
+  .hrow .meta{ font-size:12px; color:var(--faint); margin-top:2px; }
+  .chev{ margin-left:auto; color:#CBD5E1; }
+  .hexp{ border-top:1px solid var(--line); margin-top:13px; padding-top:14px; width:100%; display:flex; flex-direction:column; gap:14px; }
+  .rd-grid{ display:grid; grid-template-columns:1fr 1fr; gap:2px 26px; }
+  .rd{ display:flex; align-items:center; justify-content:space-between; padding:4px 0; }
+  .rd .k{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--soft); }
+  .rd .k i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .rd .v{ font-size:13px; font-weight:600; color:var(--ink); }
+  .rd .v em{ font-style:normal; color:var(--faint); font-size:11px; margin-left:2px; }
+
+  .cc-sub{ font-size:12px; color:var(--soft); margin:2px 0 16px; }
+  .cc-biz{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .cc-logo{ width:40px; height:40px; border-radius:11px; background:var(--brand); display:flex; align-items:center; justify-content:center; }
+  .cc-logo svg{ width:22px; height:22px; }
+  .cc-biz b{ font-size:15px; font-weight:600; color:var(--ink); }
+  .cc-link{ display:flex; align-items:center; gap:12px; font-size:14px; color:#334155; text-decoration:none; margin-bottom:10px; }
+  .cc-ic{ width:32px; height:32px; border-radius:9px; background:#F1F5F9; display:flex; align-items:center; justify-content:center; }
+  .cc-ic svg{ width:16px; height:16px; color:#64748B; }
+  .team-lbl{ font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); margin:0 0 12px; }
+  .staff{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px; display:flex; align-items:center; gap:12px; }
+  .avatar{ width:44px; height:44px; border-radius:50%; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; letter-spacing:.02em; }
+  .staff .nm{ font-size:14px; font-weight:600; color:var(--ink); }
+  .staff .rl{ font-size:12px; color:var(--faint); margin-top:1px; }
+
+  .foot{ text-align:center; font-size:11px; color:#CBD5E1; padding:18px; border-top:1px solid var(--line); background:#fff; }
+
+  .m .app-body{ padding:18px 16px 26px; }
+  .m .grid{ grid-template-columns:1fr; }
+  .m .hi h2{ font-size:22px; }
+
+  .em-card{ max-width:520px; margin:0 auto; background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .em-hd{ background:var(--brand); color:#fff; text-align:center; padding:26px 24px; }
+  .em-hd .logo{ margin:0 auto 10px; }
+  .em-hd .biz{ font-size:16px; font-weight:700; }
+  .em-in{ padding:26px 24px; }
+  .em-in h3{ margin:0 0 6px; font-size:18px; color:#111827; }
+  .em-in p{ margin:0 0 14px; font-size:14.5px; line-height:1.55; color:#374151; }
+  .em-photo{ border-radius:12px; overflow:hidden; margin:4px 0 18px; }
+  .em-photo .water{ display:block; width:100%; height:170px; }
+  .table{ width:100%; border-collapse:collapse; font-size:13px; border:1px solid #E5E7EB; border-radius:10px; overflow:hidden; margin-bottom:18px; }
+  .table th{ background:#F9FAFB; text-align:left; padding:8px 12px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#6B7280; border-bottom:1px solid #E5E7EB; }
+  .table th:last-child,.table td:last-child{ text-align:center; }
+  .table td{ padding:9px 12px; border-bottom:1px solid #F3F4F6; color:#374151; }
+  .table td b{ color:#111827; }
+  .em-sec{ font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:#6B7280; margin:0 0 8px; }
+  .em-tasks{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+  .em-next{ background:#ECFDF5; border:1px solid #A7F3D0; border-radius:12px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .em-next .l{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#047857; font-weight:600; }
+  .em-next .d{ font-size:16px; font-weight:700; color:#065F46; margin-top:2px; }
+  .em-foot{ padding:18px 24px; text-align:center; border-top:1px solid #F3F4F6; font-size:12px; color:#9CA3AF; }
+  .em-foot b{ color:#6B7280; }
+
+  @media (max-width:640px){ .shot-cap{ padding:0 4px; } .phone{ transform:scale(.92); transform-origin:top center; } }
+</style>
+
+<div class="stage">
+  <div class="wrap">
+
+    <header class="intro">
+      <p class="eyebrow">PoolPro &middot; Customer Portal</p>
+      <h1>Every visit, in your customer's pocket.</h1>
+      <p class="lede">After each service, your customers get a <b>branded report</b> and a live portal &mdash; their readings, photos, and what's coming up next. <b>Sample data.</b></p>
+    </header>
+
+    <section class="shot">
+      <div class="shot-cap"><span class="tag">Desktop</span><h2>The customer portal</h2></div>
+      <div class="scroll-x">
+        <div class="browser">
+          <div class="bbar">
+            <span class="dot" style="background:#FF5F57"></span><span class="dot" style="background:#FEBC2E"></span><span class="dot" style="background:#28C840"></span>
+            <span class="url"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2h1M8 8V6a4 4 0 118 0v2" stroke-linecap="round" stroke-linejoin="round"/></svg>tropicalpool.app/portal</span>
+          </div>
+          <div class="browser-screen app">
+            <div class="app-hd">
+              <div class="hd-row">
+                <div class="hd-brand">
+                  <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3 4 6 6.5 6 10a6 6 0 11-12 0c0-3.5 3-6 6-10z" fill="#fff"/></svg></div>
+                  <div><div class="hd-name">Tropical Pool</div><div class="hd-sub">Customer Portal</div></div>
+                </div>
+                <div class="signout">Sign Out</div>
+              </div>
+              <div class="hi"><h2>Hi Sarah &#128075;</h2><p>Here's the latest on your pool &mdash; service details, readings and what's coming up.</p></div>
+              <div class="stats"><div class="stat"><b>24</b><span>services</span></div><div class="stat"><b>1</b><span>pool</span></div></div>
+            </div>
+
+            <div class="app-body">
+              <div class="grid">
+                <div class="col">
+                  <div class="hero">
+                    <svg class="water" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="w1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2DD4E8"/><stop offset=".55" stop-color="#06B6D4"/><stop offset="1" stop-color="#0E7490"/></linearGradient></defs><rect width="800" height="240" fill="url(#w1)"/><g fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3" stroke-linecap="round"><path d="M-20 52 q60 -16 120 0 t120 0 t120 0 t120 0 t120 0 t120 0"/><path d="M-20 118 q70 20 140 0 t140 0 t140 0 t140 0 t140 0"/><path d="M-20 190 q60 -18 120 0 t120 0 t120 0 t120 0 t120 0 t120 0"/></g><g fill="#fff" fill-opacity=".12"><ellipse cx="180" cy="80" rx="72" ry="9"/><ellipse cx="560" cy="150" rx="92" ry="11"/><ellipse cx="380" cy="212" rx="58" ry="7"/></g></svg>
+                    <div class="hero-ov"></div>
+                    <div class="hero-tx"><div><span class="chip">Chlorine</span> <span style="font-size:12px;color:rgba(255,255,255,.75);margin-left:6px">48,000L</span></div><p class="addr">18 Bayview Terrace, Sorrento VIC</p><p class="last">Last serviced 21 Jul 2026 by Jake Turner</p></div>
+                  </div>
+
+                  <div class="card">
+                    <div class="ns-top"><h4>Next Service</h4><span class="freq">Weekly</span></div>
+                    <div class="ns-row">
+                      <div class="ns-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg></div>
+                      <div><div class="ns-date">Mon, 28 Jul 2026</div><div class="ns-note">Your next scheduled visit.</div></div>
+                    </div>
+                  </div>
+
+                  <div class="card">
+                    <div class="lsd-top"><h4>Latest Service Details</h4><span class="lsd-date">21 Jul 2026</span></div>
+                    <div class="tiles">
+                      <div class="tile em"><div class="tile-top"><span>pH</span><span class="tile-dot"></span></div><div class="tile-val"><b>7.4</b></div><div class="tile-foot"><span>In range</span><i>Target 7.2&ndash;7.6</i></div></div>
+                      <div class="tile em"><div class="tile-top"><span>Total Chlorine</span><span class="tile-dot"></span></div><div class="tile-val"><b>3.0</b><i>ppm</i></div><div class="tile-foot"><span>In range</span><i>Target 1&ndash;3</i></div></div>
+                    </div>
+                    <p class="sec-lbl">Tasks completed</p>
+                    <div class="chips" style="margin-bottom:18px">
+                      <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Vacuumed</span>
+                      <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Skimmed surface</span>
+                      <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Brushed walls</span>
+                      <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Emptied baskets</span>
+                      <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Checked pump &amp; filter</span>
+                    </div>
+                    <p class="sec-lbl">Chemicals added</p>
+                    <div class="chem blue"><div><div class="nm">Liquid Chlorine</div><span class="cat">Sanitiser</span></div><div class="dose">2 L</div></div>
+                    <div class="chem green"><div><div class="nm">pH Reducer</div><span class="cat">Water Balancer</span></div><div class="dose">300 g</div></div>
+                  </div>
+
+                  <div class="hist">
+                    <h4>Service History <span>24 visits</span></h4>
+                    <div class="hrow open">
+                      <div class="hrow-main">
+                        <div class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg></div>
+                        <div><div class="date">21 Jul 2026</div><div class="meta">Jake Turner &middot; 5 tasks &middot; 2 chemicals</div></div>
+                        <span class="chev" style="transform:rotate(180deg)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                      </div>
+                      <div class="hexp">
+                        <div><p class="sec-lbl">Water readings</p>
+                          <div class="rd-grid">
+                            <div class="rd"><span class="k"><i style="background:#22C55E"></i>pH</span><span class="v">7.4</span></div>
+                            <div class="rd"><span class="k"><i style="background:#22C55E"></i>Free Chlorine</span><span class="v">2.4<em>ppm</em></span></div>
+                            <div class="rd"><span class="k"><i style="background:#22C55E"></i>Total Chlorine</span><span class="v">3.0<em>ppm</em></span></div>
+                            <div class="rd"><span class="k"><i style="background:#22C55E"></i>Alkalinity</span><span class="v">110<em>ppm</em></span></div>
+                            <div class="rd"><span class="k"><i style="background:#F59E0B"></i>Stabiliser</span><span class="v">38<em>ppm</em></span></div>
+                            <div class="rd"><span class="k"><i style="background:#22C55E"></i>Salt</span><span class="v">3200<em>ppm</em></span></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="hrow"><div class="hrow-main"><div class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg></div><div><div class="date">14 Jul 2026</div><div class="meta">Jake Turner &middot; 5 tasks &middot; 1 chemical</div></div><span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+                    <div class="hrow"><div class="hrow-main"><div class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg></div><div><div class="date">7 Jul 2026</div><div class="meta">Mia Chen &middot; 6 tasks &middot; 2 chemicals</div></div><span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+                  </div>
+                </div>
+
+                <div class="col">
+                  <div class="card">
+                    <h4>Contact</h4>
+                    <p class="cc-sub">Questions about your pool? Get in touch.</p>
+                    <div class="cc-biz"><div class="cc-logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3 4 6 6.5 6 10a6 6 0 11-12 0c0-3.5 3-6 6-10z" fill="#fff"/></svg></div><b>Tropical Pool</b></div>
+                    <a class="cc-link" href="#"><span class="cc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.6A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.6a2 2 0 01-.5 2.1L8.1 9.9a16 16 0 006 6l1.5-1.2a2 2 0 012.1-.5c.8.3 1.7.6 2.6.7a2 2 0 011.7 2z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>(03) 5984 2210</a>
+                    <a class="cc-link" href="#"><span class="cc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>hello@tropicalpool.app</a>
+                  </div>
+                  <div>
+                    <p class="team-lbl">Your service team</p>
+                    <div class="staff"><div class="avatar">JT</div><div><div class="nm">Jake Turner</div><div class="rl">Pool Technician</div></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="foot">Powered by PoolPro</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shot">
+      <div class="shot-cap"><span class="tag">Mobile</span><h2>Same portal, on the phone</h2></div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="phone-screen app m">
+          <div class="app-hd" style="padding-top:38px">
+            <div class="hd-row">
+              <div class="hd-brand"><div class="logo" style="width:40px;height:40px"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3 4 6 6.5 6 10a6 6 0 11-12 0c0-3.5 3-6 6-10z" fill="#fff"/></svg></div><div><div class="hd-name" style="font-size:17px">Tropical Pool</div><div class="hd-sub">Customer Portal</div></div></div>
+              <div class="signout">Sign Out</div>
+            </div>
+            <div class="hi"><h2>Hi Sarah &#128075;</h2><p>Here's the latest on your pool.</p></div>
+            <div class="stats"><div class="stat"><b>24</b><span>services</span></div><div class="stat"><b>1</b><span>pool</span></div></div>
+          </div>
+          <div class="app-body">
+            <div class="grid">
+              <div class="col">
+                <div class="hero">
+                  <svg class="water" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="w2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2DD4E8"/><stop offset=".55" stop-color="#06B6D4"/><stop offset="1" stop-color="#0E7490"/></linearGradient></defs><rect width="800" height="240" fill="url(#w2)"/><g fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3" stroke-linecap="round"><path d="M-20 52 q60 -16 120 0 t120 0 t120 0 t120 0 t120 0 t120 0"/><path d="M-20 118 q70 20 140 0 t140 0 t140 0 t140 0 t140 0"/><path d="M-20 190 q60 -18 120 0 t120 0 t120 0 t120 0 t120 0 t120 0"/></g><g fill="#fff" fill-opacity=".12"><ellipse cx="180" cy="80" rx="72" ry="9"/><ellipse cx="560" cy="150" rx="92" ry="11"/></g></svg>
+                  <div class="hero-ov"></div>
+                  <div class="hero-tx"><div><span class="chip">Chlorine</span></div><p class="addr" style="font-size:17px">18 Bayview Terrace, Sorrento VIC</p><p class="last">Last serviced 21 Jul 2026 by Jake Turner</p></div>
+                </div>
+                <div class="card">
+                  <div class="ns-top"><h4>Next Service</h4><span class="freq">Weekly</span></div>
+                  <div class="ns-row"><div class="ns-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg></div><div><div class="ns-date">Mon, 28 Jul 2026</div><div class="ns-note">Your next scheduled visit.</div></div></div>
+                </div>
+                <div class="card">
+                  <div class="lsd-top"><h4>Latest Service Details</h4><span class="lsd-date">21 Jul</span></div>
+                  <div class="tiles">
+                    <div class="tile em"><div class="tile-top"><span>pH</span><span class="tile-dot"></span></div><div class="tile-val"><b>7.4</b></div><div class="tile-foot"><span>In range</span></div></div>
+                    <div class="tile em"><div class="tile-top"><span>Tot. Chlorine</span><span class="tile-dot"></span></div><div class="tile-val"><b>3.0</b><i>ppm</i></div><div class="tile-foot"><span>In range</span></div></div>
+                  </div>
+                  <p class="sec-lbl">Tasks completed</p>
+                  <div class="chips" style="margin-bottom:16px">
+                    <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Vacuumed</span>
+                    <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Skimmed</span>
+                    <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Brushed walls</span>
+                    <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Baskets</span>
+                  </div>
+                  <p class="sec-lbl">Chemicals added</p>
+                  <div class="chem blue"><div><div class="nm">Liquid Chlorine</div><span class="cat">Sanitiser</span></div><div class="dose">2 L</div></div>
+                </div>
+                <div class="hist">
+                  <h4>Service History <span>24 visits</span></h4>
+                  <div class="hrow"><div class="hrow-main"><div class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg></div><div><div class="date">21 Jul 2026</div><div class="meta">Jake Turner &middot; 5 tasks &middot; 2 chemicals</div></div><span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+                  <div class="hrow"><div class="hrow-main"><div class="hic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round"/></svg></div><div><div class="date">14 Jul 2026</div><div class="meta">Jake Turner &middot; 5 tasks &middot; 1 chemical</div></div><span class="chev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+                </div>
+                <div class="card">
+                  <h4>Contact</h4><p class="cc-sub">Questions about your pool? Get in touch.</p>
+                  <a class="cc-link" href="#"><span class="cc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.6A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.6a2 2 0 01-.5 2.1L8.1 9.9a16 16 0 006 6l1.5-1.2a2 2 0 012.1-.5c.8.3 1.7.6 2.6.7a2 2 0 011.7 2z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>(03) 5984 2210</a>
+                  <a class="cc-link" href="#"><span class="cc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>hello@tropicalpool.app</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shot">
+      <div class="shot-cap"><span class="tag">Email</span><h2>The service report &mdash; sent after every visit</h2></div>
+      <div class="mail">
+        <div class="mail-hd">
+          <div class="mail-subj">Pool Service Complete &mdash; 18 Bayview Terrace &mdash; 21 Jul 2026</div>
+          <div class="mail-from"><b>Tropical Pool</b> &lt;noreply@tropicalpool.app&gt; &middot; to Sarah</div>
+        </div>
+        <div class="mail-body">
+          <div class="em-card">
+            <div class="em-hd">
+              <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3 4 6 6.5 6 10a6 6 0 11-12 0c0-3.5 3-6 6-10z" fill="#fff"/></svg></div>
+              <div class="biz">Tropical Pool</div>
+            </div>
+            <div class="em-in">
+              <h3>Hi Sarah,</h3>
+              <p>Your pool at <b>18 Bayview Terrace</b> has been serviced. Here's a summary of everything we did today.</p>
+              <div class="em-photo"><svg class="water" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="w3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2DD4E8"/><stop offset=".55" stop-color="#06B6D4"/><stop offset="1" stop-color="#0E7490"/></linearGradient></defs><rect width="800" height="240" fill="url(#w3)"/><g fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3" stroke-linecap="round"><path d="M-20 60 q60 -16 120 0 t120 0 t120 0 t120 0 t120 0 t120 0"/><path d="M-20 130 q70 20 140 0 t140 0 t140 0 t140 0 t140 0"/><path d="M-20 200 q60 -18 120 0 t120 0 t120 0 t120 0 t120 0 t120 0"/></g><g fill="#fff" fill-opacity=".12"><ellipse cx="200" cy="86" rx="72" ry="9"/><ellipse cx="560" cy="160" rx="92" ry="11"/></g></svg></div>
+              <table class="table">
+                <thead><tr><th>Reading</th><th>Result</th><th>Range</th></tr></thead>
+                <tbody>
+                  <tr><td>pH</td><td><b>7.4</b></td><td>7.2&ndash;7.6</td></tr>
+                  <tr><td>Free Chlorine</td><td><b>2.4</b> ppm</td><td>1&ndash;3</td></tr>
+                  <tr><td>Total Chlorine</td><td><b>3.0</b> ppm</td><td>1&ndash;3</td></tr>
+                  <tr><td>Alkalinity</td><td><b>110</b> ppm</td><td>80&ndash;120</td></tr>
+                  <tr><td>Salt</td><td><b>3200</b> ppm</td><td>3000&ndash;3500</td></tr>
+                </tbody>
+              </table>
+              <p class="em-sec">Tasks completed</p>
+              <div class="em-tasks">
+                <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Vacuumed</span>
+                <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Skimmed surface</span>
+                <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Brushed walls</span>
+                <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Emptied baskets</span>
+                <span class="task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>Checked equipment</span>
+              </div>
+              <div class="em-next"><div><div class="l">Next Service</div><div class="d">Mon, 28 Jul 2026</div></div><span class="freq" style="background:#D1FAE5;color:#047857">Weekly</span></div>
+            </div>
+            <div class="em-foot"><b>Tropical Pool</b><br>(03) 5984 2210 &bull; hello@tropicalpool.app</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+</body>
+</html>

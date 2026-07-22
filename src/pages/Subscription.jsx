@@ -132,6 +132,21 @@ export default function Subscription() {
     )
   }
 
+  // TEMP (hide-pricing): keep subscription plans/prices + seat purchase hidden
+  // from businesses for now. Flip HIDE_BILLING to false to restore the pricing UI.
+  const HIDE_BILLING = true
+  if (HIDE_BILLING) {
+    const planName = currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)
+    return (
+      <Card className="p-6 text-center">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">You're all set</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto">
+          Your account is active{currentPlan && currentPlan !== 'trial' ? ` on the ${planName} plan` : ''}. For anything about billing, just reach out and we'll take care of it.
+        </p>
+      </Card>
+    )
+  }
+
   return (
     <div>
       <div className="space-y-5">

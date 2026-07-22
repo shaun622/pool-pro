@@ -35,6 +35,11 @@ export default function AddSeatCard() {
   const purchasedSeats = business?.purchased_seats || 0
   const overrideActive = business?.staff_seat_override != null
 
+  // TEMP (hide-pricing): don't surface the paid "$3/mo" seat card anywhere for now
+  // (Billing + Team & roles). Remove these two lines to restore seat purchasing.
+  const HIDE_SEAT_PRICING = true
+  if (HIDE_SEAT_PRICING) return null
+
   // Trial accounts and override-enforced businesses can't buy extra seats.
   if (currentPlan === 'trial' || overrideActive) return null
 
