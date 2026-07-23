@@ -5,7 +5,8 @@ import L from 'leaflet'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import OneOffVisitPicker from '../../components/ui/OneOffVisitPicker'
-import InstallPrompt from '../../components/InstallPrompt'
+// TEMP (pending domain switch): install prompt removed — see the render site below.
+// import InstallPrompt from '../../components/InstallPrompt'
 import { useBusiness } from '../../hooks/useBusiness'
 import { useLanguage, translateUnableReason } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
@@ -438,8 +439,12 @@ export default function TechRunSheet() {
 
   return (
     <div className="max-w-lg mx-auto px-4 pb-8">
-      {/* Install-the-app nudge (self-hides when installed / dismissed) */}
-      <InstallPrompt />
+      {/* Install-the-app nudge — TEMPORARILY DISABLED ahead of a domain change.
+          A PWA is bound to the origin it's installed from, so installing at the old
+          domain would force techs to reinstall after the switch. RESTORE this line
+          (and the InstallPrompt import above) once the new domain is live — the
+          component and src/lib/pwaInstall are left intact. */}
+      {/* <InstallPrompt /> */}
 
       {/* Progress bar */}
       {totalCount > 0 && (
