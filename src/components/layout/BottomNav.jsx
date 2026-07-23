@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Home, Calendar, ClipboardList, Users, Settings as SettingsIcon,
-  Repeat, MoreHorizontal,
+  Repeat, MoreHorizontal, BarChart3,
 } from 'lucide-react'
 import MoreSheet from './MoreSheet'
 import { cn } from '../../lib/utils'
@@ -15,11 +15,11 @@ const primaryTabs = [
   { path: '/clients',     label: 'Clients',    Icon: Users },
 ]
 
-// Items shown in the "More" sheet. Analytics moved into Settings, so
-// it's reachable via /settings/analytics — no longer a separate row.
+// Items shown in the "More" sheet (secondary destinations).
 const moreItems = [
-  { path: '/recurring-jobs', label: 'Recurring',  Icon: Repeat,     color: 'cyan'   },
-  { path: '/settings',       label: 'Settings',   Icon: SettingsIcon, color: 'gray' },
+  { path: '/recurring-jobs', label: 'Recurring',  Icon: Repeat,       color: 'cyan'   },
+  { path: '/analytics',      label: 'Analytics',  Icon: BarChart3,    color: 'violet' },
+  { path: '/settings',       label: 'Settings',   Icon: SettingsIcon, color: 'gray'   },
 ]
 
 export default function BottomNav() {

@@ -167,13 +167,14 @@ export default function App() {
                   <Route path="/pools/:id" element={<PoolDetail />} />
                   <Route path="/work-orders" element={<WorkOrders />} />
                   <Route path="/recurring-jobs" element={<RecurringJobs />} />
+                  <Route path="/analytics" element={<Reports />} />
                   <Route path="/quotes" element={<Quotes />} />
                   <Route path="/quotes/new" element={<QuoteBuilder />} />
                   <Route path="/quotes/:id" element={<QuoteBuilder />} />
                   {/* Settings — nested shell. Sub-pages render into <Outlet />. */}
                   <Route path="/settings" element={<Settings />}>
                     <Route index               element={<BusinessDetails />} />
-                    <Route path="analytics"    element={<Reports />} />
+                    <Route path="analytics"    element={<Navigate to="/analytics" replace />} />
                     <Route path="reports"      element={<TechnicianReport />} />
                     <Route path="staff"        element={<Staff />} />
                     <Route path="security"     element={<Security />} />
@@ -191,7 +192,7 @@ export default function App() {
                   {/* Redirects for cached bookmarks / PWA installs */}
                   <Route path="/settings/business" element={<Navigate to="/settings" replace />} />
                   <Route path="/subscription"      element={<Navigate to="/settings/billing" replace />} />
-                  <Route path="/reports"           element={<Navigate to="/settings/analytics" replace />} />
+                  <Route path="/reports"           element={<Navigate to="/analytics" replace />} />
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/invoices/new" element={<InvoiceBuilder />} />
                   <Route path="/invoices/:id" element={<InvoiceBuilder />} />
